@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -356,3 +358,90 @@ EndCLIVerification:
 	time.Sleep(100 * time.Millisecond)
 }
 
+func TestPrefixing(t *testing.T) {
+	// 1. Setup Test Environment
+	tmpDir, err := os.MkdirTemp("", "devloop_prefix_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Change current working directory to tmpDir for relative paths to work
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	assert.NoError(t, os.Chdir(tmpDir))
+
+	// Define paths within the temporary directory
+	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
+
+	// Create multi.yaml content
+	multiYamlContent := fmt.Sprintf(`
+settings:
+  prefix_logs: true
+  prefix_max_length: 10
+rules:
+  - name: "Prefix Test Rule"
+    prefix: "prefix"
+    watch:
+      - action: include
+        patterns:
+          - "%s"
+    commands:
+      - "echo 'hello'"
+`, filepath.Base(triggerFilePath))
+
+	// Write multi.yaml
+	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
+	assert.NoError(t, err)
+
+	// 2. Run Orchestrator
+	orchestrator, err := NewOrchestrator(multiYamlPath)
+	assert.NoError(t, err)
+	assert.NotNil(t, orchestrator)
+
+	// Capture the output
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Channel to signal when orchestrator has started
+	orchestratorStarted := make(chan struct{})
+
+	// Start the orchestrator in a goroutine
+	go func() {
+		close(orchestratorStarted) // Signal that orchestrator is starting
+		err := orchestrator.Start()
+		assert.NoError(t, err)
+	}()
+
+	// Wait for orchestrator to start
+	<-orchestratorStarted
+
+	// Give the watcher some time to initialize
+	time.Sleep(500 * time.Millisecond)
+
+	// 3. Trigger and Verify
+	// Create the trigger file
+	err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
+	assert.NoError(t, err)
+
+	// Give the watcher some time to process the event
+	time.Sleep(1 * time.Second)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	// 4. Cleanup
+	err = orchestrator.Stop()
+	assert.NoError(t, err)
+
+	// Give time for orchestrator goroutine to exit
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the output
+	assert.Contains(t, output, "[prefix    ] hello")
+}

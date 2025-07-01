@@ -16,12 +16,20 @@ import (
 
 // Config represents the top-level structure of the multi.yaml file.
 type Config struct {
-	Rules []Rule `yaml:"rules"`
+	Settings Settings `yaml:"settings"`
+	Rules    []Rule   `yaml:"rules"`
+}
+
+// Settings defines global settings for devloop.
+type Settings struct {
+	PrefixLogs        bool `yaml:"prefix_logs"`
+	PrefixMaxLength int  `yaml:"prefix_max_length"`
 }
 
 // Rule defines a single watch-and-run rule.
 type Rule struct {
 	Name     string            `yaml:"name"`
+	Prefix   string            `yaml:"prefix,omitempty"`
 	Commands []string          `yaml:"commands"`
 	Watch    []*Matcher        `yaml:"watch"`
 	Env      map[string]string `yaml:"env,omitempty"`
@@ -92,8 +100,30 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 	for _, cmdStr := range rule.Commands {
 		log.Printf("  Running command: %s", cmdStr)
 		cmd := exec.Command("bash", "-c", cmdStr)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+
+		if o.Config.Settings.PrefixLogs {
+			prefix := rule.Name
+			if rule.Prefix != "" {
+				prefix = rule.Prefix
+			}
+
+			if o.Config.Settings.PrefixMaxLength > 0 {
+				if len(prefix) > o.Config.Settings.PrefixMaxLength {
+					prefix = prefix[:o.Config.Settings.PrefixMaxLength]
+				} else {
+					for len(prefix) < o.Config.Settings.PrefixMaxLength {
+						prefix += " "
+					}
+				}
+			}
+
+			cmd.Stdout = &PrefixWriter{writer: os.Stdout, prefix: "[" + prefix + "] "}
+			cmd.Stderr = &PrefixWriter{writer: os.Stderr, prefix: "[" + prefix + "] "}
+		} else {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // Set process group ID
 
 		// Set working directory if specified
