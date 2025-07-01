@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -37,16 +36,11 @@ rules:
     watch:
       - "trigger.txt"
     commands:
-      - bash -c "while true; do echo "heartbeat" >> %s; sleep 0.1; done"
-`, strconv.Quote(fmt.Sprintf("while true; do echo \"heartbeat\" >> %s; sleep 0.1; done", heartbeatFilePath)))
+      - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
+`, heartbeatFilePath)
 
 	// Write multi.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
-	assert.NoError(t, err)
-
-	// Create a trigger file to start the heartbeat rule
-	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
-	err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
 	assert.NoError(t, err)
 
 	// 2. Run devloop as a subprocess
@@ -71,13 +65,31 @@ rules:
 	assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
 
 	// 3. Verify Child Process Activity
-	// Give devloop and the heartbeat command some time to start
+	// Give devloop some time to start
 	time.Sleep(1 * time.Second)
 
-	// Check if heartbeat file is being written to
-	initialHeartbeatContent, err := os.ReadFile(heartbeatFilePath)
+	// Create the trigger file to start the heartbeat rule
+	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
+	err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
 	assert.NoError(t, err)
-	assert.True(t, len(initialHeartbeatContent) > 0, "Heartbeat file should not be empty")
+
+	// Poll for heartbeat file to be written to
+	timeout := time.After(5 * time.Second)
+	var initialHeartbeatContent []byte // Declare here
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("Timeout waiting for heartbeat file to be written")
+		default:
+			content, readErr := os.ReadFile(heartbeatFilePath)
+			if readErr == nil && len(content) > 0 {
+				initialHeartbeatContent = content // Assign here
+				goto EndHeartbeatCheck
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+EndHeartbeatCheck:
 
 	// 4. Send SIGINT
 	log.Println("Sending SIGINT to devloop process...")
