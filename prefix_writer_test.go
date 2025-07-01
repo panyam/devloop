@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,7 @@ func TestPrefixWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writer := &PrefixWriter{writer: &buf, prefix: tt.prefix}
+			writer := &PrefixWriter{writers: []io.Writer{&buf}, prefix: tt.prefix}
 			_, err := writer.Write([]byte(tt.input))
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, buf.String())

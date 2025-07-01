@@ -2,7 +2,7 @@
 
 ![devloop Logo/Banner (Placeholder)](https://via.placeholder.com/1200x300?text=devloop+Logo)
 
-`devloop` is a generic, multi-variant tool designed to streamline development workflows, particularly within Multi-Component Projects (MCPs). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on intelligent, configuration-driven orchestration of tasks based on file system changes.
+`devloop` is a generic, multi-variant tool designed to streamline development workflows, particularly within Multi-Component Projects (MCPs) (no not *that* MCP). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on simple, configuration-driven orchestration of tasks based on file system changes.
 
 ## 🚀 Getting Started
 
@@ -23,7 +23,7 @@
         commands:
           - "echo 'Building backend...'"
           - "go build -o ./bin/server ./cmd/server"
-          - "./bin/server"
+          - "./bin/server"    # This starts the server and is long running
     ```
 3.  **Run `devloop`**:
     ```bash

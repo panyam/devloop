@@ -16,11 +16,13 @@ var verbose bool // Global flag for verbose logging
 func main() {
 	var configPath string
 	var showVersion bool
+	var httpPort string
 
 	// Define global flags
 	flag.StringVar(&configPath, "c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 	flag.BoolVar(&showVersion, "version", false, "Display version information")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
+	flag.StringVar(&httpPort, "http-port", "", "Port for the HTTP log streaming server. By default the log server is not started")
 
 	// Define subcommands
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
@@ -47,11 +49,11 @@ func main() {
 	}
 
 	// Default behavior: run the orchestrator
-	runOrchestrator(configPath)
+	runOrchestrator(configPath, httpPort)
 }
 
-func runOrchestrator(configPath string) {
-	orchestrator, err := NewOrchestrator(configPath)
+func runOrchestrator(configPath string, httpPort string) {
+	orchestrator, err := NewOrchestrator(configPath, httpPort)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
 	}

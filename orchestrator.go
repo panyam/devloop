@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -103,10 +104,17 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 	o.runningCommands[rule.Name] = []*exec.Cmd{} // Clear previous commands
 
 	var currentCmds []*exec.Cmd
+	logWriter, err := o.LogManager.GetWriter(rule.Name)
+	if err != nil {
+		log.Printf("[devloop] Error getting log writer for rule %q: %v", rule.Name, err)
+		return
+	}
+
 	for _, cmdStr := range rule.Commands {
 		log.Printf("[devloop]   Running command: %s", cmdStr)
 		cmd := exec.Command("bash", "-c", cmdStr)
 
+		var writers []io.Writer
 		if o.Config.Settings.PrefixLogs {
 			prefix := rule.Name
 			if rule.Prefix != "" {
@@ -122,12 +130,13 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 					}
 				}
 			}
-
-			cmd.Stdout = &PrefixWriter{writer: os.Stdout, prefix: "[" + prefix + "] "}
-			cmd.Stderr = &PrefixWriter{writer: os.Stderr, prefix: "[" + prefix + "] "}
+			writers = []io.Writer{os.Stdout, logWriter}
+			cmd.Stdout = &PrefixWriter{writers: writers, prefix: "[" + prefix + "] "}
+			cmd.Stderr = &PrefixWriter{writers: writers, prefix: "[" + prefix + "] "}
 		} else {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
+			writers = []io.Writer{os.Stdout, logWriter}
+			cmd.Stdout = io.MultiWriter(writers...)
+			cmd.Stderr = io.MultiWriter(writers...)
 		}
 
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // Set process group ID
@@ -144,7 +153,7 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 		}
 		err := cmd.Start()
 		if err != nil {
-			log.Printf("  Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
+			log.Printf("[devloop] Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
 			continue
 		}
 		currentCmds = append(currentCmds, cmd)
@@ -153,12 +162,25 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 		// For now, we'll assume all commands might be long-running and don't wait.
 	}
 	o.runningCommands[rule.Name] = currentCmds
+
+	// Signal that the rule has finished when all commands are done
+	go func() {
+		for _, cmd := range currentCmds {
+			if cmd != nil && cmd.Process != nil {
+				_ = cmd.Wait() // Wait for each command to finish
+			}
+		}
+		o.LogManager.SignalFinished(rule.Name)
+		log.Printf("[devloop] Rule %q commands finished.", rule.Name)
+	}()
 }
 
 // Orchestrator manages file watching and rule execution.
 type Orchestrator struct {
 	Config           *Config
 	Watcher          *fsnotify.Watcher
+	LogManager       *LogManager // New field for log management
+	HTTPServer       *HTTPServer // New field for HTTP server
 	done             chan bool
 	debounceTimers   map[string]*time.Timer
 	debouncedEvents  chan Rule
@@ -196,7 +218,7 @@ func LoadConfig(filePath string) (*Config, error) {
 }
 
 // NewOrchestrator creates a new Orchestrator instance.
-func NewOrchestrator(configPath string) (*Orchestrator, error) {
+func NewOrchestrator(configPath string, httpPort string) (*Orchestrator, error) {
 	config, err := LoadConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -207,9 +229,21 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
+	logManager, err := NewLogManager("./logs") // Assuming a 'logs' directory at the project root
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log manager: %w", err)
+	}
+
+	var httpServer *HTTPServer
+	if httpPort != "" {
+		httpServer = NewHTTPServer(logManager, httpPort)
+	}
+
 	return &Orchestrator{
 		Config:           config,
 		Watcher:          watcher,
+		LogManager:       logManager,
+		HTTPServer:       httpServer,
 		done:             make(chan bool),
 		debounceTimers:   make(map[string]*time.Timer),
 		debouncedEvents:  make(chan Rule),
@@ -220,6 +254,11 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 
 // Start begins the file watching and event processing.
 func (o *Orchestrator) Start() error {
+	// Start the HTTP server if it exists
+	if o.HTTPServer != nil {
+		o.HTTPServer.Start()
+	}
+
 	// Goroutine for processing file system events
 	go func() {
 		for {
@@ -321,6 +360,16 @@ func (o *Orchestrator) Stop() error {
 				log.Printf("Terminating process group %d for rule %q during shutdown", cmd.Process.Pid, ruleName)
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 			}
+		}
+	}
+
+	// Close the log manager and HTTP server
+	if err := o.LogManager.Close(); err != nil {
+		log.Printf("Error closing log manager: %v", err)
+	}
+	if o.HTTPServer != nil {
+		if err := o.HTTPServer.Stop(); err != nil {
+			log.Printf("Error stopping HTTP server: %v", err)
 		}
 	}
 

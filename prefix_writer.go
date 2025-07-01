@@ -7,8 +7,8 @@ import (
 
 // PrefixWriter is an io.Writer that adds a prefix to each line of output.
 type PrefixWriter struct {
-	writer io.Writer
-	prefix string
+	writers []io.Writer
+	prefix  string
 }
 
 // Write implements the io.Writer interface.
@@ -24,6 +24,11 @@ func (pw *PrefixWriter) Write(p []byte) (n int, err error) {
 			}
 		}
 	}
-	_, err = pw.writer.Write(output)
-	return len(p), err
+	for _, w := range pw.writers {
+		_, err = w.Write(output)
+		if err != nil {
+			return n, err // Return on first error
+		}
+	}
+	return len(p), nil
 }

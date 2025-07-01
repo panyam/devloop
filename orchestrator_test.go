@@ -42,19 +42,19 @@ func TestLoadConfig(t *testing.T) {
 
 func TestNewOrchestrator(t *testing.T) {
 	// Test successful creation
-	orchestrator, err := NewOrchestrator("./testdata/test_devloop.yaml")
+	orchestrator, err := NewOrchestrator("./testdata/test_devloop.yaml", "")
 	assert.NoError(t, err)
 	assert.NotNil(t, orchestrator)
 	assert.NotNil(t, orchestrator.Config)
 	assert.NotNil(t, orchestrator.Watcher)
 
 	// Test with non-existent config file
-	_, err = NewOrchestrator("non_existent.yaml")
+	_, err = NewOrchestrator("non_existent.yaml", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to load config")
 
 	// Test with invalid config file
-	_, err = NewOrchestrator("./testdata/invalid.yaml")
+	_, err = NewOrchestrator("./testdata/invalid.yaml", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to load config")
 }
@@ -85,7 +85,7 @@ rules:
 	defer os.Chdir(originalDir)
 	assert.NoError(t, os.Chdir(tmpDir))
 
-	orchestrator, err := NewOrchestrator(".devloop.yaml")
+	orchestrator, err := NewOrchestrator(".devloop.yaml", "")
 	assert.NoError(t, err)
 	assert.NotNil(t, orchestrator)
 
