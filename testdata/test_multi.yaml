@@ -1,0 +1,11 @@
+rules:
+  - name: "Test Rule 1"
+    watch:
+      - "src/**/*.go"
+    commands:
+      - "go build"
+  - name: "Test Rule 2"
+    watch:
+      - "web/**/*.js"
+    commands:
+      - "npm run build"
