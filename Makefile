@@ -2,7 +2,7 @@
 deps:
 	go install honnef.co/go/tools/cmd/staticcheck
 
-version:
+versionup:
 	git tag -a `cat VERSION`
 
 test:
