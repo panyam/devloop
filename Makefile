@@ -2,6 +2,9 @@
 deps:
 	go install honnef.co/go/tools/cmd/staticcheck
 
+version:
+	git tag -a `cat VERSION`
+
 test:
 	go fmt ./...
 	go vet ./...
