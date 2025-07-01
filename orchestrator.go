@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the top-level structure of the multi.yaml file.
+// Config represents the top-level structure of the .devloop.yaml file.
 type Config struct {
 	Settings Settings `yaml:"settings"`
 	Rules    []Rule   `yaml:"rules"`
@@ -22,7 +22,7 @@ type Config struct {
 
 // Settings defines global settings for devloop.
 type Settings struct {
-	PrefixLogs        bool `yaml:"prefix_logs"`
+	PrefixLogs      bool `yaml:"prefix_logs"`
 	PrefixMaxLength int  `yaml:"prefix_max_length"`
 }
 
@@ -170,7 +170,7 @@ func (o *Orchestrator) debounce(rule Rule) {
 	})
 }
 
-// LoadConfig reads and unmarshals the multi.yaml configuration file.
+// LoadConfig reads and unmarshals the .devloop.yaml configuration file.
 func LoadConfig(filePath string) (*Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {

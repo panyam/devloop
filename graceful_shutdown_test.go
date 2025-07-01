@@ -26,11 +26,11 @@ func TestGracefulShutdown(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
 	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
 	heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
 
-	// Create multi.yaml content with a long-running command
+	// Create .devloop.yaml content with a long-running command
 	multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Heartbeat Rule"
@@ -42,7 +42,7 @@ rules:
       - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
 `, filepath.Base(triggerFilePath), heartbeatFilePath)
 
-	// Write multi.yaml
+	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 	assert.NoError(t, err)
 
@@ -55,7 +55,7 @@ rules:
 	err = buildCmd.Run()
 	assert.NoError(t, err, "Failed to build devloop executable")
 
-	cmd := exec.Command(filepath.Join(tmpDir, "devloop"), "-c", "multi.yaml")
+	cmd := exec.Command(filepath.Join(tmpDir, "devloop"), "-c", ".devloop.yaml")
 	cmd.Dir = tmpDir // Run the command in the temporary directory
 
 	// Capture stdout and stderr

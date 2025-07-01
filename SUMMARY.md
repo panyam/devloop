@@ -7,7 +7,7 @@ This document summarizes the design, progress, and future plans for the `devloop
 `devloop` is envisioned as a generic, multi-variant tool combining functionalities of `air` (Go's live-reloading tool) and `make` (a build automation tool). Its primary purpose is to act as an intelligent orchestrator for development workflows, especially within Multi-Component Projects (MCPs).
 
 **Key Principles:**
-- **Configuration-driven:** Behavior defined in `multi.yaml`.
+- **Configuration-driven:** Behavior defined in `.devloop.yaml`.
 - **Glob-based Triggers:** Actions initiated by file changes matching defined globs.
 - **Unopinionated Actions:** The tool focuses on change detection and lifecycle management, not the semantics of the commands themselves. Commands can be any shell script (Go build, Python script, Node.js minifier, etc.).
 - **Idempotency at Trigger Level:** Debouncing ensures a rule is triggered only once per set of rapid changes.
@@ -22,12 +22,12 @@ This document summarizes the design, progress, and future plans for the `devloop
 - Offering **simplified configuration** for the entire development environment.
 - Improving **resource efficiency** by only acting on affected components.
 
-## 3. `multi.yaml` Configuration Structure
+## 3. `.devloop.yaml` Configuration Structure
 
-The tool's behavior is defined by `rules` in a `multi.yaml` file.
+The tool's behavior is defined by `rules` in a `.devloop.yaml` file.
 
 ```yaml
-# multi.yaml
+# .devloop.yaml
 
 rules:
   - name: "Go Backend Build and Run" # A unique name for this rule, used for process management
@@ -53,7 +53,7 @@ rules:
 
 ## 4. Execution Flow
 
-1.  **Startup:** `devloop` reads `multi.yaml` and registers all defined `rules`.
+1.  **Startup:** `devloop` reads `.devloop.yaml` and registers all defined `rules`.
 2.  **File Watching:** A single file watcher monitors the project directory.
 3.  **Event Processing:** When a file changes, `devloop` identifies *all* rules whose `watch` globs match the file.
 4.  **Debouncing (per rule):** Each matched rule is debounced independently. If multiple files change rapidly, the affected rules are triggered only once after a configurable debounce period.
@@ -66,7 +66,7 @@ rules:
 **Phase 1: Core Structure & Configuration**
 1.  **Project Setup:** `devloop` directory, `go.mod`, `main.go` created. (✅ Done)
 2.  **Configuration Definition:** Go structs for `Config` and `Rule` defined in `config.go`. YAML unmarshaling implemented. (✅ Done)
-3.  **Test Configuration Loading:** Dummy `multi.yaml` created and `main.go` modified to load and print config. (✅ Done)
+3.  **Test Configuration Loading:** Dummy `.devloop.yaml` created and `main.go` modified to load and print config. (✅ Done)
 
 **Phase 2: Basic File Watching & Glob Matching**
 4.  File Watching Integration (`fsnotify`). (✅ Done)

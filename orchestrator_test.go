@@ -11,7 +11,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	// Test successful loading
-	configPath := "./testdata/test_multi.yaml"
+	configPath := "./testdata/test_devloop.yaml"
 	config, err := LoadConfig(configPath)
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
@@ -42,7 +42,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestNewOrchestrator(t *testing.T) {
 	// Test successful creation
-	orchestrator, err := NewOrchestrator("./testdata/test_multi.yaml")
+	orchestrator, err := NewOrchestrator("./testdata/test_devloop.yaml")
 	assert.NoError(t, err)
 	assert.NotNil(t, orchestrator)
 	assert.NotNil(t, orchestrator.Config)
@@ -65,8 +65,8 @@ func TestOrchestratorStartStop(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create a dummy multi.yaml in the temporary directory
-	configPath := filepath.Join(tmpDir, "multi.yaml")
+	// Create a dummy .devloop.yaml in the temporary directory
+	configPath := filepath.Join(tmpDir, ".devloop.yaml")
 	dummyConfigContent := `
 rules:
   - name: "Test Watch"
@@ -85,7 +85,7 @@ rules:
 	defer os.Chdir(originalDir)
 	assert.NoError(t, os.Chdir(tmpDir))
 
-	orchestrator, err := NewOrchestrator("multi.yaml")
+	orchestrator, err := NewOrchestrator(".devloop.yaml")
 	assert.NoError(t, err)
 	assert.NotNil(t, orchestrator)
 
@@ -130,10 +130,10 @@ rules:
 
 func TestRuleMatches(t *testing.T) {
 	tests := []struct {
-		name          string
-		watchers      []*Matcher
-		filePath      string
-		expectedMatch bool
+		name           string
+		watchers       []*Matcher
+		filePath       string
+		expectedMatch  bool
 		expectedAction string
 	}{
 		{
@@ -141,8 +141,8 @@ func TestRuleMatches(t *testing.T) {
 			watchers: []*Matcher{
 				{Action: "include", Patterns: []string{"*.go"}},
 			},
-			filePath:      "main.go",
-			expectedMatch: true,
+			filePath:       "main.go",
+			expectedMatch:  true,
 			expectedAction: "include",
 		},
 		{
@@ -150,8 +150,8 @@ func TestRuleMatches(t *testing.T) {
 			watchers: []*Matcher{
 				{Action: "exclude", Patterns: []string{"*.go"}},
 			},
-			filePath:      "main.go",
-			expectedMatch: true,
+			filePath:       "main.go",
+			expectedMatch:  true,
 			expectedAction: "exclude",
 		},
 		{
@@ -160,8 +160,8 @@ func TestRuleMatches(t *testing.T) {
 				{Action: "include", Patterns: []string{"*.go"}},
 				{Action: "exclude", Patterns: []string{"main.go"}},
 			},
-			filePath:      "main.go",
-			expectedMatch: true,
+			filePath:       "main.go",
+			expectedMatch:  true,
 			expectedAction: "include",
 		},
 		{
@@ -170,8 +170,8 @@ func TestRuleMatches(t *testing.T) {
 				{Action: "exclude", Patterns: []string{"*.go"}},
 				{Action: "include", Patterns: []string{"main.go"}},
 			},
-			filePath:      "main.go",
-			expectedMatch: true,
+			filePath:       "main.go",
+			expectedMatch:  true,
 			expectedAction: "exclude",
 		},
 		{
@@ -189,8 +189,8 @@ func TestRuleMatches(t *testing.T) {
 				{Action: "exclude", Patterns: []string{"vendor/**"}},
 				{Action: "include", Patterns: []string{"**/*.go"}},
 			},
-			filePath:      "vendor/specific/file.go",
-			expectedMatch: true,
+			filePath:       "vendor/specific/file.go",
+			expectedMatch:  true,
 			expectedAction: "include",
 		},
 		{
@@ -200,8 +200,8 @@ func TestRuleMatches(t *testing.T) {
 				{Action: "exclude", Patterns: []string{"vendor/**"}},
 				{Action: "include", Patterns: []string{"**/*.go"}},
 			},
-			filePath:      "vendor/other/file.go",
-			expectedMatch: true,
+			filePath:       "vendor/other/file.go",
+			expectedMatch:  true,
 			expectedAction: "exclude",
 		},
 		{
@@ -211,8 +211,8 @@ func TestRuleMatches(t *testing.T) {
 				{Action: "exclude", Patterns: []string{"vendor/**"}},
 				{Action: "include", Patterns: []string{"**/*.go"}},
 			},
-			filePath:      "src/main.go",
-			expectedMatch: true,
+			filePath:       "src/main.go",
+			expectedMatch:  true,
 			expectedAction: "include",
 		},
 	}

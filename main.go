@@ -15,7 +15,7 @@ func main() {
 	convertInputPath := convertCmd.String("i", ".air.toml", "Path to the .air.toml input file")
 
 	// Main command flags
-	configPath := flag.String("c", "./multi.yaml", "Path to the multi.yaml configuration file")
+	configPath := flag.String("c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 
 	if len(os.Args) < 2 {
 		// Default behavior: run the orchestrator

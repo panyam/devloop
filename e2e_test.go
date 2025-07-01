@@ -25,14 +25,14 @@ func TestEndToEnd(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
 	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
 	outputFilePath := filepath.Join(tmpDir, "output.txt")
 
 	// Unique string to verify command execution
 	uniqueString := "command_executed_" + time.Now().Format("20060102150405")
 
-	// Create multi.yaml content
+	// Create .devloop.yaml content
 	multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "E2E Test Rule"
@@ -44,7 +44,7 @@ rules:
       - "echo %s > %s"
 `, filepath.Base(triggerFilePath), uniqueString, filepath.Base(outputFilePath))
 
-	// Write multi.yaml
+	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 	assert.NoError(t, err)
 
@@ -111,11 +111,11 @@ func TestDebouncing(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
 	triggerFilePath := filepath.Join(tmpDir, "trigger_debounce.txt")
 	outputFilePath := filepath.Join(tmpDir, "output_debounce.txt")
 
-	// Create multi.yaml content to append to output file
+	// Create .devloop.yaml content to append to output file
 	multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Debounce Test Rule"
@@ -127,7 +127,7 @@ rules:
       - "echo 'executed' >> %s"
 `, filepath.Base(triggerFilePath), filepath.Base(outputFilePath))
 
-	// Write multi.yaml
+	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 	assert.NoError(t, err)
 
@@ -193,11 +193,11 @@ func TestProcessManagement(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
 	triggerFilePath := filepath.Join(tmpDir, "trigger_process.txt")
 	heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
 
-	// Create multi.yaml content with a long-running command
+	// Create .devloop.yaml content with a long-running command
 	multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Process Test Rule"
@@ -209,7 +209,7 @@ rules:
       - "bash -c 'ID=$(date +%%%%s%%%%N); echo \"Heartbeat $ID\" >> %s; while true; do echo \"Heartbeat $ID\" >> %s; sleep 0.1; done'"
 `, filepath.Base(triggerFilePath), filepath.Base(heartbeatFilePath), filepath.Base(heartbeatFilePath))
 
-	// Write multi.yaml
+	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 	assert.NoError(t, err)
 
@@ -284,14 +284,14 @@ func TestCLIConfigPath(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	customMultiYamlPath := filepath.Join(tmpDir, "custom_multi.yaml")
+	customMultiYamlPath := filepath.Join(tmpDir, "custom_.devloop.yaml")
 	cliTriggerFilePath := filepath.Join(tmpDir, "cli_trigger.txt")
 	cliOutputFilePath := filepath.Join(tmpDir, "cli_output.txt")
 
 	// Unique string to verify command execution
 	cliUniqueString := "cli_command_executed_" + time.Now().Format("20060102150405")
 
-	// Create custom_multi.yaml content
+	// Create custom_.devloop.yaml content
 	customMultiYamlContent := fmt.Sprintf(`
 rules:
   - name: "CLI Test Rule"
@@ -303,7 +303,7 @@ rules:
       - "echo %s > %s"
 `, filepath.Base(cliTriggerFilePath), cliUniqueString, filepath.Base(cliOutputFilePath))
 
-	// Write custom_multi.yaml
+	// Write custom_.devloop.yaml
 	err = os.WriteFile(customMultiYamlPath, []byte(customMultiYamlContent), 0644)
 	assert.NoError(t, err)
 
@@ -370,10 +370,10 @@ func TestPrefixing(t *testing.T) {
 	assert.NoError(t, os.Chdir(tmpDir))
 
 	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
 	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
 
-	// Create multi.yaml content
+	// Create .devloop.yaml content
 	multiYamlContent := fmt.Sprintf(`
 settings:
   prefix_logs: true
@@ -389,7 +389,7 @@ rules:
       - "echo 'hello'"
 `, filepath.Base(triggerFilePath))
 
-	// Write multi.yaml
+	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 	assert.NoError(t, err)
 
