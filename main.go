@@ -9,11 +9,47 @@ import (
 	"syscall"
 )
 
-func runApp(configPath string) (*Orchestrator, error) {
+func main() {
+	// Define subcommands
+	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
+	convertInputPath := convertCmd.String("i", ".air.toml", "Path to the .air.toml input file")
+
+	// Main command flags
+	configPath := flag.String("c", "./multi.yaml", "Path to the multi.yaml configuration file")
+
+	if len(os.Args) < 2 {
+		// Default behavior: run the orchestrator
+		runOrchestrator(*configPath)
+		return
+	}
+
+	switch os.Args[1] {
+	case "convert":
+		convertCmd.Parse(os.Args[2:])
+		if err := convertAirToml(*convertInputPath); err != nil {
+			log.Fatalf("Failed to convert .air.toml: %v", err)
+		}
+	default:
+		// Default behavior: run the orchestrator
+		flag.Parse()
+		runOrchestrator(*configPath)
+	}
+}
+
+func runOrchestrator(configPath string) {
 	orchestrator, err := NewOrchestrator(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create orchestrator: %w", err)
+		log.Fatalf("Failed to create orchestrator: %v", err)
 	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		log.Println("Shutting down...")
+		orchestrator.Stop()
+	}()
 
 	fmt.Println("Config loaded successfully:")
 	for _, rule := range orchestrator.Config.Rules {
@@ -23,36 +59,7 @@ func runApp(configPath string) (*Orchestrator, error) {
 	}
 
 	log.Println("Starting orchestrator...")
-	return orchestrator, nil
-}
-
-func main() {
-	configPath := flag.String("c", "./multi.yaml", "Path to the multi.yaml configuration file")
-	flag.Parse()
-
-	orchestrator, err := runApp(*configPath)
-	if err != nil {
-		log.Fatalf("%v", err)
+	if err := orchestrator.Start(); err != nil {
+		log.Fatalf("Failed to start orchestrator: %v", err)
 	}
-
-	// Set up a channel to listen for OS signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start the orchestrator in a goroutine
-	go func() {
-		if err := orchestrator.Start(); err != nil {
-			log.Fatalf("Failed to start orchestrator: %v", err)
-		}
-	}()
-
-	// Block until a signal is received
-	sig := <-sigChan
-	log.Printf("Received signal %v. Shutting down...", sig)
-
-	// Gracefully stop the orchestrator
-	if err := orchestrator.Stop(); err != nil {
-		log.Fatalf("Failed to gracefully stop orchestrator: %v", err)
-	}
-	log.Println("Orchestrator stopped.")
 }

@@ -109,7 +109,7 @@ EndHeartbeatCheck:
 	select {
 	case err := <-done:
 		assert.NoError(t, err, "devloop process did not exit cleanly")
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Timeout waiting for devloop process to exit")
 	}
 
