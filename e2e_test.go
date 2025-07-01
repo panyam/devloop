@@ -35,7 +35,9 @@ func TestEndToEnd(t *testing.T) {
 rules:
   - name: "E2E Test Rule"
     watch:
-      - "%s"
+      - action: include
+        patterns:
+          - "%s"
     commands:
       - "echo %s > %s"
 `, filepath.Base(triggerFilePath), uniqueString, filepath.Base(outputFilePath))
@@ -116,7 +118,9 @@ func TestDebouncing(t *testing.T) {
 rules:
   - name: "Debounce Test Rule"
     watch:
-      - "%s"
+      - action: include
+        patterns:
+          - "%s"
     commands:
       - "echo 'executed' >> %s"
 `, filepath.Base(triggerFilePath), filepath.Base(outputFilePath))
@@ -196,7 +200,9 @@ func TestProcessManagement(t *testing.T) {
 rules:
   - name: "Process Test Rule"
     watch:
-      - "%s"
+      - action: include
+        patterns:
+          - "%s"
     commands:
       - "bash -c 'ID=$(date +%%%%s%%%%N); echo \"Heartbeat $ID\" >> %s; while true; do echo \"Heartbeat $ID\" >> %s; sleep 0.1; done'"
 `, filepath.Base(triggerFilePath), filepath.Base(heartbeatFilePath), filepath.Base(heartbeatFilePath))
@@ -288,7 +294,9 @@ func TestCLIConfigPath(t *testing.T) {
 rules:
   - name: "CLI Test Rule"
     watch:
-      - "%s"
+      - action: include
+        patterns:
+          - "%s"
     commands:
       - "echo %s > %s"
 `, filepath.Base(cliTriggerFilePath), cliUniqueString, filepath.Base(cliOutputFilePath))

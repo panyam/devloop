@@ -34,7 +34,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	defer orchestrator.Stop()
 
 	// Set up a channel to listen for OS signals
 	sigChan := make(chan os.Signal, 1)
@@ -50,4 +49,10 @@ func main() {
 	// Block until a signal is received
 	sig := <-sigChan
 	log.Printf("Received signal %v. Shutting down...", sig)
+
+	// Gracefully stop the orchestrator
+	if err := orchestrator.Stop(); err != nil {
+		log.Fatalf("Failed to gracefully stop orchestrator: %v", err)
+	}
+	log.Println("Orchestrator stopped.")
 }

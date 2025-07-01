@@ -21,24 +21,47 @@ type Config struct {
 
 // Rule defines a single watch-and-run rule.
 type Rule struct {
-	Name     string   `yaml:"name"`
-	Watch    []string `yaml:"watch"`
-	Commands []string `yaml:"commands"`
+	Name     string            `yaml:"name"`
+	Commands []string          `yaml:"commands"`
+	Watch    []*Matcher        `yaml:"watch"`
+	Env      map[string]string `yaml:"env,omitempty"`
+	WorkDir  string            `yaml:"workdir,omitempty"`
 }
 
-// Matches checks if the given file path matches any of the rule's watch patterns.
-func (r *Rule) Matches(filePath string) bool {
-	for _, pattern := range r.Watch {
-		g, err := glob.Compile(pattern)
-		if err != nil {
-			log.Printf("Error compiling glob pattern %q: %v", pattern, err)
-			continue
+// Matcher defines a single include or exclude directive using glob patterns.
+type Matcher struct {
+	Action   string   `yaml:"action"` // Should be "include" or "exclude"
+	Patterns []string `yaml:"patterns"`
+	Globs    []glob.Glob
+}
+
+func (m *Matcher) Matches(filePath string) bool {
+	if m.Globs == nil {
+		for _, pattern := range m.Patterns {
+			g, err := glob.Compile(pattern)
+			if err != nil {
+				panic(fmt.Sprintf("Error compiling glob pattern %q: %v", pattern, err))
+			} else {
+				m.Globs = append(m.Globs, g)
+			}
 		}
+	}
+	for _, g := range m.Globs {
 		if g.Match(filePath) {
 			return true
 		}
 	}
 	return false
+}
+
+// Matches checks if the given file path matches the rule's watch criteria.
+func (r *Rule) Match(filePath string) *Matcher {
+	for _, matcher := range r.Watch {
+		if matcher.Matches(filePath) {
+			return matcher
+		}
+	}
+	return nil
 }
 
 // executeCommands runs the commands associated with a rule.
@@ -73,6 +96,16 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 		cmd.Stderr = os.Stderr
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // Set process group ID
 
+		// Set working directory if specified
+		if rule.WorkDir != "" {
+			cmd.Dir = rule.WorkDir
+		}
+
+		// Set environment variables
+		cmd.Env = os.Environ() // Inherit parent environment
+		for key, value := range rule.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
 		err := cmd.Start()
 		if err != nil {
 			log.Printf("  Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
@@ -163,7 +196,7 @@ func (o *Orchestrator) Start() error {
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Printf("File event detected: %s", event.Name)
 					for _, rule := range o.Config.Rules {
-						if rule.Matches(event.Name) {
+						if m := rule.Match(event.Name); m != nil {
 							log.Printf("Rule %q matched for file %q. Debouncing...", rule.Name, event.Name)
 							o.debounce(rule)
 						}

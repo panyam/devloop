@@ -27,6 +27,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	// Define paths within the temporary directory
 	multiYamlPath := filepath.Join(tmpDir, "multi.yaml")
+	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
 	heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
 
 	// Create multi.yaml content with a long-running command
@@ -34,10 +35,12 @@ func TestGracefulShutdown(t *testing.T) {
 rules:
   - name: "Heartbeat Rule"
     watch:
-      - "trigger.txt"
+      - action: include
+        patterns:
+          - "%s"
     commands:
       - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
-`, heartbeatFilePath)
+`, filepath.Base(triggerFilePath), heartbeatFilePath)
 
 	// Write multi.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
@@ -69,7 +72,7 @@ rules:
 	time.Sleep(1 * time.Second)
 
 	// Create the trigger file to start the heartbeat rule
-	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
+	triggerFilePath = filepath.Join(tmpDir, "trigger.txt")
 	err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
 	assert.NoError(t, err)
 

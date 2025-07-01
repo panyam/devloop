@@ -1,6 +1,8 @@
 rules:
   - name: "Test Echo Rule"
     watch:
-      - "test_trigger.txt"
+      - action: include
+        patterns:
+          - "test_trigger.txt"
     commands:
       - "echo 'Test Echo Rule triggered by test_trigger.txt!'"

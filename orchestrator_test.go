@@ -18,11 +18,15 @@ func TestLoadConfig(t *testing.T) {
 	assert.Len(t, config.Rules, 2)
 
 	assert.Equal(t, "Test Rule 1", config.Rules[0].Name)
-	assert.Equal(t, []string{"src/**/*.go"}, config.Rules[0].Watch)
+	assert.Len(t, config.Rules[0].Watch, 1)
+	assert.Equal(t, "include", config.Rules[0].Watch[0].Action)
+	assert.Equal(t, []string{"src/**/*.go"}, config.Rules[0].Watch[0].Patterns)
 	assert.Equal(t, []string{"go build"}, config.Rules[0].Commands)
 
 	assert.Equal(t, "Test Rule 2", config.Rules[1].Name)
-	assert.Equal(t, []string{"web/**/*.js"}, config.Rules[1].Watch)
+	assert.Len(t, config.Rules[1].Watch, 1)
+	assert.Equal(t, "include", config.Rules[1].Watch[0].Action)
+	assert.Equal(t, []string{"web/**/*.js"}, config.Rules[1].Watch[0].Patterns)
 	assert.Equal(t, []string{"npm run build"}, config.Rules[1].Commands)
 
 	// Test non-existent file
@@ -67,7 +71,9 @@ func TestOrchestratorStartStop(t *testing.T) {
 rules:
   - name: "Test Watch"
     watch:
-      - "**/*"
+      - action: include
+        patterns:
+          - "**/*"
     commands:
       - "echo 'File changed!'"
 `
@@ -124,73 +130,105 @@ rules:
 
 func TestRuleMatches(t *testing.T) {
 	tests := []struct {
-		name     string
-		patterns []string
-		filePath string
-		expected bool
+		name          string
+		watchers      []*Matcher
+		filePath      string
+		expectedMatch bool
+		expectedAction string
 	}{
 		{
-			name:     "Exact match",
-			patterns: []string{"main.go"},
-			filePath: "main.go",
-			expected: true,
+			name: "Simple include",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"*.go"}},
+			},
+			filePath:      "main.go",
+			expectedMatch: true,
+			expectedAction: "include",
 		},
 		{
-			name:     "Wildcard match",
-			patterns: []string{"*.go"},
-			filePath: "main.go",
-			expected: true,
+			name: "Simple exclude",
+			watchers: []*Matcher{
+				{Action: "exclude", Patterns: []string{"*.go"}},
+			},
+			filePath:      "main.go",
+			expectedMatch: true,
+			expectedAction: "exclude",
 		},
 		{
-			name:     "Recursive wildcard match",
-			patterns: []string{"**/*.go"},
-			filePath: "src/cmd/server/main.go",
-			expected: true,
+			name: "Include then exclude (include wins)",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"*.go"}},
+				{Action: "exclude", Patterns: []string{"main.go"}},
+			},
+			filePath:      "main.go",
+			expectedMatch: true,
+			expectedAction: "include",
 		},
 		{
-			name:     "No match",
-			patterns: []string{"*.js"},
-			filePath: "main.go",
-			expected: false,
+			name: "Exclude then include (exclude wins)",
+			watchers: []*Matcher{
+				{Action: "exclude", Patterns: []string{"*.go"}},
+				{Action: "include", Patterns: []string{"main.go"}},
+			},
+			filePath:      "main.go",
+			expectedMatch: true,
+			expectedAction: "exclude",
 		},
 		{
-			name:     "Multiple patterns - one matches",
-			patterns: []string{"*.js", "**/*.css"},
-			filePath: "web/style.css",
-			expected: true,
+			name: "No match",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"*.js"}},
+			},
+			filePath:      "main.go",
+			expectedMatch: false,
 		},
 		{
-			name:     "Multiple patterns - none match",
-			patterns: []string{"*.js", "*.css"},
-			filePath: "index.html",
-			expected: false,
+			name: "Complex rule: include specific, exclude folder, include general",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
+				{Action: "exclude", Patterns: []string{"vendor/**"}},
+				{Action: "include", Patterns: []string{"**/*.go"}},
+			},
+			filePath:      "vendor/specific/file.go",
+			expectedMatch: true,
+			expectedAction: "include",
 		},
 		{
-			name:     "Directory match (should not match file)",
-			patterns: []string{"src/"},
-			filePath: "src/main.go",
-			expected: false,
+			name: "Complex rule: file in excluded folder",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
+				{Action: "exclude", Patterns: []string{"vendor/**"}},
+				{Action: "include", Patterns: []string{"**/*.go"}},
+			},
+			filePath:      "vendor/other/file.go",
+			expectedMatch: true,
+			expectedAction: "exclude",
 		},
 		{
-			name:     "Directory match with recursive wildcard",
-			patterns: []string{"src/**"},
-			filePath: "src/main.go",
-			expected: true,
-		},
-		{
-			name:     "Directory match with recursive wildcard for directory",
-			patterns: []string{"src/**"},
-			filePath: "src/sub/",
-			expected: true,
+			name: "Complex rule: general go file",
+			watchers: []*Matcher{
+				{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
+				{Action: "exclude", Patterns: []string{"vendor/**"}},
+				{Action: "include", Patterns: []string{"**/*.go"}},
+			},
+			filePath:      "src/main.go",
+			expectedMatch: true,
+			expectedAction: "include",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := Rule{
-				Watch: tt.patterns,
+				Watch: tt.watchers,
 			}
-			assert.Equal(t, tt.expected, rule.Matches(tt.filePath))
+			matcher := rule.Match(tt.filePath)
+			if tt.expectedMatch {
+				assert.NotNil(t, matcher)
+				assert.Equal(t, tt.expectedAction, matcher.Action)
+			} else {
+				assert.Nil(t, matcher)
+			}
 		})
 	}
 }

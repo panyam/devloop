@@ -4,17 +4,33 @@
 
 `devloop` is a generic, multi-variant tool designed to streamline development workflows, particularly within Multi-Component Projects (MCPs). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on intelligent, configuration-driven orchestration of tasks based on file system changes.
 
-## 🚀 Project Vision & Core Idea
+## 🚀 Getting Started
 
-`devloop` aims to be an intelligent orchestrator for your development environment. Instead of manually running build commands or restarting services after every code change, `devloop` automates these repetitive tasks by watching your file system and triggering predefined actions.
+1.  **Install `devloop`**:
+    ```bash
+    go install
+    ```
+2.  **Create a `multi.yaml` file in your project's root directory**:
+    ```yaml
+    rules:
+      - name: "Go Backend Build and Run"
+        watch:
+          - action: "include"
+            patterns:
+              - "**/*.go"
+              - "go.mod"
+              - "go.sum"
+        commands:
+          - "echo 'Building backend...'"
+          - "go build -o ./bin/server ./cmd/server"
+          - "./bin/server"
+    ```
+3.  **Run `devloop`**:
+    ```bash
+    devloop -c multi.yaml
+    ```
 
-### Key Principles:
-
--   **Configuration-driven:** All behavior is defined in a simple `multi.yaml` file.
--   **Glob-based Triggers:** Actions are initiated by file changes that match defined glob patterns.
--   **Unopinionated Actions:** `devloop` focuses on change detection and lifecycle management, not the semantics of the commands themselves. Commands can be any shell script (e.g., `go build`, `npm run build`, Python scripts, Docker commands).
--   **Idempotency at Trigger Level:** Debouncing ensures that a rule is triggered only once per set of rapid changes, preventing redundant executions.
--   **Robust Process Management:** It gracefully terminates previously spawned processes (and their children) before re-executing commands, ensuring clean restarts and preventing orphaned processes.
+`devloop` will now watch your files and automatically rebuild and restart your backend server whenever you make changes to your Go code.
 
 ## ✨ Usefulness as an MCP Tool
 
@@ -36,9 +52,11 @@ The core of `devloop`'s behavior is defined by `rules` in a `multi.yaml` file. E
 rules:
   - name: "Go Backend Build and Run" # A unique name for this rule, used for process management
     watch:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
+      - action: "include"
+        patterns:
+          - "**/*.go"
+          - "go.mod"
+          - "go.sum"
     commands:
       - "echo 'Building backend...'"
       - "go build -o ./bin/server ./cmd/server"
@@ -46,8 +64,10 @@ rules:
 
   - name: "Frontend Assets Build" # Another rule for web assets
     watch:
-      - "web/static/**/*.css"
-      - "web/static/**/*.js"
+      - action: "include"
+        patterns:
+          - "web/static/**/*.css"
+          - "web/static/**/*.js"
     commands:
       - "echo 'Rebuilding frontend assets...'"
       - "npm run build --prefix web/" # This is a short-lived process
@@ -58,7 +78,7 @@ rules:
 ### Explanation of Fields:
 
 -   `name`: A unique identifier for the rule. Used internally for process management and logging.
--   `watch`: A list of glob patterns. When any file matching these patterns is created, modified, or deleted, the rule's commands are considered for execution.
+-   `watch`: A list of `Matcher` objects. Each `Matcher` has an `action` (`include` or `exclude`) and a list of `patterns`. The `watch` rules are evaluated in order, and the first one to match a file determines the action to take.
 -   `commands`: A list of shell commands to execute sequentially when the rule is triggered. These commands are run in a new process group, allowing `devloop` to manage their lifecycle.
 
 ## 📦 Installation
@@ -115,4 +135,4 @@ Contributions are welcome! Please feel free to open issues or submit pull reques
 
 ## 📄 License
 
-This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details. (Note: A LICENSE file is not yet present in the repository, but this is a placeholder for future inclusion.)
+This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
