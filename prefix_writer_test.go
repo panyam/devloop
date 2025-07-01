@@ -45,7 +45,7 @@ func TestPrefixWriter(t *testing.T) {
 			var buf bytes.Buffer
 			writer := &PrefixWriter{writer: &buf, prefix: tt.prefix}
 			_, err := writer.Write([]byte(tt.input))
-			assert.NoError(t, err);
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, buf.String())
 		})
 	}

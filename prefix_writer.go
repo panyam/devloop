@@ -27,4 +27,3 @@ func (pw *PrefixWriter) Write(p []byte) (n int, err error) {
 	_, err = pw.writer.Write(output)
 	return len(p), err
 }
-

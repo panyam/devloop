@@ -10,12 +10,12 @@ import (
 
 // AirConfig represents the structure of a .air.toml file.
 type AirConfig struct {
-	Root      string `toml:"root"`
-	TmpDir    string `toml:"tmp_dir"`
-	Build     BuildConfig `toml:"build"`
-	Log       LogConfig `toml:"log"`
-	Misc      MiscConfig `toml:"misc"`
-	Color     ColorConfig `toml:"color"`
+	Root   string      `toml:"root"`
+	TmpDir string      `toml:"tmp_dir"`
+	Build  BuildConfig `toml:"build"`
+	Log    LogConfig   `toml:"log"`
+	Misc   MiscConfig  `toml:"misc"`
+	Color  ColorConfig `toml:"color"`
 }
 
 type BuildConfig struct {
@@ -96,9 +96,7 @@ func convertAirToml(inputPath string) error {
 	for _, dir := range airConfig.Build.ExcludeDir {
 		excludePatterns = append(excludePatterns, fmt.Sprintf("%s/**/*", dir))
 	}
-	for _, file := range airConfig.Build.ExcludeFile {
-		excludePatterns = append(excludePatterns, file)
-	}
+	excludePatterns = append(excludePatterns, airConfig.Build.ExcludeFile...)
 	if len(excludePatterns) > 0 {
 		devloopRule.Watch = append(devloopRule.Watch, &Matcher{
 			Action:   "exclude",
