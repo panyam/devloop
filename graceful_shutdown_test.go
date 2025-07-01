@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +32,10 @@ func TestGracefulShutdown(t *testing.T) {
 	heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
 
 	// Create .devloop.yaml content with a long-running command
+	httpPort := "8888" // Use a fixed port for the test
 	multiYamlContent := fmt.Sprintf(`
+server:
+  port: "%s"
 rules:
   - name: "Heartbeat Rule"
     watch:
@@ -40,7 +44,7 @@ rules:
           - "%s"
     commands:
       - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
-`, filepath.Base(triggerFilePath), heartbeatFilePath)
+`, httpPort, filepath.Base(triggerFilePath), heartbeatFilePath)
 
 	// Write .devloop.yaml
 	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
@@ -55,7 +59,7 @@ rules:
 	err = buildCmd.Run()
 	assert.NoError(t, err, "Failed to build devloop executable")
 
-	cmd := exec.Command(filepath.Join(tmpDir, "devloop"), "-c", ".devloop.yaml")
+	cmd := exec.Command(filepath.Join(tmpDir, "devloop"), "-c", ".devloop.yaml", "--http-port", httpPort, "-v")
 	cmd.Dir = tmpDir // Run the command in the temporary directory
 
 	// Capture stdout and stderr
@@ -67,9 +71,25 @@ rules:
 	err = cmd.Start()
 	assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
 
-	// 3. Verify Child Process Activity
-	// Give devloop some time to start
-	time.Sleep(1 * time.Second)
+	// 3. Verify Child Process Activity and HTTP Server
+	// Verify HTTP server is running by polling
+	client := &http.Client{Timeout: 5 * time.Second} // Shorter timeout for individual attempts
+	serverURL := fmt.Sprintf("http://localhost:%s/stream/someRule", httpPort)
+	maxAttempts := 10
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := client.Get(serverURL)
+		if err == nil {
+			defer resp.Body.Close()
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "HTTP server should return 200 OK")
+			t.Logf("HTTP server became reachable after %d attempts.", i+1)
+			break // Server is up, exit loop
+		}
+		t.Logf("Attempt %d: HTTP server not yet reachable: %v", i+1, err)
+		time.Sleep(1 * time.Second) // Wait before retrying
+		if i == maxAttempts-1 {
+			t.Fatalf("HTTP server did not become reachable after %d attempts. Last error: %v", maxAttempts, err)
+		}
+	}
 
 	// Create the trigger file to start the heartbeat rule
 	triggerFilePath = filepath.Join(tmpDir, "trigger.txt")
@@ -121,6 +141,11 @@ EndHeartbeatCheck:
 	assert.NoError(t, err)
 	assert.Equal(t, len(initialHeartbeatContent), len(finalHeartbeatContent), "Heartbeat file content should not have changed after shutdown")
 
-	log.Printf("Devloop process stdout:\n%s", stdout.String())
-	log.Printf("Devloop process stderr:\n%s", stderr.String())
+	// Verify HTTP server is no longer reachable
+	_, err = client.Get(fmt.Sprintf("http://localhost:%s/stream/someRule", httpPort))
+	assert.Error(t, err, "HTTP server should no longer be reachable after shutdown")
+	assert.Contains(t, err.Error(), "connection refused", "Error should indicate connection refused")
+
+	t.Logf("Devloop process stdout:\n%s", stdout.String())
+	t.Logf("Devloop process stderr:\n%s", stderr.String())
 }

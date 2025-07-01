@@ -83,7 +83,7 @@ rules:
 **Phase 5: Robustness, CLI & Polish**
 10. Error Handling & Logging. (✅ Done)
 11. CLI Arguments. (✅ Done)
-12. Graceful Shutdown. (⏳ In Progress)
+12. Graceful Shutdown. (✅ Done)
 13. Documentation & Testing. (⏳ In Progress)
 
 ## 6. Progress & Next Steps

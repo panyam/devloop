@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -80,6 +81,13 @@ func (hs *HTTPServer) streamLogsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	log.Printf("[devloop] Client connected to stream for rule %q (filter: %q)", ruleName, filter)
+
+	// Send an initial comment to keep the connection alive and signal readiness
+	if _, err := fmt.Fprintf(w, ": ping\n\n"); err != nil {
+		log.Printf("[devloop] Error sending initial ping for rule %q: %v", ruleName, err)
+		return
+	}
+	flusher.Flush()
 
 	// Stream logs from the LogManager
 	err := hs.logManager.StreamLogs(ruleName, filter, w)
