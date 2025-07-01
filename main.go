@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"log"
@@ -9,7 +10,8 @@ import (
 	"syscall"
 )
 
-const version = "0.0.4" // Define the current version
+//go:embed VERSION
+var version string
 
 var verbose bool // Global flag for verbose logging
 
