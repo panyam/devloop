@@ -74,13 +74,17 @@ func (r *Rule) Match(filePath string) *Matcher {
 
 // executeCommands runs the commands associated with a rule.
 func (o *Orchestrator) executeCommands(rule Rule) {
-	log.Printf("Executing commands for rule %q", rule.Name)
+	if verbose {
+		log.Printf("[devloop] Executing commands for rule %q", rule.Name)
+	}
 
 	// Terminate any previously running commands for this rule
 	if cmds, ok := o.runningCommands[rule.Name]; ok {
 		for _, cmd := range cmds {
 			if cmd != nil && cmd.Process != nil {
-				log.Printf("Terminating previous process group %d for rule %q", cmd.Process.Pid, rule.Name)
+				if verbose {
+					log.Printf("[devloop] Terminating previous process group %d for rule %q", cmd.Process.Pid, rule.Name)
+				}
 				// Send SIGTERM to the process group
 				err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 				if err != nil {
@@ -89,7 +93,9 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 				// Wait for the process to exit
 				go func(c *exec.Cmd) {
 					_ = c.Wait() // Wait for the process to actually exit
-					log.Printf("Previous process group %d for rule %q terminated.", c.Process.Pid, rule.Name)
+					if verbose {
+						log.Printf("[devloop] Previous process group %d for rule %q terminated.", c.Process.Pid, rule.Name)
+					}
 				}(cmd)
 			}
 		}
@@ -98,7 +104,7 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 
 	var currentCmds []*exec.Cmd
 	for _, cmdStr := range rule.Commands {
-		log.Printf("  Running command: %s", cmdStr)
+		log.Printf("[devloop]   Running command: %s", cmdStr)
 		cmd := exec.Command("bash", "-c", cmdStr)
 
 		if o.Config.Settings.PrefixLogs {
@@ -222,27 +228,41 @@ func (o *Orchestrator) Start() error {
 				if !ok {
 					return
 				}
-				log.Println("event:", event)
+				if verbose {
+					log.Println("[devloop] event:", event)
+				}
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-					log.Printf("File event detected: %s", event.Name)
+					if verbose {
+						log.Printf("[devloop] File event detected: %s", event.Name)
+					}
 					for _, rule := range o.Config.Rules {
 						if m := rule.Match(event.Name); m != nil {
-							log.Printf("Rule %q matched for file %q. Debouncing...", rule.Name, event.Name)
+							if verbose {
+								log.Printf("[devloop] Rule %q matched for file %q. Debouncing...", rule.Name, event.Name)
+							}
 							o.debounce(rule)
 						}
 					}
 				} else if event.Op&fsnotify.Remove == fsnotify.Remove {
-					log.Println("removed file/directory:", event.Name)
+					if verbose {
+						log.Println("[devloop] removed file/directory:", event.Name)
+					}
 				} else if event.Op&fsnotify.Rename == fsnotify.Rename {
-					log.Println("renamed file/directory:", event.Name)
+					if verbose {
+						log.Println("[devloop] renamed file/directory:", event.Name)
+					}
 				} else if event.Op&fsnotify.Chmod == fsnotify.Chmod {
-					log.Println("chmodded file/directory:", event.Name)
+					if verbose {
+						log.Println("[devloop] chmodded file/directory:", event.Name)
+					}
 				}
 			case err, ok := <-o.Watcher.Errors:
 				if !ok {
 					return
 				}
-				log.Println("error:", err)
+				if verbose {
+					log.Println("[devloop] error:", err)
+				}
 			}
 		}
 	}()
