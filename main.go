@@ -9,7 +9,7 @@ import (
 	"syscall"
 )
 
-const version = "0.1.0" // Define the current version
+const version = "0.0.4" // Define the current version
 
 var verbose bool // Global flag for verbose logging
 
