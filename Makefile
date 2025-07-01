@@ -4,6 +4,8 @@ deps:
 
 versionup:
 	git tag -a `cat VERSION`
+	git push origin --tags
+	git push
 
 test:
 	go fmt ./...
