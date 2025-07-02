@@ -6,6 +6,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/panyam/devloop/gateway"
 )
 
 // AirConfig represents the structure of a .air.toml file.
@@ -62,7 +64,7 @@ func convertAirToml(inputPath string) error {
 	}
 
 	// Convert the AirConfig to a devloop Rule
-	devloopRule := Rule{
+	devloopRule := gateway.Rule{
 		Name: "Imported from .air.toml",
 	}
 
@@ -86,7 +88,7 @@ func convertAirToml(inputPath string) error {
 		includePatterns = append(includePatterns, fmt.Sprintf("%s/**/*", dir))
 	}
 	if len(includePatterns) > 0 {
-		devloopRule.Watch = append(devloopRule.Watch, &Matcher{
+		devloopRule.Watch = append(devloopRule.Watch, &gateway.Matcher{
 			Action:   "include",
 			Patterns: includePatterns,
 		})
@@ -98,7 +100,7 @@ func convertAirToml(inputPath string) error {
 	}
 	excludePatterns = append(excludePatterns, airConfig.Build.ExcludeFile...)
 	if len(excludePatterns) > 0 {
-		devloopRule.Watch = append(devloopRule.Watch, &Matcher{
+		devloopRule.Watch = append(devloopRule.Watch, &gateway.Matcher{
 			Action:   "exclude",
 			Patterns: excludePatterns,
 		})
