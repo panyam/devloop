@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
 )
 
 // LogManager manages log files and provides streaming capabilities.
@@ -39,10 +41,9 @@ func NewLogManager(logDir string) (*LogManager, error) {
 		return nil, fmt.Errorf("failed to create log directory %q: %w", logDir, err)
 	}
 	return &LogManager{
-			logDir:     logDir,
-			ruleStates: make(map[string]*ruleLogState),
-		},
-		nil
+		logDir:     logDir,
+		ruleStates: make(map[string]*ruleLogState),
+	}, nil
 }
 
 // GetWriter returns an io.Writer for a specific rule's log file.
@@ -103,58 +104,74 @@ func (lm *LogManager) SignalFinished(ruleName string) {
 	}
 }
 
-// StreamLogs streams log content for a given rule.
-// It blocks until the rule starts execution if not already running.
-func (lm *LogManager) StreamLogs(ruleName string, filter string, w io.Writer) error {
+// StreamLogs streams logs for a given rule to the provided gRPC stream.
+func (lm *LogManager) StreamLogs(ruleName, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error {
 	lm.mu.Lock()
 	state, ok := lm.ruleStates[ruleName]
 	if !ok {
-		state = &ruleLogState{
-			started:  make(chan struct{}),
-			finished: make(chan struct{}),
-		}
-		lm.ruleStates[ruleName] = state
+		lm.mu.Unlock()
+		return fmt.Errorf("no state found for rule: %s", ruleName)
 	}
 	lm.mu.Unlock()
 
-	// Wait for the rule to start if it's not already running
+	// Wait for the rule to start. This is important for realtime streaming.
 	select {
 	case <-state.started:
-		// Rule has started or was already started
-	case <-time.After(10 * time.Second): // Timeout for waiting
-		return fmt.Errorf("timeout waiting for rule %q to start", ruleName)
+	case <-stream.Context().Done():
+		return stream.Context().Err()
 	}
 
 	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
-
-	// Open the file for reading
-	file, err := os.OpenFile(logFilePath, os.O_RDONLY|os.O_CREATE, 0644)
+	file, err := os.Open(logFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to open log file %q for streaming: %w", logFilePath, err)
+		return fmt.Errorf("failed to open log file for streaming: %w", err)
 	}
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
+
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("error reading log file: %w", err)
-		}
-
-		if filter == "" || (filter != "" && contains(line, filter)) {
-			if _, writeErr := io.WriteString(w, line); writeErr != nil {
-				return fmt.Errorf("error writing log stream: %w", writeErr)
+		select {
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		case <-state.finished:
+			// Rule is finished. Drain any remaining content from the reader and exit.
+			for {
+				line, err := reader.ReadString('\n')
+				if len(line) > 0 {
+					if filter == "" || contains(line, filter) {
+						if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
+							return sendErr
+						}
+					}
+				}
+				if err == io.EOF {
+					return nil // Successfully drained and finished.
+				}
+				if err != nil {
+					return err // Return other errors.
+				}
 			}
-		}
-
-		if err == io.EOF {
-			// If rule is finished, we're done
-			select {
-			case <-state.finished:
-				return nil
-			default:
-				// Rule is still running, wait for more data
-				time.Sleep(100 * time.Millisecond) // Poll for new data
+		default:
+			line, err := reader.ReadString('\n')
+			if err == io.EOF {
+				// If we're at the end of the file, check if the rule is finished.
+				select {
+				case <-state.finished:
+					return nil
+				default:
+					// Rule is not finished, so wait for more content.
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+			}
+			if err != nil {
+				return err
+			}
+			if filter == "" || contains(line, filter) {
+				if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
+					return sendErr
+				}
 			}
 		}
 	}

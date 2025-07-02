@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,229 +11,217 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/metadata"
+
+	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
 )
 
-func TestLogManager_NewLogManager(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+// mockStream is a mock implementation of the GatewayClientService_StreamLogsClientServer interface.
+type mockStream struct {
+	ctx    context.Context
+	buffer *bytes.Buffer
+}
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
-	assert.NotNil(t, lm)
-	assert.DirExists(t, tmpDir)
+func (m *mockStream) Send(logLine *pb.LogLine) error {
+	_, err := m.buffer.WriteString(logLine.Line)
+	return err
+}
+
+func (m *mockStream) SetHeader(md metadata.MD) error  { return nil }
+func (m *mockStream) SendHeader(md metadata.MD) error { return nil }
+func (m *mockStream) SetTrailer(md metadata.MD)       {}
+func (m *mockStream) Context() context.Context        { return m.ctx }
+func (m *mockStream) SendMsg(v interface{}) error     { return nil }
+func (m *mockStream) RecvMsg(v interface{}) error     { return nil }
+
+func newMockStream(ctx context.Context) *mockStream {
+	return &mockStream{
+		ctx:    ctx,
+		buffer: &bytes.Buffer{},
+	}
+}
+
+func TestLogManager_NewLogManager(t *testing.T) {
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+		assert.NotNil(t, lm)
+		assert.DirExists(t, tmpDir)
+	})
 }
 
 func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
+		ruleName := "test-rule-1"
+		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
 
-	ruleName := "test-rule-1"
-	logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
+		writer, err := lm.GetWriter(ruleName)
+		assert.NoError(t, err)
+		assert.NotNil(t, writer)
 
-	// Get writer and write some data
-	writer, err := lm.GetWriter(ruleName)
-	assert.NoError(t, err)
-	assert.NotNil(t, writer)
+		_, err = writer.Write([]byte("line 1\n"))
+		assert.NoError(t, err)
+		_, err = writer.Write([]byte("line 2\n"))
+		assert.NoError(t, err)
 
-	_, err = writer.Write([]byte("line 1\n"))
-	assert.NoError(t, err)
-	_, err = writer.Write([]byte("line 2\n"))
-	assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
 
-	// Signal finished
-	lm.SignalFinished(ruleName)
+		content, err := os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		assert.Equal(t, "line 1\nline 2\n", string(content))
 
-	// Verify file content
-	content, err := os.ReadFile(logFilePath)
-	assert.NoError(t, err)
-	assert.Equal(t, "line 1\nline 2\n", string(content))
+		writer2, err := lm.GetWriter(ruleName)
+		assert.NoError(t, err)
+		_, err = writer2.Write([]byte("new line 1\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
 
-	// Get writer again for a new run, should truncate
-	writer2, err := lm.GetWriter(ruleName)
-	assert.NoError(t, err)
-	_, err = writer2.Write([]byte("new line 1\n"))
-	assert.NoError(t, err)
-	lm.SignalFinished(ruleName)
-
-	content, err = os.ReadFile(logFilePath)
-	assert.NoError(t, err)
-	assert.Equal(t, "new line 1\n", string(content))
+		content, err = os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		assert.Equal(t, "new line 1\n", string(content))
+	})
 }
 
 func TestLogManager_StreamLogs_Historical(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
+		ruleName := "test-rule-historical"
+		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
 
-	ruleName := "test-rule-historical"
-	logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
+		initialContent := "historical line 1\nhistorical line 2\n"
+		err = os.WriteFile(logFilePath, []byte(initialContent), 0644)
+		assert.NoError(t, err)
 
-	// Write some initial content to the log file
-	initialContent := "historical line 1\nhistorical line 2\n"
-	err = os.WriteFile(logFilePath, []byte(initialContent), 0644)
-	assert.NoError(t, err)
+		lm.mu.Lock()
+		state := &ruleLogState{
+			started:  make(chan struct{}),
+			finished: make(chan struct{}),
+		}
+		lm.ruleStates[ruleName] = state
+		close(state.started)
+		close(state.finished)
+		lm.mu.Unlock()
 
-	// Simulate a finished state for the rule
-	lm.mu.Lock()
-	state := &ruleLogState{
-		started:  make(chan struct{}),
-		finished: make(chan struct{}),
-	}
-	lm.ruleStates[ruleName] = state
-	close(state.started)  // Mark as started (but no active writer)
-	close(state.finished) // Mark as finished
-	lm.mu.Unlock()
-
-	var buf bytes.Buffer
-	err = lm.StreamLogs(ruleName, "", &buf)
-	assert.NoError(t, err)
-	assert.Equal(t, initialContent, buf.String())
+		stream := newMockStream(context.Background())
+		err = lm.StreamLogs(ruleName, "", stream)
+		assert.NoError(t, err)
+		assert.Equal(t, initialContent, stream.buffer.String())
+	})
 }
 
 func TestLogManager_StreamLogs_Realtime(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
-
-	ruleName := "test-rule-realtime"
-	// logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// Goroutine to stream logs
-	var streamedContent bytes.Buffer
-	go func() {
-		defer wg.Done()
-		err := lm.StreamLogs(ruleName, "", &streamedContent)
+	withTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
-	}()
 
-	// Give streamer time to start waiting
-	time.Sleep(100 * time.Millisecond)
+		ruleName := "test-rule-realtime"
+		writer, err := lm.GetWriter(ruleName)
+		assert.NoError(t, err)
 
-	// Get writer and write data
-	writer, err := lm.GetWriter(ruleName)
-	assert.NoError(t, err)
+		var wg sync.WaitGroup
+		wg.Add(1)
 
-	_, err = writer.Write([]byte("realtime line 1\n"))
-	assert.NoError(t, err)
-	time.Sleep(50 * time.Millisecond) // Give time for write to be processed
+		stream := newMockStream(context.Background())
+		go func() {
+			defer wg.Done()
+			err := lm.StreamLogs(ruleName, "", stream)
+			assert.NoError(t, err)
+		}()
 
-	_, err = writer.Write([]byte("realtime line 2\n"))
-	assert.NoError(t, err)
-	time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
-	// Signal finished
-	lm.SignalFinished(ruleName)
-	wg.Wait()
+		_, err = writer.Write([]byte("realtime line 1\n"))
+		assert.NoError(t, err)
+		time.Sleep(50 * time.Millisecond)
 
-	assert.Equal(t, "realtime line 1\nrealtime line 2\n", streamedContent.String())
+		_, err = writer.Write([]byte("realtime line 2\n"))
+		assert.NoError(t, err)
+		time.Sleep(50 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+
+		assert.Equal(t, "realtime line 1\nrealtime line 2\n", stream.buffer.String())
+	})
 }
 
 func TestLogManager_StreamLogs_Blocking(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
+		ruleName := "test-rule-blocking"
+		streamErrChan := make(chan error, 1)
 
-	ruleName := "test-rule-blocking"
-	var buf bytes.Buffer
-	streamErrChan := make(chan error, 1)
+		writer, err := lm.GetWriter(ruleName)
+		assert.NoError(t, err)
 
-	// Start streaming in a goroutine BEFORE getting the writer
-	go func() {
-		streamErrChan <- lm.StreamLogs(ruleName, "", &buf)
-	}()
+		stream := newMockStream(context.Background())
+		go func() {
+			streamErrChan <- lm.StreamLogs(ruleName, "", stream)
+		}()
 
-	// Give streamer time to start blocking
-	time.Sleep(100 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
-	// Get writer - this should unblock the streamer
-	writer, err := lm.GetWriter(ruleName)
-	assert.NoError(t, err)
-	_, err = writer.Write([]byte("blocked line\n"))
-	assert.NoError(t, err)
-	lm.SignalFinished(ruleName)
+		_, err = writer.Write([]byte("blocked line\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
 
-	// Wait for streaming to finish
-	assert.NoError(t, <-streamErrChan)
-	assert.Equal(t, "blocked line\n", buf.String())
+		err = <-streamErrChan
+		assert.NoError(t, err)
+		assert.Equal(t, "blocked line\n", stream.buffer.String())
+	})
 }
 
 func TestLogManager_StreamLogs_Filtering(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
+		ruleName := "test-rule-filter"
+		writer, err := lm.GetWriter(ruleName)
+		assert.NoError(t, err)
 
-	ruleName := "test-rule-filter"
+		contentToWrite := "line with filter keyword\nline without\nANOTHER LINE WITH FILTER KEYWORD\nfinal line\n"
+		_, err = writer.Write([]byte(contentToWrite))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
 
-	// Write some content with and without the filter string
-	contentToWrite := "line with filter keyword\nline without\nANOTHER LINE WITH FILTER KEYWORD\nfinal line\n"
-	err = os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName)), []byte(contentToWrite), 0644)
-	assert.NoError(t, err)
+		stream := newMockStream(context.Background())
+		err = lm.StreamLogs(ruleName, "filter keyword", stream)
+		assert.NoError(t, err)
 
-	// Simulate a finished state for the rule
-	lm.mu.Lock()
-	state := &ruleLogState{
-		started:  make(chan struct{}),
-		finished: make(chan struct{}),
-	}
-	lm.ruleStates[ruleName] = state
-	close(state.started)
-	close(state.finished)
-	lm.mu.Unlock()
-
-	var buf bytes.Buffer
-	err = lm.StreamLogs(ruleName, "filter keyword", &buf)
-	assert.NoError(t, err)
-
-	expected := "line with filter keyword\nANOTHER LINE WITH FILTER KEYWORD\n"
-	assert.Equal(t, expected, buf.String())
+		expected := "line with filter keyword\nANOTHER LINE WITH FILTER KEYWORD\n"
+		assert.Equal(t, expected, stream.buffer.String())
+	})
 }
 
 func TestLogManager_Close(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "log_manager_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
 
-	lm, err := NewLogManager(tmpDir)
-	assert.NoError(t, err)
+		writer1, err := lm.GetWriter("rule-close-1")
+		assert.NoError(t, err)
+		_, err = writer1.Write([]byte("data"))
+		assert.NoError(t, err)
 
-	// Get writers for a few rules
-	writer1, err := lm.GetWriter("rule-close-1")
-	assert.NoError(t, err)
-	_, err = writer1.Write([]byte("data"))
-	assert.NoError(t, err)
+		writer2, err := lm.GetWriter("rule-close-2")
+		assert.NoError(t, err)
+		_, err = writer2.Write([]byte("data"))
+		assert.NoError(t, err)
 
-	writer2, err := lm.GetWriter("rule-close-2")
-	assert.NoError(t, err)
-	_, err = writer2.Write([]byte("data"))
-	assert.NoError(t, err)
+		err = lm.Close()
+		assert.NoError(t, err)
 
-	// Close the log manager
-	err = lm.Close()
-	assert.NoError(t, err)
-
-	// Verify that files are closed (attempting to write should fail)
-	_, err = writer1.Write([]byte("more data"))
-	assert.Error(t, err) // Should be an error because the file is closed
-	_, err = writer2.Write([]byte("more data"))
-	assert.Error(t, err) // Should be an error because the file is closed
+		_, err = writer1.Write([]byte("more data"))
+		assert.Error(t, err)
+		_, err = writer2.Write([]byte("more data"))
+		assert.Error(t, err)
+	})
 }

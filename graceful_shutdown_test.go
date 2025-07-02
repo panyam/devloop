@@ -16,26 +16,32 @@ import (
 )
 
 func TestGracefulShutdown(t *testing.T) {
-	// 1. Setup Test Environment
-	tmpDir, err := os.MkdirTemp("", "devloop_graceful_shutdown_test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	withTestContext(t, 20*time.Second, func(t *testing.T, tmpDir string) {
+		// Get the project root to build the binary correctly.
+		originalDir, err := os.Getwd()
+		assert.NoError(t, err)
 
-	// Change current working directory to tmpDir for relative paths to work
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	assert.NoError(t, os.Chdir(tmpDir))
+		// 1. Build the devloop executable from the project root.
+		buildCmd := exec.Command("go", "build", "-o", filepath.Join(tmpDir, "devloop"), ".")
+		buildCmd.Dir = originalDir // Ensure build runs in the project root.
+		buildCmd.Stdout = os.Stdout
+		buildCmd.Stderr = os.Stderr
+		err = buildCmd.Run()
+		assert.NoError(t, err, "Failed to build devloop executable")
 
-	// Define paths within the temporary directory
-	multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
-	triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
-	heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
+		// 2. Change into the temporary directory for the test execution.
+		err = os.Chdir(tmpDir)
+		assert.NoError(t, err)
+		defer os.Chdir(originalDir) // Ensure we go back.
 
-	// Create .devloop.yaml content with a long-running command
-	httpPort := "8888" // Use a fixed port for the test
-	multiYamlContent := fmt.Sprintf(`
-server:
-  port: "%s"
+		// 3. Setup test files inside the temporary directory.
+		multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
+		triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
+		heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
+
+		httpPort := "8888"
+		grpcPort := "50051"
+		multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Heartbeat Rule"
     watch:
@@ -44,108 +50,71 @@ rules:
           - "%s"
     commands:
       - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
-`, httpPort, filepath.Base(triggerFilePath), heartbeatFilePath)
+`, filepath.Base(triggerFilePath), heartbeatFilePath)
+		err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
+		assert.NoError(t, err)
 
-	// Write .devloop.yaml
-	err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
-	assert.NoError(t, err)
+		// 4. Run devloop as a subprocess from within the temp directory.
+		cmd := exec.Command("./devloop", "-c", ".devloop.yaml", "--mode", "standalone", "--http-port", httpPort, "--grpc-port", grpcPort, "-v")
+		var stdout, stderr strings.Builder
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err = cmd.Start()
+		assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
 
-	// 2. Run devloop as a subprocess
-	// Build the devloop executable into the temporary directory
-	buildCmd := exec.Command("go", "build", "-o", filepath.Join(tmpDir, "devloop"), ".")
-	buildCmd.Stdout = os.Stdout
-	buildCmd.Stderr = os.Stderr
-	buildCmd.Dir = originalDir // Set the working directory for go build
-	err = buildCmd.Run()
-	assert.NoError(t, err, "Failed to build devloop executable")
-
-	cmd := exec.Command(filepath.Join(tmpDir, "devloop"), "-c", ".devloop.yaml", "--http-port", httpPort, "-v")
-	cmd.Dir = tmpDir // Run the command in the temporary directory
-
-	// Capture stdout and stderr
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// Start the command
-	err = cmd.Start()
-	assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
-
-	// 3. Verify Child Process Activity and HTTP Server
-	// Verify HTTP server is running by polling
-	client := &http.Client{Timeout: 5 * time.Second} // Shorter timeout for individual attempts
-	serverURL := fmt.Sprintf("http://localhost:%s/stream/someRule", httpPort)
-	maxAttempts := 10
-	for i := 0; i < maxAttempts; i++ {
-		resp, err := client.Get(serverURL)
-		if err == nil {
+		// 5. Verify server readiness.
+		client := &http.Client{Timeout: 1 * time.Second}
+		serverURL := fmt.Sprintf("http://localhost:%s/", httpPort)
+		assert.Eventually(t, func() bool {
+			resp, err := client.Get(serverURL)
+			if err != nil {
+				return false
+			}
 			defer resp.Body.Close()
-			assert.Equal(t, http.StatusOK, resp.StatusCode, "HTTP server should return 200 OK")
-			t.Logf("HTTP server became reachable after %d attempts.", i+1)
-			break // Server is up, exit loop
-		}
-		t.Logf("Attempt %d: HTTP server not yet reachable: %v", i+1, err)
-		time.Sleep(1 * time.Second) // Wait before retrying
-		if i == maxAttempts-1 {
-			t.Fatalf("HTTP server did not become reachable after %d attempts. Last error: %v", maxAttempts, err)
-		}
-	}
+			return resp.StatusCode == http.StatusNotFound
+		}, 10*time.Second, 500*time.Millisecond, "HTTP server did not become reachable")
 
-	// Create the trigger file to start the heartbeat rule
-	triggerFilePath = filepath.Join(tmpDir, "trigger.txt")
-	err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
-	assert.NoError(t, err)
+		// 6. Trigger the rule and verify activity.
+		err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
+		assert.NoError(t, err)
 
-	// Poll for heartbeat file to be written to
-	timeout := time.After(5 * time.Second)
-	var initialHeartbeatContent []byte // Declare here
-	for {
-		select {
-		case <-timeout:
-			t.Fatal("Timeout waiting for heartbeat file to be written")
-		default:
+		var initialHeartbeatContent []byte
+		assert.Eventually(t, func() bool {
 			content, readErr := os.ReadFile(heartbeatFilePath)
 			if readErr == nil && len(content) > 0 {
-				initialHeartbeatContent = content // Assign here
-				goto EndHeartbeatCheck
+				initialHeartbeatContent = content
+				return true
 			}
-			time.Sleep(100 * time.Millisecond)
+			return false
+		}, 5*time.Second, 100*time.Millisecond, "Timeout waiting for heartbeat file")
+
+		// 7. Send SIGINT and verify graceful shutdown.
+		log.Println("Sending SIGINT to devloop process...")
+		err = syscall.Kill(cmd.Process.Pid, syscall.SIGINT)
+		assert.NoError(t, err, "Failed to send SIGINT to devloop process")
+
+		waitDone := make(chan error, 1)
+		go func() {
+			waitDone <- cmd.Wait()
+		}()
+		select {
+		case err := <-waitDone:
+			assert.NoError(t, err, "devloop process did not exit cleanly")
+		case <-time.After(10 * time.Second):
+			t.Fatal("Timeout waiting for devloop process to exit")
 		}
-	}
-EndHeartbeatCheck:
 
-	// 4. Send SIGINT
-	log.Println("Sending SIGINT to devloop process...")
-	err = syscall.Kill(cmd.Process.Pid, syscall.SIGINT)
-	assert.NoError(t, err, "Failed to send SIGINT to devloop process")
+		time.Sleep(500 * time.Millisecond)
 
-	// 5. Verify Termination
-	// Wait for the devloop process to exit
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
+		finalHeartbeatContent, err := os.ReadFile(heartbeatFilePath)
+		assert.NoError(t, err)
+		assert.Equal(t, len(initialHeartbeatContent), len(finalHeartbeatContent), "Heartbeat file should not have changed after shutdown")
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err, "devloop process did not exit cleanly")
-	case <-time.After(10 * time.Second):
-		t.Fatal("Timeout waiting for devloop process to exit")
-	}
+		_, err = client.Get(serverURL)
+		assert.Error(t, err, "HTTP server should no longer be reachable")
+		assert.Contains(t, err.Error(), "connection refused")
 
-	// Give a moment for the child process to fully terminate after devloop exits
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify heartbeat file is no longer being written to
-	finalHeartbeatContent, err := os.ReadFile(heartbeatFilePath)
-	assert.NoError(t, err)
-	assert.Equal(t, len(initialHeartbeatContent), len(finalHeartbeatContent), "Heartbeat file content should not have changed after shutdown")
-
-	// Verify HTTP server is no longer reachable
-	_, err = client.Get(fmt.Sprintf("http://localhost:%s/stream/someRule", httpPort))
-	assert.Error(t, err, "HTTP server should no longer be reachable after shutdown")
-	assert.Contains(t, err.Error(), "connection refused", "Error should indicate connection refused")
-
-	t.Logf("Devloop process stdout:\n%s", stdout.String())
-	t.Logf("Devloop process stderr:\n%s", stderr.String())
+		t.Logf("Devloop process stdout:\n%s", stdout.String())
+		t.Logf("Devloop process stderr:\n%s", stderr.String())
+	})
 }
