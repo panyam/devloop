@@ -22,4 +22,7 @@ install-tools:
 	go install golang.org/x/tools/cmd/goyacc@latest
 	go install github.com/bufbuild/buf/cmd/buf@latest
 	go install honnef.co/go/tools/cmd/staticcheck
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	@echo "✓ Go tools installed"
