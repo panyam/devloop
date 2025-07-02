@@ -1,10 +1,9 @@
 package gateway
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/gobwas/glob"
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // Config represents the top-level structure of the .devloop.yaml file.
@@ -33,7 +32,6 @@ type Rule struct {
 type Matcher struct {
 	Action   string   `yaml:"action"` // Should be "include" or "exclude"
 	Patterns []string `yaml:"patterns"`
-	globs    []glob.Glob
 }
 
 // Matches checks if the given file path matches the rule's watch criteria.
@@ -47,18 +45,13 @@ func (r *Rule) Matches(filePath string) *Matcher {
 }
 
 func (m *Matcher) Matches(filePath string) bool {
-	if m.globs == nil {
-		for _, pattern := range m.Patterns {
-			g, err := glob.Compile(pattern)
-			if err != nil {
-				panic(fmt.Sprintf("Error compiling glob pattern %q: %v", pattern, err))
-			} else {
-				m.globs = append(m.globs, g)
-			}
+	for _, pattern := range m.Patterns {
+		matched, err := doublestar.Match(pattern, filePath)
+		if err != nil {
+			// Log error but continue with other patterns
+			continue
 		}
-	}
-	for _, g := range m.globs {
-		if g.Match(filePath) {
+		if matched {
 			return true
 		}
 	}

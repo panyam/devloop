@@ -720,9 +720,16 @@ func (o *Orchestrator) Start() error {
 				if !ok {
 					return
 				}
+				if verbose {
+					log.Printf("[devloop] File event: %s on %s", event.Op, event.Name)
+				}
 				// Check all rules for a match
 				for _, rule := range o.Config.Rules {
-					if rule.Matches(event.Name) != nil {
+					matcher := rule.Matches(event.Name)
+					if matcher != nil {
+						if verbose {
+							log.Printf("[devloop] Rule %q matched for file %s", rule.Name, event.Name)
+						}
 						// Use a map to debounce rules by name, ensuring each rule is only debounced once per event burst
 						o.debounce(rule)
 					}

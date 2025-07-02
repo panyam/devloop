@@ -270,6 +270,110 @@ rules:
 	})
 }
 
+func TestRelativePathPatterns(t *testing.T) {
+	withTestContext(t, 10*time.Second, func(t *testing.T, tmpDir string) {
+		// Create a subdirectory structure
+		srcDir := filepath.Join(tmpDir, "src")
+		err := os.Mkdir(srcDir, 0755)
+		assert.NoError(t, err)
+
+		webDir := filepath.Join(tmpDir, "web")
+		err = os.Mkdir(webDir, 0755)
+		assert.NoError(t, err)
+
+		// Define paths
+		multiYamlPath := filepath.Join(tmpDir, ".devloop.yaml")
+		goFilePath := filepath.Join(srcDir, "main.go")
+		jsFilePath := filepath.Join(webDir, "app.js")
+		outputFilePath := filepath.Join(tmpDir, "output.txt")
+
+		// Create .devloop.yaml with relative patterns
+		multiYamlContent := fmt.Sprintf(`
+rules:
+  - name: "Go Files Rule"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "echo 'Go file changed' >> %s"
+  - name: "JS Files Rule"
+    watch:
+      - action: include
+        patterns:
+          - "web/**/*.js"
+    commands:
+      - "echo 'JS file changed' >> %s"
+`, outputFilePath, outputFilePath)
+
+		err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
+		assert.NoError(t, err)
+
+		// Run Orchestrator
+		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		assert.NoError(t, err)
+		assert.NotNil(t, orchestrator)
+
+		// Enable verbose mode for debugging
+		oldVerbose := verbose
+		verbose = true
+		defer func() { verbose = oldVerbose }()
+
+
+		// Start the orchestrator
+		go func() {
+			err := orchestrator.Start()
+			assert.NoError(t, err)
+		}()
+		defer orchestrator.Stop()
+
+		// Give the watcher time to initialize and watch all directories
+		time.Sleep(2 * time.Second)
+
+		// Log the patterns we're testing
+		t.Logf("Testing with config patterns: src/**/*.go and web/**/*.js")
+		t.Logf("Go file path: %s", goFilePath)
+		t.Logf("JS file path: %s", jsFilePath)
+
+		// Test 1: Create a Go file in src/
+		err = os.WriteFile(goFilePath, []byte("package main"), 0644)
+		assert.NoError(t, err)
+		t.Logf("Created Go file at %s", goFilePath)
+
+		// Wait for command execution
+		time.Sleep(1 * time.Second)
+
+		// Check if the file was triggered
+		if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
+			t.Logf("Output file does not exist yet at %s", outputFilePath)
+			// Wait a bit more
+			time.Sleep(2 * time.Second)
+		}
+
+		// Check output
+		content, err := os.ReadFile(outputFilePath)
+		assert.NoError(t, err)
+		assert.Contains(t, string(content), "Go file changed")
+
+		// Test 2: Create a JS file in web/
+		err = os.WriteFile(jsFilePath, []byte("console.log('test')"), 0644)
+		assert.NoError(t, err)
+
+		// Wait for command execution
+		time.Sleep(1 * time.Second)
+
+		// Check output again
+		content, err = os.ReadFile(outputFilePath)
+		assert.NoError(t, err)
+		assert.Contains(t, string(content), "Go file changed")
+		assert.Contains(t, string(content), "JS file changed")
+
+		// Verify both rules were triggered
+		lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+		assert.Len(t, lines, 2, "Should have exactly 2 lines in output")
+	})
+}
+
 func TestPrefixing(t *testing.T) {
 	withTestContext(t, 10*time.Second, func(t *testing.T, tmpDir string) {
 		// Define paths within the temporary directory
