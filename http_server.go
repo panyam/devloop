@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -13,13 +15,14 @@ const DEFAULT_HTTP_PORT = "9999"
 
 // HTTPServer provides an HTTP endpoint for streaming rule logs.
 type HTTPServer struct {
-	server     *http.Server
-	logManager *LogManager
-	port       string
+	server       *http.Server
+	orchestrator *Orchestrator // Reference to the orchestrator
+	logManager   *LogManager
+	port         string
 }
 
 // NewHTTPServer creates a new HTTPServer instance.
-func NewHTTPServer(logManager *LogManager, port string) *HTTPServer {
+func NewHTTPServer(orchestrator *Orchestrator, logManager *LogManager, port string) *HTTPServer {
 	if port == "" {
 		return nil // Do not create server if port is empty
 	}
@@ -37,14 +40,81 @@ func NewHTTPServer(logManager *LogManager, port string) *HTTPServer {
 	}
 
 	hs := &HTTPServer{
-		server:     server,
-		logManager: logManager,
-		port:       port,
+		server:       server,
+		orchestrator: orchestrator,
+		logManager:   logManager,
+		port:         port,
 	}
 
 	r.HandleFunc("/stream/{ruleName}", hs.streamLogsHandler).Methods("GET")
+	r.HandleFunc("/config", hs.handleGetConfig).Methods("GET")
+	r.HandleFunc("/status/{ruleName}", hs.handleGetRuleStatus).Methods("GET")
+	r.HandleFunc("/trigger/{ruleName}", hs.handleTriggerRule).Methods("POST")
+	r.HandleFunc("/watched-paths", hs.handleListWatchedPaths).Methods("GET")
+	r.HandleFunc("/file-content", hs.handleReadFileContent).Methods("GET")
 
 	return hs
+}
+
+// handleListWatchedPaths returns a list of all paths being watched by devloop.
+func (hs *HTTPServer) handleListWatchedPaths(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	paths := hs.orchestrator.GetWatchedPaths()
+	json.NewEncoder(w).Encode(paths)
+}
+
+// handleReadFileContent reads and returns the content of a specified file.
+func (hs *HTTPServer) handleReadFileContent(w http.ResponseWriter, r *http.Request) {
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		http.Error(w, "Missing 'path' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read file %q: %v", filePath, err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(content)
+}
+
+// handleTriggerRule triggers the execution of a specific rule.
+func (hs *HTTPServer) handleTriggerRule(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	ruleName := vars["ruleName"]
+
+	err := hs.orchestrator.TriggerRule(ruleName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Rule %q triggered successfully", ruleName)
+}
+
+// handleGetConfig returns the entire devloop configuration.
+func (hs *HTTPServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(hs.orchestrator.Config)
+}
+
+// handleGetRuleStatus returns the current status of a specific rule.
+func (hs *HTTPServer) handleGetRuleStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	ruleName := vars["ruleName"]
+
+	status, ok := hs.orchestrator.GetRuleStatus(ruleName)
+	if !ok {
+		http.Error(w, "Rule not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }
 
 // Start begins listening for HTTP requests.

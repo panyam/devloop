@@ -92,7 +92,8 @@ rules:
 - All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented and covered by unit and end-to-end tests.
 - CLI argument parsing for the config file path is implemented.
 - Error handling and logging have been improved.
+- Initial MCP (Model Context Protocol) support has been implemented, including enhanced rule status tracking and new HTTP API endpoints for configuration, rule status, rule triggering, watched paths, and file content.
 
 **Next Steps:**
-- Implement graceful shutdown to handle OS signals (SIGINT/SIGTERM) for clean termination.
 - Continue with general documentation and testing improvements.
+- **Devloop Proxy/Centralized Management:** Brainstorm and implement a centralized proxy or push mechanism to manage multiple `devloop` instances across different projects, streamlining log streaming and overall MCP client interaction.

@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package devloop_gateway.v1;
+
+option go_package = "devloop/protos/devloop/v1";
+
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/protobuf/empty.proto";
+
+// ProjectInfo represents the information about a registered devloop project.
+message ProjectInfo {
+  string project_id = 1;
+  string project_root = 2;
+  string internal_addr = 3; // The internal address (host:port) where this devloop instance's HTTP server is listening
+}
+
+// LogLine represents a single log entry from a rule.
+message LogLine {
+  string project_id = 1;
+  string rule_name = 2;
+  string line = 3;
+  int64 timestamp = 4; // Unix timestamp in milliseconds
+}
+
+// RuleStatus represents the current status of a rule.
+message RuleStatus {
+  string project_id = 1;
+  string rule_name = 2;
+  bool is_running = 3;
+  int64 start_time = 4;       // Unix timestamp in milliseconds, if running
+  int64 last_build_time = 5;  // Unix timestamp in milliseconds, if not running
+  string last_build_status = 6; // e.g., "SUCCESS", "FAILED", "RUNNING", "IDLE"
+}
+
+// RegisterRequest is sent by devloop to register with the gateway.
+message RegisterRequest {
+  ProjectInfo project_info = 1;
+}
+
+// RegisterResponse is sent by the gateway in response to a registration.
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// UnregisterRequest is sent by devloop to unregister from the gateway.
+message UnregisterRequest {
+  string project_id = 1;
+}
+
+// UnregisterResponse is sent by the gateway in response to unregistration.
+message UnregisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// StreamLogsRequest is sent by devloop to stream logs to the gateway.
+message StreamLogsRequest {
+  LogLine log_line = 1;
+}
+
+// StreamLogsResponse is sent by the gateway in response to a log line.
+message StreamLogsResponse {
+  bool success = 1;
+}
+
+// UpdateRuleStatusRequest is sent by devloop to update a rule's status.
+message UpdateRuleStatusRequest {
+  RuleStatus rule_status = 1;
+}
+
+// UpdateRuleStatusResponse is sent by the gateway in response to a status update.
+message UpdateRuleStatusResponse {
+  bool success = 1;
+}
+
+// TriggerRuleRequest is sent by the gateway to devloop to trigger a rule.
+message TriggerRuleRequest {
+  string project_id = 1;
+  string rule_name = 2;
+}
+
+// TriggerRuleResponse is sent by devloop in response to a trigger request.
+message TriggerRuleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// GetHistoricalLogsRequest is sent by the gateway to devloop to request historical logs.
+message GetHistoricalLogsRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+  int64 start_time = 4; // Unix timestamp in milliseconds, for logs after this time
+  int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
+}
+
+// DevloopGatewayService defines the gRPC service for communication between devloop and the gateway.
+service DevloopGatewayService {
+  // Register a devloop instance with the gateway.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Unregister a devloop instance from the gateway.
+  rpc Unregister(UnregisterRequest) returns (UnregisterResponse);
+
+  // Stream real-time logs from devloop to the gateway.
+  rpc StreamLogs(stream StreamLogsRequest) returns (stream StreamLogsResponse);
+
+  // Update the status of a rule from devloop to the gateway.
+  rpc UpdateRuleStatus(UpdateRuleStatusRequest) returns (UpdateRuleStatusResponse);
+
+  // Trigger a rule on a devloop instance from the gateway.
+  rpc TriggerRule(TriggerRuleRequest) returns (TriggerRuleResponse);
+
+  // Get historical logs from a devloop instance.
+  rpc GetHistoricalLogs(GetHistoricalLogsRequest) returns (stream LogLine);
+}
+
+// GatewayClientService defines the gRPC service for MCP clients to interact with the gateway.
+service GatewayClientService {
+  // List all registered devloop projects.
+  rpc ListProjects(google.protobuf.Empty) returns (ListProjectsResponse) {
+    option (google.api.http) = {
+      get: "/projects"
+    };
+  }
+
+  // Get the configuration for a specific devloop project.
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/config"
+    };
+  }
+
+  // Get the detailed status of a specific rule within a project.
+  rpc GetRuleStatus(GetRuleStatusRequest) returns (GetRuleStatusResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/status/{rule_name}"
+    };
+  }
+
+  // Manually trigger a specific rule in a devloop project.
+  rpc TriggerRuleClient(TriggerRuleClientRequest) returns (TriggerRuleClientResponse) {
+    option (google.api.http) = {
+      post: "/projects/{project_id}/trigger/{rule_name}"
+    };
+  }
+
+  // List all glob patterns being watched by a specific devloop project.
+  rpc ListWatchedPaths(ListWatchedPathsRequest) returns (ListWatchedPathsResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/watched-paths"
+    };
+  }
+
+  // Read and return the content of a specific file within a devloop project.
+  rpc ReadFileContent(ReadFileContentRequest) returns (ReadFileContentResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/file-content"
+    };
+  }
+
+  // Stream real-time logs for a specific rule in a project.
+  rpc StreamLogsClient(StreamLogsClientRequest) returns (stream LogLine) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/stream/logs/{rule_name}"
+    };
+  }
+
+  // Retrieve historical logs for a specific rule, with optional time filtering.
+  rpc GetHistoricalLogsClient(GetHistoricalLogsClientRequest) returns (stream LogLine) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/historical-logs/{rule_name}"
+    };
+  }
+}
+
+// Messages for GatewayClientService
+
+message ListProjectsResponse {
+  message Project {
+    string project_id = 1;
+    string project_root = 2;
+    string status = 3; // e.g., "CONNECTED", "DISCONNECTED"
+  }
+  repeated Project projects = 1;
+}
+
+message GetConfigRequest {
+  string project_id = 1;
+}
+
+message GetConfigResponse {
+  // Assuming Config struct from devloop will be mapped here
+  // For now, just a placeholder string or bytes
+  bytes config_json = 1;
+}
+
+message GetRuleStatusRequest {
+  string project_id = 1;
+  string rule_name = 2;
+}
+
+message GetRuleStatusResponse {
+  RuleStatus rule_status = 1;
+}
+
+message TriggerRuleClientRequest {
+  string project_id = 1;
+  string rule_name = 2;
+}
+
+message TriggerRuleClientResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListWatchedPathsRequest {
+  string project_id = 1;
+}
+
+message ListWatchedPathsResponse {
+  repeated string paths = 1;
+}
+
+message ReadFileContentRequest {
+  string project_id = 1;
+  string path = 2;
+}
+
+message ReadFileContentResponse {
+  bytes content = 1;
+}
+
+message StreamLogsClientRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+}
+
+message GetHistoricalLogsClientRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+  int64 start_time = 4; // Unix timestamp in milliseconds, for logs after this time
+  int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -75,6 +76,17 @@ func (r *Rule) Match(filePath string) *Matcher {
 
 // executeCommands runs the commands associated with a rule.
 func (o *Orchestrator) executeCommands(rule Rule) {
+	o.mu.Lock()
+	status, ok := o.ruleStatuses[rule.Name]
+	if !ok {
+		status = &RuleStatus{}
+		o.ruleStatuses[rule.Name] = status
+	}
+	status.IsRunning = true
+	status.StartTime = time.Now()
+	status.LastBuildStatus = "RUNNING"
+	o.mu.Unlock()
+
 	if verbose {
 		log.Printf("[devloop] Executing commands for rule %q", rule.Name)
 	}
@@ -165,14 +177,41 @@ func (o *Orchestrator) executeCommands(rule Rule) {
 
 	// Signal that the rule has finished when all commands are done
 	go func() {
+		allCommandsSuccessful := true
 		for _, cmd := range currentCmds {
 			if cmd != nil && cmd.Process != nil {
-				_ = cmd.Wait() // Wait for each command to finish
+				waitErr := cmd.Wait() // Wait for each command to finish
+				if waitErr != nil {
+					log.Printf("[devloop] Command for rule %q failed: %v", rule.Name, waitErr)
+					allCommandsSuccessful = false
+				}
 			}
 		}
+
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		status := o.ruleStatuses[rule.Name]
+		if status != nil {
+			status.IsRunning = false
+			status.LastBuildTime = time.Now()
+			if allCommandsSuccessful {
+				status.LastBuildStatus = "SUCCESS"
+			} else {
+				status.LastBuildStatus = "FAILED"
+			}
+		}
+
 		o.LogManager.SignalFinished(rule.Name)
 		log.Printf("[devloop] Rule %q commands finished.", rule.Name)
 	}()
+}
+
+// Orchestrator manages file watching and rule execution.
+type RuleStatus struct {
+	IsRunning       bool      `json:"is_running"`
+	StartTime       time.Time `json:"start_time,omitempty"`
+	LastBuildTime   time.Time `json:"last_build_time,omitempty"`
+	LastBuildStatus string    `json:"last_build_status,omitempty"` // e.g., "SUCCESS", "FAILED", "IDLE"
 }
 
 // Orchestrator manages file watching and rule execution.
@@ -186,6 +225,8 @@ type Orchestrator struct {
 	debouncedEvents  chan Rule
 	debounceDuration time.Duration
 	runningCommands  map[string][]*exec.Cmd // Track running commands by rule name
+	ruleStatuses     map[string]*RuleStatus // Track status of each rule
+	mu               sync.RWMutex           // Mutex to protect ruleStatuses
 }
 
 // debounce manages the debounce timer for a given rule.
@@ -234,22 +275,68 @@ func NewOrchestrator(configPath string, httpPort string) (*Orchestrator, error) 
 		return nil, fmt.Errorf("failed to create log manager: %w", err)
 	}
 
-	var httpServer *HTTPServer
-	if httpPort != "" {
-		httpServer = NewHTTPServer(logManager, httpPort)
-	}
-
-	return &Orchestrator{
+	orchestrator := &Orchestrator{
 		Config:           config,
 		Watcher:          watcher,
 		LogManager:       logManager,
-		HTTPServer:       httpServer,
 		done:             make(chan bool),
 		debounceTimers:   make(map[string]*time.Timer),
 		debouncedEvents:  make(chan Rule),
 		debounceDuration: 500 * time.Millisecond, // Default debounce duration
 		runningCommands:  make(map[string][]*exec.Cmd),
-	}, nil
+		ruleStatuses:     make(map[string]*RuleStatus),
+	}
+
+	// Initialize HTTP server if port is provided
+	if httpPort != "" {
+		orchestrator.HTTPServer = NewHTTPServer(orchestrator, logManager, httpPort)
+	}
+
+	return orchestrator, nil
+}
+
+// GetRuleStatus returns the current status of a specific rule.
+func (o *Orchestrator) GetRuleStatus(ruleName string) (*RuleStatus, bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	status, ok := o.ruleStatuses[ruleName]
+	return status, ok
+}
+
+// TriggerRule manually triggers the execution of a specific rule.
+func (o *Orchestrator) TriggerRule(ruleName string) error {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	for _, rule := range o.Config.Rules {
+		if rule.Name == ruleName {
+			// Send the rule to the debouncedEvents channel to trigger execution
+			o.debouncedEvents <- rule
+			return nil
+		}
+	}
+	return fmt.Errorf("rule %q not found", ruleName)
+}
+
+// GetWatchedPaths returns a unique list of all paths being watched by any rule.
+func (o *Orchestrator) GetWatchedPaths() []string {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	watchedPaths := make(map[string]struct{})
+	for _, rule := range o.Config.Rules {
+		for _, matcher := range rule.Watch {
+			for _, pattern := range matcher.Patterns {
+				watchedPaths[pattern] = struct{}{}
+			}
+		}
+	}
+
+	paths := make([]string, 0, len(watchedPaths))
+	for path := range watchedPaths {
+		paths = append(paths, path)
+	}
+	return paths
 }
 
 // Start begins the file watching and event processing.

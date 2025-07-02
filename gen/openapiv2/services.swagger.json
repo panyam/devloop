@@ -1,0 +1,564 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "devloop/v1/devloop_gateway.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "DevloopGatewayService"
+    },
+    {
+      "name": "GatewayClientService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/projects": {
+      "get": {
+        "summary": "List all registered devloop projects.",
+        "operationId": "GatewayClientService_ListProjects",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListProjectsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/config": {
+      "get": {
+        "summary": "Get the configuration for a specific devloop project.",
+        "operationId": "GatewayClientService_GetConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/file-content": {
+      "get": {
+        "summary": "Read and return the content of a specific file within a devloop project.",
+        "operationId": "GatewayClientService_ReadFileContent",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ReadFileContentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/historical-logs/{ruleName}": {
+      "get": {
+        "summary": "Retrieve historical logs for a specific rule, with optional time filtering.",
+        "operationId": "GatewayClientService_GetHistoricalLogsClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1LogLine"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1LogLine"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ruleName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "startTime",
+            "description": "Unix timestamp in milliseconds, for logs after this time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "endTime",
+            "description": "Unix timestamp in milliseconds, for logs before this time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/status/{ruleName}": {
+      "get": {
+        "summary": "Get the detailed status of a specific rule within a project.",
+        "operationId": "GatewayClientService_GetRuleStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRuleStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ruleName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/stream/logs/{ruleName}": {
+      "get": {
+        "summary": "Stream real-time logs for a specific rule in a project.",
+        "operationId": "GatewayClientService_StreamLogsClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1LogLine"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1LogLine"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ruleName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/trigger/{ruleName}": {
+      "post": {
+        "summary": "Manually trigger a specific rule in a devloop project.",
+        "operationId": "GatewayClientService_TriggerRuleClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TriggerRuleClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "ruleName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    },
+    "/projects/{projectId}/watched-paths": {
+      "get": {
+        "summary": "List all glob patterns being watched by a specific devloop project.",
+        "operationId": "GatewayClientService_ListWatchedPaths",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListWatchedPathsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayClientService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ListProjectsResponseProject": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "projectRoot": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "title": "e.g., \"CONNECTED\", \"DISCONNECTED\""
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1GetConfigResponse": {
+      "type": "object",
+      "properties": {
+        "configJson": {
+          "type": "string",
+          "format": "byte",
+          "title": "Assuming Config struct from devloop will be mapped here\nFor now, just a placeholder string or bytes"
+        }
+      }
+    },
+    "v1GetRuleStatusResponse": {
+      "type": "object",
+      "properties": {
+        "ruleStatus": {
+          "$ref": "#/definitions/v1RuleStatus"
+        }
+      }
+    },
+    "v1ListProjectsResponse": {
+      "type": "object",
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/ListProjectsResponseProject"
+          }
+        }
+      }
+    },
+    "v1ListWatchedPathsResponse": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1LogLine": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": "string"
+        },
+        "line": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp in milliseconds"
+        }
+      },
+      "description": "LogLine represents a single log entry from a rule."
+    },
+    "v1ProjectInfo": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "projectRoot": {
+          "type": "string"
+        },
+        "internalAddr": {
+          "type": "string",
+          "title": "The internal address (host:port) where this devloop instance's HTTP server is listening"
+        }
+      },
+      "description": "ProjectInfo represents the information about a registered devloop project."
+    },
+    "v1ReadFileContentResponse": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "v1RegisterResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "description": "RegisterResponse is sent by the gateway in response to a registration."
+    },
+    "v1RuleStatus": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": "string"
+        },
+        "isRunning": {
+          "type": "boolean"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp in milliseconds, if running"
+        },
+        "lastBuildTime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp in milliseconds, if not running"
+        },
+        "lastBuildStatus": {
+          "type": "string",
+          "title": "e.g., \"SUCCESS\", \"FAILED\", \"RUNNING\", \"IDLE\""
+        }
+      },
+      "description": "RuleStatus represents the current status of a rule."
+    },
+    "v1StreamLogsResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "description": "StreamLogsResponse is sent by the gateway in response to a log line."
+    },
+    "v1TriggerRuleClientResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1TriggerRuleResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "description": "TriggerRuleResponse is sent by devloop in response to a trigger request."
+    },
+    "v1UnregisterResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "description": "UnregisterResponse is sent by the gateway in response to unregistration."
+    },
+    "v1UpdateRuleStatusResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "description": "UpdateRuleStatusResponse is sent by the gateway in response to a status update."
+    }
+  }
+}
