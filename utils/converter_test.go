@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"bytes"
@@ -45,7 +45,7 @@ exclude_regex = ["_test.go"]
 	os.Stdout = w
 
 	// Run the conversion
-	err = convertAirToml(airTomlPath)
+	err = ConvertAirToml(airTomlPath)
 	assert.NoError(t, err)
 
 	// Restore stdout

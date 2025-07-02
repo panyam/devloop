@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"fmt"
@@ -20,10 +20,13 @@ func TestGracefulShutdown(t *testing.T) {
 		// Get the project root to build the binary correctly.
 		originalDir, err := os.Getwd()
 		assert.NoError(t, err)
+		
+		// Get the actual project root (parent of agent directory)
+		projectRoot := filepath.Dir(originalDir)
 
 		// 1. Build the devloop executable from the project root.
 		buildCmd := exec.Command("go", "build", "-o", filepath.Join(tmpDir, "devloop"), ".")
-		buildCmd.Dir = originalDir // Ensure build runs in the project root.
+		buildCmd.Dir = projectRoot // Ensure build runs in the project root.
 		buildCmd.Stdout = os.Stdout
 		buildCmd.Stderr = os.Stderr
 		err = buildCmd.Run()

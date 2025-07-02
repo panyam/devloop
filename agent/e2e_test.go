@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"bytes"
@@ -315,10 +315,9 @@ rules:
 		assert.NotNil(t, orchestrator)
 
 		// Enable verbose mode for debugging
-		oldVerbose := verbose
-		verbose = true
-		defer func() { verbose = oldVerbose }()
-
+		oldVerbose := orchestrator.Verbose
+		orchestrator.Verbose = true
+		defer func() { orchestrator.Verbose = oldVerbose }()
 
 		// Start the orchestrator
 		go func() {

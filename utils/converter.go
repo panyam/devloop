@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"fmt"
@@ -50,7 +50,7 @@ type ColorConfig struct {
 	Runner  string `toml:"runner"`
 }
 
-func convertAirToml(inputPath string) error {
+func ConvertAirToml(inputPath string) error {
 	// Read the .air.toml file
 	data, err := os.ReadFile(inputPath)
 	if err != nil {

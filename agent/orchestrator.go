@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"bufio"
@@ -25,6 +25,29 @@ import (
 	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
 )
 
+// Orchestrator manages file watching and rule execution.
+type Orchestrator struct {
+	ConfigPath       string
+	Config           *gateway.Config
+	Verbose          bool
+	Watcher          *fsnotify.Watcher
+	LogManager       *LogManager                                // New field for log management
+	gatewayClient    pb.DevloopGatewayServiceClient             // gRPC client to the gateway
+	gatewayStream    pb.DevloopGatewayService_CommunicateClient // Bidirectional stream to gateway
+	projectID        string                                     // Unique ID for this devloop instance/project
+	done             chan bool
+	debounceTimers   map[string]*time.Timer
+	debouncedEvents  chan gateway.Rule
+	debounceDuration time.Duration
+	runningCommands  map[string][]*exec.Cmd         // Track running commands by rule name
+	ruleStatuses     map[string]*gateway.RuleStatus // Track status of each rule
+	mu               sync.RWMutex                   // Mutex to protect ruleStatuses
+	// Channels for gateway communication
+	gatewaySendChan chan *pb.DevloopMessage            // Channel to send messages to gateway
+	responseChan    map[string]chan *pb.DevloopMessage // Correlation ID -> response channel for gateway-initiated requests
+	nextRequestID   int64
+}
+
 // executeCommands runs the commands associated with a rule.
 func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	o.mu.Lock()
@@ -38,7 +61,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	status.LastBuildStatus = "RUNNING"
 	o.mu.Unlock()
 
-	if verbose {
+	if o.Verbose {
 		log.Printf("[devloop] Executing commands for rule %q", rule.Name)
 	}
 
@@ -46,7 +69,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	if cmds, ok := o.runningCommands[rule.Name]; ok {
 		for _, cmd := range cmds {
 			if cmd != nil && cmd.Process != nil {
-				if verbose {
+				if o.Verbose {
 					log.Printf("[devloop] Terminating previous process group %d for rule %q", cmd.Process.Pid, rule.Name)
 				}
 				// Send SIGTERM to the process group
@@ -57,7 +80,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 				// Wait for the process to exit
 				go func(c *exec.Cmd) {
 					_ = c.Wait() // Wait for the process to actually exit
-					if verbose {
+					if o.Verbose {
 						log.Printf("[devloop] Previous process group %d for rule %q terminated.", c.Process.Pid, rule.Name)
 					}
 				}(cmd)
@@ -178,28 +201,6 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		o.LogManager.SignalFinished(rule.Name)
 		log.Printf("[devloop] Rule %q commands finished.", rule.Name)
 	}()
-}
-
-// Orchestrator manages file watching and rule execution.
-type Orchestrator struct {
-	ConfigPath       string
-	Config           *gateway.Config
-	Watcher          *fsnotify.Watcher
-	LogManager       *LogManager                                // New field for log management
-	gatewayClient    pb.DevloopGatewayServiceClient             // gRPC client to the gateway
-	gatewayStream    pb.DevloopGatewayService_CommunicateClient // Bidirectional stream to gateway
-	projectID        string                                     // Unique ID for this devloop instance/project
-	done             chan bool
-	debounceTimers   map[string]*time.Timer
-	debouncedEvents  chan gateway.Rule
-	debounceDuration time.Duration
-	runningCommands  map[string][]*exec.Cmd         // Track running commands by rule name
-	ruleStatuses     map[string]*gateway.RuleStatus // Track status of each rule
-	mu               sync.RWMutex                   // Mutex to protect ruleStatuses
-	// Channels for gateway communication
-	gatewaySendChan chan *pb.DevloopMessage            // Channel to send messages to gateway
-	responseChan    map[string]chan *pb.DevloopMessage // Correlation ID -> response channel for gateway-initiated requests
-	nextRequestID   int64
 }
 
 // debounce manages the debounce timer for a given rule.
@@ -685,7 +686,7 @@ func (o *Orchestrator) handleGatewayStreamSend() {
 func (o *Orchestrator) Start() error {
 	// Walk the project root directory and add all subdirectories to the watcher
 	projectRoot := o.ProjectRoot()
-	if verbose {
+	if o.Verbose {
 		log.Printf("[devloop] Starting file watcher from project root: %s", projectRoot)
 	}
 	err := filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
@@ -703,7 +704,7 @@ func (o *Orchestrator) Start() error {
 			err = o.Watcher.Add(path)
 			if err != nil {
 				log.Printf("Error watching %s: %v", path, err)
-			} else if verbose {
+			} else if o.Verbose {
 				log.Printf("[devloop] Watching directory: %s", path)
 			}
 		}
@@ -720,14 +721,14 @@ func (o *Orchestrator) Start() error {
 				if !ok {
 					return
 				}
-				if verbose {
+				if o.Verbose {
 					log.Printf("[devloop] File event: %s on %s", event.Op, event.Name)
 				}
 				// Check all rules for a match
 				for _, rule := range o.Config.Rules {
 					matcher := rule.Matches(event.Name)
 					if matcher != nil {
-						if verbose {
+						if o.Verbose {
 							log.Printf("[devloop] Rule %q matched for file %s", rule.Name, event.Name)
 						}
 						// Use a map to debounce rules by name, ensuring each rule is only debounced once per event burst

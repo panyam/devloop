@@ -9,13 +9,15 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/panyam/devloop/agent"
 	"github.com/panyam/devloop/gateway"
+	"github.com/panyam/devloop/utils"
 )
 
 //go:embed VERSION
 var version string
 
-var verbose bool // Global flag for verbose logging
+var verbose bool
 
 func main() {
 	var configPath string
@@ -51,7 +53,7 @@ func main() {
 		switch flag.Args()[0] {
 		case "convert":
 			convertCmd.Parse(flag.Args()[1:])
-			if err := convertAirToml(*convertInputPath); err != nil {
+			if err := utils.ConvertAirToml(*convertInputPath); err != nil {
 				log.Fatalf("Error: Failed to convert .air.toml: %v\n", err)
 			}
 			return
@@ -63,7 +65,7 @@ func main() {
 }
 
 func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string) {
-	orchestrator, err := NewOrchestrator(configPath, gatewayAddr)
+	orchestrator, err := agent.NewOrchestrator(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
 	}
