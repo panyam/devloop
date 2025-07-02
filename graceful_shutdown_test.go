@@ -61,7 +61,7 @@ rules:
 		cmd.Stderr = &stderr
 		err = cmd.Start()
 		assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
-		
+
 		// Log the process ID for debugging
 		t.Logf("Started devloop process with PID: %d", cmd.Process.Pid)
 
@@ -79,7 +79,7 @@ rules:
 
 		// Give the watcher time to initialize
 		time.Sleep(2 * time.Second)
-		
+
 		// Verify we're in the right directory
 		cwd, _ := os.Getwd()
 		t.Logf("Current working directory: %s", cwd)
@@ -88,7 +88,7 @@ rules:
 		// 6. Trigger the rule and verify activity.
 		err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
 		assert.NoError(t, err)
-		
+
 		// Log that we created the file
 		if _, err := os.Stat(triggerFilePath); err == nil {
 			t.Logf("Successfully created trigger file at %s", triggerFilePath)

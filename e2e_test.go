@@ -227,7 +227,7 @@ rules:
           - "%s"
     commands:
       - "echo %s > %s"
-`, filepath.Base(cliTriggerFilePath), cliUniqueString, filepath.Base(cliOutputFilePath))
+`, filepath.Base(cliTriggerFilePath), cliUniqueString, cliOutputFilePath)
 
 		// Write custom_.devloop.yaml
 		err := os.WriteFile(customMultiYamlPath, []byte(customMultiYamlContent), 0644)

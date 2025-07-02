@@ -304,7 +304,7 @@ func NewOrchestrator(configPath string, gatewayAddr string) (*Orchestrator, erro
 
 	// Connect to gateway if address is provided
 	if gatewayAddr != "" {
-		conn, err := grpc.Dial(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to gateway %q: %w", gatewayAddr, err)
 		}
