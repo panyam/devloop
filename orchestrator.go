@@ -182,6 +182,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 
 // Orchestrator manages file watching and rule execution.
 type Orchestrator struct {
+	ConfigPath       string
 	Config           *gateway.Config
 	Watcher          *fsnotify.Watcher
 	LogManager       *LogManager                                // New field for log management
@@ -211,32 +212,56 @@ func (o *Orchestrator) debounce(rule gateway.Rule) {
 	})
 }
 
-// LoadConfig reads and unmarshals the .devloop.yaml configuration file.
-func LoadConfig(filePath string) (*gateway.Config, error) {
-	filePath, err := filepath.Abs(filePath)
+// LoadConfig reads and unmarshals the .devloop.yaml configuration file,
+// resolving all relative watch paths to be absolute from the config file's location.
+func LoadConfig(configPath string) (*gateway.Config, error) {
+	absConfigPath, err := filepath.Abs(configPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
 	}
-	data, err := os.ReadFile(filePath)
+
+	data, err := os.ReadFile(absConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("config file not found: %q", filePath)
+			return nil, fmt.Errorf("config file not found: %q", absConfigPath)
 		}
-		return nil, fmt.Errorf("failed to read config file %q: %w", filePath, err)
+		return nil, fmt.Errorf("failed to read config file %q: %w", absConfigPath, err)
 	}
 
 	var config gateway.Config
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse config file %q: %w", filePath, err)
+		return nil, fmt.Errorf("failed to parse config file %q: %w", absConfigPath, err)
+	}
+
+	// Resolve relative watch paths to be absolute.
+	configDir := filepath.Dir(absConfigPath)
+	for _, rule := range config.Rules {
+		for _, matcher := range rule.Watch {
+			for i, pattern := range matcher.Patterns {
+				if !filepath.IsAbs(pattern) {
+					absPattern := filepath.Join(configDir, pattern)
+					matcher.Patterns[i] = absPattern
+				}
+			}
+		}
 	}
 
 	return &config, nil
 }
 
+func (o *Orchestrator) ProjectRoot() string {
+	return filepath.Dir(o.ConfigPath)
+}
+
 // NewOrchestrator creates a new Orchestrator instance.
 func NewOrchestrator(configPath string, gatewayAddr string) (*Orchestrator, error) {
-	config, err := LoadConfig(configPath)
+	absConfigPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not determine absolute path for config: %w", err)
+	}
+
+	config, err := LoadConfig(absConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -246,26 +271,26 @@ func NewOrchestrator(configPath string, gatewayAddr string) (*Orchestrator, erro
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
-	// Generate a unique project ID based on the current working directory
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
-	}
+	// The project root is the directory containing the config file.
+	projectRoot := filepath.Dir(absConfigPath)
+
+	// Generate a unique project ID based on the project root.
 	hasher := sha1.New()
 	hasher.Write([]byte(projectRoot))
 	projectID := hex.EncodeToString(hasher.Sum(nil))
 
 	orchestrator := &Orchestrator{
+		ConfigPath:       absConfigPath,
 		Config:           config,
 		Watcher:          watcher,
 		projectID:        projectID,
 		done:             make(chan bool),
 		debounceTimers:   make(map[string]*time.Timer),
 		debouncedEvents:  make(chan gateway.Rule),
-		debounceDuration: 500 * time.Millisecond, // Default debounce duration
+		debounceDuration: 500 * time.Millisecond,
 		runningCommands:  make(map[string][]*exec.Cmd),
 		ruleStatuses:     make(map[string]*gateway.RuleStatus),
-		gatewaySendChan:  make(chan *pb.DevloopMessage, 100), // Buffered channel for messages to gateway
+		gatewaySendChan:  make(chan *pb.DevloopMessage, 100),
 		responseChan:     make(map[string]chan *pb.DevloopMessage),
 		nextRequestID:    0,
 	}
@@ -658,22 +683,28 @@ func (o *Orchestrator) handleGatewayStreamSend() {
 
 // Start begins the file watching and command execution loop.
 func (o *Orchestrator) Start() error {
-	// Walk the current directory and add all subdirectories to the watcher
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+	// Walk the project root directory and add all subdirectories to the watcher
+	projectRoot := o.ProjectRoot()
+	if verbose {
+		log.Printf("[devloop] Starting file watcher from project root: %s", projectRoot)
+	}
+	err := filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
 			// Basic ignore for hidden directories and common dependency folders
-			if strings.HasPrefix(path, ".") && path != "." {
+			if strings.HasPrefix(filepath.Base(path), ".") && path != projectRoot {
 				return filepath.SkipDir
 			}
-			if path == "node_modules" || path == "vendor" || path == "gen" {
+			if filepath.Base(path) == "node_modules" || filepath.Base(path) == "vendor" || filepath.Base(path) == "gen" {
 				return filepath.SkipDir
 			}
 			err = o.Watcher.Add(path)
 			if err != nil {
 				log.Printf("Error watching %s: %v", path, err)
+			} else if verbose {
+				log.Printf("[devloop] Watching directory: %s", path)
 			}
 		}
 		return nil

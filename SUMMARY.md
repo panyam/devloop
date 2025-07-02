@@ -8,92 +8,53 @@ This document summarizes the design, progress, and future plans for the `devloop
 
 **Key Principles:**
 - **Configuration-driven:** Behavior defined in `.devloop.yaml`.
-- **Glob-based Triggers:** Actions initiated by file changes matching defined globs.
-- **Unopinionated Actions:** The tool focuses on change detection and lifecycle management, not the semantics of the commands themselves. Commands can be any shell script (Go build, Python script, Node.js minifier, etc.).
+- **Glob-based Triggers:** Actions initiated by file changes matching defined globs. Paths can be relative to the config file or absolute.
+- **Unopinionated Actions:** The tool focuses on change detection and lifecycle management, not the semantics of the commands themselves. Commands can be any shell script.
 - **Idempotency at Trigger Level:** Debouncing ensures a rule is triggered only once per set of rapid changes.
 - **Robust Process Management:** Graceful termination of previously spawned processes (and their children) before re-execution.
 
-## 2. Usefulness as an MCP Tool
+## 2. Architecture & Operating Modes
 
-`devloop` aims to streamline development in multi-component environments by:
-- Providing a **unified development experience** from a single entry point.
-- Enabling **intelligent, targeted rebuilds/restarts** based on specific file changes, avoiding unnecessary work.
-- Managing **long-running processes** (e.g., backend servers, frontend dev servers) with automatic restarts.
-- Offering **simplified configuration** for the entire development environment.
-- Improving **resource efficiency** by only acting on affected components.
+`devloop` has evolved to a gRPC-based architecture to provide a robust and flexible API for monitoring and interaction. The API is defined in Protobuf (`protos/devloop/v1/devloop_gateway.proto`) and exposed via a gRPC-Gateway, providing both gRPC and RESTful HTTP/JSON endpoints.
 
-## 3. `.devloop.yaml` Configuration Structure
+The tool can operate in three distinct modes:
 
-The tool's behavior is defined by `rules` in a `.devloop.yaml` file.
+1.  **Standalone Mode (Default):**
+    *   This is the standard mode for individual projects.
+    *   `devloop` runs as a single daemon, watching files and executing commands as defined in `.devloop.yaml`.
+    *   It runs an **in-process gRPC server and gateway**, allowing you to interact with it via the gRPC or HTTP API (e.g., to check status or trigger rules from a script).
 
-```yaml
-# .devloop.yaml
+2.  **Agent Mode:**
+    *   In this mode, the `devloop` instance does *not* host its own server.
+    *   Instead, it connects as a client to a central `devloop` instance running in **Gateway Mode**.
+    *   It registers itself and streams its logs and status updates to the central gateway. This is ideal for MCPs where you want a single point of control and observation.
 
-rules:
-  - name: "Go Backend Build and Run" # A unique name for this rule, used for process management
-    watch:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-    commands:
-      - "echo 'Building backend...'"
-      - "go build -o ./bin/server ./cmd/server"
-      - "./bin/server" # This is a long-running process
+3.  **Gateway Mode:**
+    *   This instance acts as a central hub.
+    *   It runs the gRPC server and gateway, but does not perform any file watching or command execution itself.
+    *   Its primary role is to accept connections from multiple `devloop` instances running in **Agent Mode**, aggregate their logs and statuses, and provide a unified API for clients to interact with the entire project ecosystem.
 
-  - name: "Frontend Assets Build"
-    watch:
-      - "web/static/**/*.css"
-      - "web/static/**/*.js"
-    commands:
-      - "echo 'Rebuilding frontend assets...'"
-      - "npm run build --prefix web/" # This is a short-lived process
+## 3. Execution Flow (Standalone Mode)
 
-  # ... other rules for WASM, docs, etc.
-```
+1.  **Startup:** `devloop` reads `.devloop.yaml`. Relative `watch` paths are resolved to absolute paths based on the config file's location.
+2.  **Server Start:** The combined gRPC server and gRPC-Gateway proxy is started in the background.
+3.  **File Watching:** A single file watcher monitors the project directory.
+4.  **Event Processing:** When a file changes, `devloop` identifies all rules whose `watch` globs match the file's absolute path.
+5.  **Debouncing (per rule):** Each matched rule is debounced independently.
+6.  **Action Execution (per rule):**
+    *   Once a rule's debounce timer expires, any previously running processes for that rule are terminated.
+    *   The `commands` for the rule are then executed sequentially.
 
-## 4. Execution Flow
-
-1.  **Startup:** `devloop` reads `.devloop.yaml` and registers all defined `rules`.
-2.  **File Watching:** A single file watcher monitors the project directory.
-3.  **Event Processing:** When a file changes, `devloop` identifies *all* rules whose `watch` globs match the file.
-4.  **Debouncing (per rule):** Each matched rule is debounced independently. If multiple files change rapidly, the affected rules are triggered only once after a configurable debounce period.
-5.  **Action Execution (per rule):**
-    *   Once a rule's debounce timer expires, any previously running processes for that rule are terminated (via `SIGTERM` to their process group).
-    *   The `commands` for the rule are then executed sequentially in a new process group.
-
-## 5. Incremental Build Plan
-
-**Phase 1: Core Structure & Configuration**
-1.  **Project Setup:** `devloop` directory, `go.mod`, `main.go` created. (✅ Done)
-2.  **Configuration Definition:** Go structs for `Config` and `Rule` defined in `config.go`. YAML unmarshaling implemented. (✅ Done)
-3.  **Test Configuration Loading:** Dummy `.devloop.yaml` created and `main.go` modified to load and print config. (✅ Done)
-
-**Phase 2: Basic File Watching & Glob Matching**
-4.  File Watching Integration (`fsnotify`). (✅ Done)
-5.  Glob Matching Logic. (✅ Done)
-
-**Phase 3: Command Execution & Basic Process Management**
-6.  Simple Command Execution. (✅ Done)
-7.  Sequential Command Execution. (✅ Done)
-
-**Phase 4: Debouncing & Advanced Process Management**
-8.  Debouncing Implementation. (✅ Done)
-9.  Process Group Management. (✅ Done)
-
-**Phase 5: Robustness, CLI & Polish**
-10. Error Handling & Logging. (✅ Done)
-11. CLI Arguments. (✅ Done)
-12. Graceful Shutdown. (✅ Done)
-13. Documentation & Testing. (⏳ In Progress)
-
-## 6. Progress & Next Steps
+## 4. Progress & Next Steps
 
 **Current Status:**
-- All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented and covered by unit and end-to-end tests.
-- CLI argument parsing for the config file path is implemented.
-- Error handling and logging have been improved.
-- Initial MCP (Model Context Protocol) support has been implemented, including enhanced rule status tracking and new HTTP API endpoints for configuration, rule status, rule triggering, watched paths, and file content.
+- All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented.
+- The architecture has been successfully migrated from a simple HTTP server to a unified gRPC and gRPC-Gateway foundation.
+- The three operating modes (`standalone`, `agent`, `gateway`) are defined at the CLI level.
+- The `standalone` mode is functional and tested.
+- The test suite has been significantly refactored for robustness, using a test context helper to manage timeouts and temporary environments.
 
 **Next Steps:**
-- Continue with general documentation and testing improvements.
-- **Devloop Proxy/Centralized Management:** Brainstorm and implement a centralized proxy or push mechanism to manage multiple `devloop` instances across different projects, streamlining log streaming and overall MCP client interaction.
+- Finalize the implementation and testing for the `agent` and `gateway` modes.
+- Add comprehensive tests for the gRPC API endpoints.
+- Continue to improve documentation and user guides for the new architecture.

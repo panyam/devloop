@@ -75,10 +75,12 @@ func (lm *LogManager) GetWriter(ruleName string) (io.Writer, error) {
 	state.file = file
 	state.fileMu.Unlock()
 
-	// Signal that the rule has started (non-blocking send)
+	// Signal that the rule has started by closing the channel
 	select {
-	case state.started <- struct{}{}:
+	case <-state.started:
+		// Already closed
 	default:
+		close(state.started)
 	}
 
 	return file, nil

@@ -13,7 +13,7 @@ import (
 func TestLoadConfig(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful loading
-		configPath := "../testdata/test_devloop.yaml"
+		configPath := "./testdata/test_devloop.yaml"
 		config, err := LoadConfig(configPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, config)
@@ -22,13 +22,18 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "Test Rule 1", config.Rules[0].Name)
 		assert.Len(t, config.Rules[0].Watch, 1)
 		assert.Equal(t, "include", config.Rules[0].Watch[0].Action)
-		assert.Equal(t, []string{"src/**/*.go"}, config.Rules[0].Watch[0].Patterns)
+		// Patterns should be resolved to absolute paths relative to config file
+		absConfigPath, _ := filepath.Abs(configPath)
+		expectedPath1 := filepath.Join(filepath.Dir(absConfigPath), "src/**/*.go")
+		assert.Equal(t, []string{expectedPath1}, config.Rules[0].Watch[0].Patterns)
 		assert.Equal(t, []string{"go build"}, config.Rules[0].Commands)
 
 		assert.Equal(t, "Test Rule 2", config.Rules[1].Name)
 		assert.Len(t, config.Rules[1].Watch, 1)
 		assert.Equal(t, "include", config.Rules[1].Watch[0].Action)
-		assert.Equal(t, []string{"web/**/*.js"}, config.Rules[1].Watch[0].Patterns)
+		// Patterns should be resolved to absolute paths relative to config file
+		expectedPath2 := filepath.Join(filepath.Dir(absConfigPath), "web/**/*.js")
+		assert.Equal(t, []string{expectedPath2}, config.Rules[1].Watch[0].Patterns)
 		assert.Equal(t, []string{"npm run build"}, config.Rules[1].Commands)
 
 		// Test non-existent file
@@ -37,7 +42,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Contains(t, err.Error(), "config file not found")
 
 		// Test invalid YAML
-		invalidConfigPath := "../testdata/invalid.yaml"
+		invalidConfigPath := "./testdata/invalid.yaml"
 		_, err = LoadConfig(invalidConfigPath)
 		assert.Error(t, err)
 	})
@@ -46,7 +51,7 @@ func TestLoadConfig(t *testing.T) {
 func TestNewOrchestrator(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful creation
-		orchestrator, err := NewOrchestrator("../testdata/test_devloop.yaml", "")
+		orchestrator, err := NewOrchestrator("./testdata/test_devloop.yaml", "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 		assert.NotNil(t, orchestrator.Config)
@@ -58,7 +63,7 @@ func TestNewOrchestrator(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to load config")
 
 		// Test with invalid config file
-		_, err = NewOrchestrator("../testdata/invalid.yaml", "")
+		_, err = NewOrchestrator("./testdata/invalid.yaml", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 	})

@@ -47,10 +47,10 @@ rules:
     watch:
       - action: include
         patterns:
-          - "%s"
+          - "trigger.txt"
     commands:
       - bash -c "while true; do echo \"heartbeat\" >> %s; sleep 0.1; done"
-`, filepath.Base(triggerFilePath), heartbeatFilePath)
+`, heartbeatFilePath)
 		err = os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
 		assert.NoError(t, err)
 
@@ -61,6 +61,9 @@ rules:
 		cmd.Stderr = &stderr
 		err = cmd.Start()
 		assert.NoError(t, err, "Failed to start devloop process: %v\nStdout: %s\nStderr: %s", err, stdout.String(), stderr.String())
+		
+		// Log the process ID for debugging
+		t.Logf("Started devloop process with PID: %d", cmd.Process.Pid)
 
 		// 5. Verify server readiness.
 		client := &http.Client{Timeout: 1 * time.Second}
@@ -74,9 +77,22 @@ rules:
 			return resp.StatusCode == http.StatusNotFound
 		}, 10*time.Second, 500*time.Millisecond, "HTTP server did not become reachable")
 
+		// Give the watcher time to initialize
+		time.Sleep(2 * time.Second)
+		
+		// Verify we're in the right directory
+		cwd, _ := os.Getwd()
+		t.Logf("Current working directory: %s", cwd)
+		t.Logf("Trigger file path: %s", triggerFilePath)
+
 		// 6. Trigger the rule and verify activity.
 		err = os.WriteFile(triggerFilePath, []byte("trigger"), 0644)
 		assert.NoError(t, err)
+		
+		// Log that we created the file
+		if _, err := os.Stat(triggerFilePath); err == nil {
+			t.Logf("Successfully created trigger file at %s", triggerFilePath)
+		}
 
 		var initialHeartbeatContent []byte
 		assert.Eventually(t, func() bool {

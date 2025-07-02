@@ -33,7 +33,7 @@ rules:
           - "%s"
     commands:
       - "echo %s > %s"
-`, filepath.Base(triggerFilePath), uniqueString, filepath.Base(outputFilePath))
+`, filepath.Base(triggerFilePath), uniqueString, outputFilePath)
 
 		// Write .devloop.yaml
 		err := os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
@@ -93,7 +93,7 @@ rules:
           - "%s"
     commands:
       - "echo 'executed' >> %s"
-`, filepath.Base(triggerFilePath), filepath.Base(outputFilePath))
+`, filepath.Base(triggerFilePath), outputFilePath)
 
 		// Write .devloop.yaml
 		err := os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
@@ -154,7 +154,7 @@ rules:
           - "%s"
     commands:
       - "bash -c 'ID=$(date +%%%%s%%%%N); echo \"Heartbeat $ID\" >> %s; while true; do echo \"Heartbeat $ID\" >> %s; sleep 0.1; done'"
-`, filepath.Base(triggerFilePath), filepath.Base(heartbeatFilePath), filepath.Base(heartbeatFilePath))
+`, filepath.Base(triggerFilePath), heartbeatFilePath, heartbeatFilePath)
 
 		// Write .devloop.yaml
 		err := os.WriteFile(multiYamlPath, []byte(multiYamlContent), 0644)
