@@ -746,6 +746,307 @@ for _, project := range resp.Projects {
 }
 ```
 
+## 🤖 MCP Server Integration
+
+Devloop Gateway can act as a Model Context Protocol (MCP) server, enabling AI agents and LLMs (like Claude) to monitor and control your development workflows.
+
+### What is MCP?
+
+Model Context Protocol (MCP) is a standard that allows AI assistants to interact with external tools and systems. By exposing devloop as an MCP server, you enable:
+
+- **AI-Assisted Development**: LLMs can trigger builds, run tests, and analyze errors
+- **Automated Workflows**: AI agents can respond to build failures and suggest fixes
+- **Intelligent Monitoring**: Query project status and logs through natural language
+
+### Setting Up Devloop MCP Server
+
+#### 1. Start Gateway in MCP Mode
+
+```bash
+# Start gateway with MCP server enabled
+devloop --mode gateway --gateway-port 8080 --mcp-port 3000
+```
+
+#### 2. Configure MCP Server Settings
+
+Create `mcp-config.json`:
+```json
+{
+  "name": "devloop-mcp",
+  "version": "1.0.0",
+  "description": "Control and monitor development workflows",
+  "tools": {
+    "project_management": {
+      "enabled": true,
+      "allowed_operations": ["list", "status", "info"]
+    },
+    "build_control": {
+      "enabled": true,
+      "require_confirmation": false,
+      "timeout_seconds": 300
+    },
+    "log_access": {
+      "enabled": true,
+      "max_lines": 1000,
+      "allow_streaming": true
+    }
+  }
+}
+```
+
+#### 3. Connect Your Devloop Agents
+
+```bash
+# In each project directory
+devloop --mode agent --gateway-url localhost:8080 \
+        --project-id "my-backend" \
+        -c .devloop.yaml
+```
+
+### Using with Claude Desktop
+
+Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "devloop": {
+      "command": "devloop",
+      "args": ["mcp-client", "--gateway-url", "localhost:3000"],
+      "env": {
+        "DEVLOOP_API_KEY": "your-optional-api-key"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+When connected, the following tools are available to AI agents:
+
+#### Project Management
+```typescript
+// List all projects
+await use_mcp_tool("devloop", "list_projects", {
+  filter: "backend",
+  include_status: true
+});
+
+// Get project information
+await use_mcp_tool("devloop", "project_info", {
+  project_id: "my-backend"
+});
+```
+
+#### Build & Test Control
+```typescript
+// Trigger a build
+await use_mcp_tool("devloop", "trigger_build", {
+  project_id: "my-backend",
+  rule_name: "build",
+  wait_for_completion: true
+});
+
+// Run tests
+await use_mcp_tool("devloop", "run_tests", {
+  project_id: "my-backend",
+  test_pattern: "**/*_test.go",
+  coverage: true
+});
+
+// Execute custom command
+await use_mcp_tool("devloop", "execute_command", {
+  project_id: "my-backend",
+  command: "make lint",
+  timeout_seconds: 60
+});
+```
+
+#### Monitoring & Logs
+```typescript
+// Check status
+await use_mcp_tool("devloop", "check_status", {
+  project_id: "my-backend",
+  rule_name: "api-server"
+});
+
+// Read recent logs
+await use_mcp_tool("devloop", "read_logs", {
+  project_id: "my-backend",
+  lines: 100,
+  filter: "ERROR"
+});
+
+// Stream real-time output
+await use_mcp_tool("devloop", "watch_output", {
+  project_id: "my-backend",
+  rule_name: "api-server",
+  duration_seconds: 30
+});
+```
+
+#### Code Intelligence
+```typescript
+// Read file content
+await use_mcp_tool("devloop", "read_file", {
+  project_id: "my-backend",
+  file_path: "src/main.go"
+});
+
+// Search for files
+await use_mcp_tool("devloop", "find_files", {
+  project_id: "my-backend",
+  pattern: "**/*_test.go"
+});
+
+// Analyze build errors
+await use_mcp_tool("devloop", "analyze_errors", {
+  project_id: "my-backend",
+  include_suggestions: true
+});
+```
+
+### Example Workflows
+
+#### 1. AI-Assisted Debugging
+```yaml
+# .devloop.yaml with MCP annotations
+rules:
+  - name: "test"
+    mcp_exposed: true
+    mcp_description: "Run unit tests with coverage"
+    commands:
+      - "go test -v -coverprofile=coverage.out ./..."
+      - "go tool cover -html=coverage.out -o coverage.html"
+```
+
+AI Agent workflow:
+1. "Run the tests for the backend project"
+2. "Show me any failing tests"
+3. "Read the source file for the failing test"
+4. "Suggest a fix for the error"
+
+#### 2. Automated Build Pipeline
+```typescript
+// AI agent can orchestrate complex workflows
+const projects = await use_mcp_tool("devloop", "list_projects");
+
+for (const project of projects) {
+  // Check if project needs rebuild
+  const status = await use_mcp_tool("devloop", "check_status", {
+    project_id: project.id
+  });
+  
+  if (status.needs_rebuild) {
+    // Trigger build
+    const result = await use_mcp_tool("devloop", "trigger_build", {
+      project_id: project.id,
+      wait_for_completion: true
+    });
+    
+    if (!result.success) {
+      // Analyze errors
+      const errors = await use_mcp_tool("devloop", "analyze_errors", {
+        project_id: project.id
+      });
+      
+      console.log(`Build failed: ${errors.summary}`);
+    }
+  }
+}
+```
+
+#### 3. Multi-Project Coordination
+```yaml
+# Gateway coordinates multiple services
+# AI agent can manage the entire stack
+```
+
+```typescript
+// Start all services in correct order
+const startOrder = ["database", "cache", "api", "frontend"];
+
+for (const service of startOrder) {
+  await use_mcp_tool("devloop", "trigger_build", {
+    project_id: service,
+    rule_name: "start"
+  });
+  
+  // Wait for service to be ready
+  let ready = false;
+  while (!ready) {
+    const status = await use_mcp_tool("devloop", "check_status", {
+      project_id: service
+    });
+    ready = status.is_running && status.health_check_passing;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+```
+
+### Security Considerations
+
+#### Authentication
+```yaml
+# mcp-config.json
+{
+  "authentication": {
+    "required": true,
+    "type": "api_key",
+    "key_header": "X-Devloop-API-Key"
+  }
+}
+```
+
+#### Access Control
+```yaml
+{
+  "access_control": {
+    "allowed_projects": ["frontend", "backend"],
+    "forbidden_commands": ["rm", "sudo"],
+    "max_command_length": 500,
+    "rate_limit": {
+      "requests_per_minute": 60,
+      "concurrent_operations": 5
+    }
+  }
+}
+```
+
+### Troubleshooting MCP Integration
+
+#### Connection Issues
+```bash
+# Test MCP server connectivity
+curl http://localhost:3000/mcp/tools
+
+# Check gateway logs
+devloop logs --mode gateway --tail 100
+```
+
+#### Common Problems
+
+1. **"MCP server not found"**
+   - Ensure gateway is running with `--mcp-port` flag
+   - Check firewall settings
+
+2. **"Tool execution failed"**
+   - Verify project is connected as agent
+   - Check tool permissions in mcp-config.json
+
+3. **"Timeout waiting for response"**
+   - Increase timeout in tool parameters
+   - Check if commands are hanging
+
+### Best Practices
+
+1. **Use Descriptive Project IDs**: Makes it easier for AI to identify projects
+2. **Add MCP Descriptions**: Document your rules for better AI understanding
+3. **Set Reasonable Timeouts**: Prevent long-running operations from blocking
+4. **Monitor Rate Limits**: Prevent AI from overwhelming your system
+5. **Log AI Actions**: Audit trail for debugging and security
+
 ## 🚀 Usage
 
 ### Running in Standalone Mode (Default)
