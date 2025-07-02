@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/panyam/devloop/gateway"
 )
 
 //go:embed VERSION
@@ -18,13 +20,19 @@ var verbose bool // Global flag for verbose logging
 func main() {
 	var configPath string
 	var showVersion bool
-	var httpPort string
+	var httpPort int
+	var grpcPort int
+	var gatewayAddr string
+	var mode string
 
 	// Define global flags
 	flag.StringVar(&configPath, "c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 	flag.BoolVar(&showVersion, "version", false, "Display version information")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
-	flag.StringVar(&httpPort, "http-port", "", "Port for the HTTP log streaming server. By default the log server is not started")
+	flag.IntVar(&httpPort, "http-port", 8080, "Port for the HTTP gateway server.")
+	flag.IntVar(&grpcPort, "grpc-port", 50051, "Port for the gRPC server.")
+	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50051). If set, devloop will register with the gateway.")
+	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
 
 	// Define subcommands
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
@@ -50,14 +58,23 @@ func main() {
 		}
 	}
 
-	// Default behavior: run the orchestrator
-	runOrchestrator(configPath, httpPort)
+	// Run the orchestrator in the selected mode
+	runOrchestrator(configPath, mode, httpPort, grpcPort, gatewayAddr)
 }
 
-func runOrchestrator(configPath string, httpPort string) {
-	orchestrator, err := NewOrchestrator(configPath, httpPort)
+func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string) {
+	orchestrator, err := NewOrchestrator(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
+	}
+
+	var gatewayService *gateway.GatewayService
+	if mode == "standalone" || mode == "gateway" {
+		gatewayService = gateway.NewGatewayService(orchestrator)
+		err = gatewayService.Start(grpcPort, httpPort)
+		if err != nil {
+			log.Fatalf("Error: Failed to start gateway service: %v\n", err)
+		}
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -66,6 +83,9 @@ func runOrchestrator(configPath string, httpPort string) {
 	go func() {
 		<-sigChan
 		log.Println("\n[devloop] Shutting down...")
+		if gatewayService != nil {
+			gatewayService.Stop()
+		}
 		orchestrator.Stop()
 	}()
 
