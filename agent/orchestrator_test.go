@@ -13,7 +13,7 @@ import (
 func TestLoadConfig(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful loading
-		configPath := "./testdata/test_devloop.yaml"
+		configPath := "../testdata/test_devloop.yaml"
 		config, err := LoadConfig(configPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, config)
@@ -42,7 +42,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Contains(t, err.Error(), "config file not found")
 
 		// Test invalid YAML
-		invalidConfigPath := "./testdata/invalid.yaml"
+		invalidConfigPath := "../testdata/invalid.yaml"
 		_, err = LoadConfig(invalidConfigPath)
 		assert.Error(t, err)
 	})
@@ -51,7 +51,7 @@ func TestLoadConfig(t *testing.T) {
 func TestNewOrchestrator(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful creation
-		orchestrator, err := NewOrchestrator("./testdata/test_devloop.yaml", "")
+		orchestrator, err := NewOrchestrator("../testdata/test_devloop.yaml", "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 		assert.NotNil(t, orchestrator.Config)
@@ -63,7 +63,7 @@ func TestNewOrchestrator(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to load config")
 
 		// Test with invalid config file
-		_, err = NewOrchestrator("./testdata/invalid.yaml", "")
+		_, err = NewOrchestrator("../testdata/invalid.yaml", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 	})
@@ -86,7 +86,7 @@ rules:
 		err := os.WriteFile(configPath, []byte(dummyConfigContent), 0644)
 		assert.NoError(t, err)
 
-		orchestrator, err := NewOrchestrator(".devloop.yaml", "")
+		orchestrator, err := NewOrchestrator(configPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 

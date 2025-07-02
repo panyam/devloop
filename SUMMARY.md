@@ -45,16 +45,40 @@ The tool can operate in three distinct modes:
     *   Once a rule's debounce timer expires, any previously running processes for that rule are terminated.
     *   The `commands` for the rule are then executed sequentially.
 
-## 4. Progress & Next Steps
+## 4. Key Technical Decisions
 
-**Current Status:**
-- All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented.
-- The architecture has been successfully migrated from a simple HTTP server to a unified gRPC and gRPC-Gateway foundation.
-- The three operating modes (`standalone`, `agent`, `gateway`) are defined at the CLI level.
-- The `standalone` mode is functional and tested.
-- The test suite has been significantly refactored for robustness, using a test context helper to manage timeouts and temporary environments.
+**Glob Pattern Matching:**
+- Switched from `gobwas/glob` to `bmatcuk/doublestar` library for conventional glob behavior
+- Pattern `**` now matches zero or more directories (following git, VS Code, and other tools' conventions)
+- Example: `src/**/*.go` matches both `src/main.go` AND `src/pkg/utils.go`
+
+**File Watching:**
+- File watcher starts from the project root (directory containing the config file)
+- All relative patterns in config are resolved to absolute paths relative to the config file location
+- This ensures consistent behavior regardless of where devloop is executed from
+
+**Code Organization:**
+- Core logic moved to `agent/` directory for better modularity
+- `main.go` remains at project root as the entry point
+- Utilities moved to `utils/` directory
+- Clear separation between agent logic, gateway logic, and main application
+
+## 5. Progress & Next Steps
+
+**Current Status (as of 2025-07-02):**
+- ✅ All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented and tested
+- ✅ The architecture has been successfully migrated from a simple HTTP server to a unified gRPC and gRPC-Gateway foundation
+- ✅ The three operating modes (`standalone`, `agent`, `gateway`) are defined at the CLI level
+- ✅ The `standalone` mode is functional and tested
+- ✅ Complete test suite with 100% passing tests after recent fixes:
+  - Fixed file watcher initialization to start from project root
+  - Fixed log manager channel signaling
+  - Fixed path resolution issues in tests after code reorganization
+  - Migrated from deprecated grpc.Dial to grpc.NewClient
+- ✅ Improved glob pattern matching to follow developer conventions
 
 **Next Steps:**
-- Finalize the implementation and testing for the `agent` and `gateway` modes.
-- Add comprehensive tests for the gRPC API endpoints.
-- Continue to improve documentation and user guides for the new architecture.
+- Finalize the implementation and testing for the `agent` and `gateway` modes
+- Add comprehensive tests for the gRPC API endpoints
+- Continue to improve documentation and user guides for the new architecture
+- Optimize performance for large-scale projects with many file changes
