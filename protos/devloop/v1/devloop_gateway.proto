@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package devloop_gateway.v1;
 
-option go_package = "github.com/panyam/devloop/gen/go/sdl/v1";
+option go_package = "github.com/panyam/devloop/gen/go/protos/devloop/v1";
 
 import "google/api/annotations.proto";
 import "google/api/http.proto";

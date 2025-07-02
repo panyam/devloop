@@ -1731,8 +1731,8 @@ const file_protos_devloop_v1_devloop_gateway_proto_rawDesc = "" +
 	"\x10ListWatchedPaths\x12+.devloop_gateway.v1.ListWatchedPathsRequest\x1a,.devloop_gateway.v1.ListWatchedPathsResponse\",\x82\xd3\xe4\x93\x02&\x12$/projects/{project_id}/watched-paths\x12\x97\x01\n" +
 	"\x0fReadFileContent\x12*.devloop_gateway.v1.ReadFileContentRequest\x1a+.devloop_gateway.v1.ReadFileContentResponse\"+\x82\xd3\xe4\x93\x02%\x12#/projects/{project_id}/file-content\x12\x96\x01\n" +
 	"\x10StreamLogsClient\x12+.devloop_gateway.v1.StreamLogsClientRequest\x1a\x1b.devloop_gateway.v1.LogLine\"6\x82\xd3\xe4\x93\x020\x12./projects/{project_id}/stream/logs/{rule_name}0\x01\x12\xa8\x01\n" +
-	"\x17GetHistoricalLogsClient\x122.devloop_gateway.v1.GetHistoricalLogsClientRequest\x1a\x1b.devloop_gateway.v1.LogLine\":\x82\xd3\xe4\x93\x024\x122/projects/{project_id}/historical-logs/{rule_name}0\x01B\xbb\x01\n" +
-	"\x16com.devloop_gateway.v1B\x13DevloopGatewayProtoP\x01Z'github.com/panyam/devloop/gen/go/sdl/v1\xa2\x02\x03DXX\xaa\x02\x11DevloopGateway.V1\xca\x02\x11DevloopGateway\\V1\xe2\x02\x1dDevloopGateway\\V1\\GPBMetadata\xea\x02\x12DevloopGateway::V1b\x06proto3"
+	"\x17GetHistoricalLogsClient\x122.devloop_gateway.v1.GetHistoricalLogsClientRequest\x1a\x1b.devloop_gateway.v1.LogLine\":\x82\xd3\xe4\x93\x024\x122/projects/{project_id}/historical-logs/{rule_name}0\x01B\xc6\x01\n" +
+	"\x16com.devloop_gateway.v1B\x13DevloopGatewayProtoP\x01Z2github.com/panyam/devloop/gen/go/protos/devloop/v1\xa2\x02\x03DXX\xaa\x02\x11DevloopGateway.V1\xca\x02\x11DevloopGateway\\V1\xe2\x02\x1dDevloopGateway\\V1\\GPBMetadata\xea\x02\x12DevloopGateway::V1b\x06proto3"
 
 var (
 	file_protos_devloop_v1_devloop_gateway_proto_rawDescOnce sync.Once
