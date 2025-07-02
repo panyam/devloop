@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package devloop_gateway.v1;
 
-option go_package = "devloop/protos/devloop/v1";
+option go_package = "github.com/panyam/devloop/gen/go/sdl/v1";
 
 import "google/api/annotations.proto";
 import "google/api/http.proto";
@@ -12,7 +12,6 @@ import "google/protobuf/empty.proto";
 message ProjectInfo {
   string project_id = 1;
   string project_root = 2;
-  string internal_addr = 3; // The internal address (host:port) where this devloop instance's HTTP server is listening
 }
 
 // LogLine represents a single log entry from a rule.
@@ -33,15 +32,34 @@ message RuleStatus {
   string last_build_status = 6; // e.g., "SUCCESS", "FAILED", "RUNNING", "IDLE"
 }
 
+// DevloopMessage is a wrapper for all messages exchanged between devloop and the gateway.
+message DevloopMessage {
+  string correlation_id = 1; // Used to correlate requests and responses
+  oneof content {
+    // Messages sent from devloop to gateway
+    RegisterRequest register_request = 2;
+    UnregisterRequest unregister_request = 3;
+    LogLine log_line = 4;
+    UpdateRuleStatusRequest update_rule_status_request = 5;
+    GetConfigResponse get_config_response = 6;
+    GetRuleStatusResponse get_rule_status_response = 7;
+    TriggerRuleResponse trigger_rule_response = 8;
+    ListWatchedPathsResponse list_watched_paths_response = 9;
+    ReadFileContentResponse read_file_content_response = 10;
+
+    // Messages sent from gateway to devloop
+    TriggerRuleRequest trigger_rule_request = 11;
+    GetConfigRequest get_config_request = 12;
+    GetRuleStatusRequest get_rule_status_request = 13;
+    ListWatchedPathsRequest list_watched_paths_request = 14;
+    ReadFileContentRequest read_file_content_request = 15;
+    GetHistoricalLogsRequest get_historical_logs_request = 16;
+  }
+}
+
 // RegisterRequest is sent by devloop to register with the gateway.
 message RegisterRequest {
   ProjectInfo project_info = 1;
-}
-
-// RegisterResponse is sent by the gateway in response to a registration.
-message RegisterResponse {
-  bool success = 1;
-  string message = 2;
 }
 
 // UnregisterRequest is sent by devloop to unregister from the gateway.
@@ -49,42 +67,15 @@ message UnregisterRequest {
   string project_id = 1;
 }
 
-// UnregisterResponse is sent by the gateway in response to unregistration.
-message UnregisterResponse {
-  bool success = 1;
-  string message = 2;
-}
-
-// StreamLogsRequest is sent by devloop to stream logs to the gateway.
-message StreamLogsRequest {
-  LogLine log_line = 1;
-}
-
-// StreamLogsResponse is sent by the gateway in response to a log line.
-message StreamLogsResponse {
-  bool success = 1;
-}
-
 // UpdateRuleStatusRequest is sent by devloop to update a rule's status.
 message UpdateRuleStatusRequest {
   RuleStatus rule_status = 1;
-}
-
-// UpdateRuleStatusResponse is sent by the gateway in response to a status update.
-message UpdateRuleStatusResponse {
-  bool success = 1;
 }
 
 // TriggerRuleRequest is sent by the gateway to devloop to trigger a rule.
 message TriggerRuleRequest {
   string project_id = 1;
   string rule_name = 2;
-}
-
-// TriggerRuleResponse is sent by devloop in response to a trigger request.
-message TriggerRuleResponse {
-  bool success = 1;
-  string message = 2;
 }
 
 // GetHistoricalLogsRequest is sent by the gateway to devloop to request historical logs.
@@ -96,31 +87,60 @@ message GetHistoricalLogsRequest {
   int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
 }
 
+// GetConfigRequest is sent by the gateway to devloop to request config.
+message GetConfigRequest {
+  string project_id = 1;
+}
+
+// GetRuleStatusRequest is sent by the gateway to devloop to request rule status.
+message GetRuleStatusRequest {
+  string project_id = 1;
+  string rule_name = 2;
+}
+
+// ListWatchedPathsRequest is sent by the gateway to devloop to request watched paths.
+message ListWatchedPathsRequest {
+  string project_id = 1;
+}
+
+// ReadFileContentRequest is sent by the gateway to devloop to request file content.
+message ReadFileContentRequest {
+  string project_id = 1;
+  string path = 2;
+}
+
+// Responses from devloop to gateway
+message GetConfigResponse {
+  bytes config_json = 1;
+}
+
+message GetRuleStatusResponse {
+  RuleStatus rule_status = 1;
+}
+
+message TriggerRuleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListWatchedPathsResponse {
+  repeated string paths = 1;
+}
+
+message ReadFileContentResponse {
+  bytes content = 1;
+}
+
 // DevloopGatewayService defines the gRPC service for communication between devloop and the gateway.
 service DevloopGatewayService {
-  // Register a devloop instance with the gateway.
-  rpc Register(RegisterRequest) returns (RegisterResponse);
-
-  // Unregister a devloop instance from the gateway.
-  rpc Unregister(UnregisterRequest) returns (UnregisterResponse);
-
-  // Stream real-time logs from devloop to the gateway.
-  rpc StreamLogs(stream StreamLogsRequest) returns (stream StreamLogsResponse);
-
-  // Update the status of a rule from devloop to the gateway.
-  rpc UpdateRuleStatus(UpdateRuleStatusRequest) returns (UpdateRuleStatusResponse);
-
-  // Trigger a rule on a devloop instance from the gateway.
-  rpc TriggerRule(TriggerRuleRequest) returns (TriggerRuleResponse);
-
-  // Get historical logs from a devloop instance.
-  rpc GetHistoricalLogs(GetHistoricalLogsRequest) returns (stream LogLine);
+  // Communicate handles all bidirectional communication between devloop and the gateway.
+  rpc Communicate(stream DevloopMessage) returns (stream DevloopMessage);
 }
 
 // GatewayClientService defines the gRPC service for MCP clients to interact with the gateway.
 service GatewayClientService {
   // List all registered devloop projects.
-  rpc ListProjects(google.protobuf.Empty) returns (ListProjectsResponse) {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
     option (google.api.http) = {
       get: "/projects"
     };
@@ -178,6 +198,9 @@ service GatewayClientService {
 
 // Messages for GatewayClientService
 
+message ListProjectsRequest {
+}
+
 message ListProjectsResponse {
   message Project {
     string project_id = 1;
@@ -185,25 +208,6 @@ message ListProjectsResponse {
     string status = 3; // e.g., "CONNECTED", "DISCONNECTED"
   }
   repeated Project projects = 1;
-}
-
-message GetConfigRequest {
-  string project_id = 1;
-}
-
-message GetConfigResponse {
-  // Assuming Config struct from devloop will be mapped here
-  // For now, just a placeholder string or bytes
-  bytes config_json = 1;
-}
-
-message GetRuleStatusRequest {
-  string project_id = 1;
-  string rule_name = 2;
-}
-
-message GetRuleStatusResponse {
-  RuleStatus rule_status = 1;
 }
 
 message TriggerRuleClientRequest {
@@ -214,23 +218,6 @@ message TriggerRuleClientRequest {
 message TriggerRuleClientResponse {
   bool success = 1;
   string message = 2;
-}
-
-message ListWatchedPathsRequest {
-  string project_id = 1;
-}
-
-message ListWatchedPathsResponse {
-  repeated string paths = 1;
-}
-
-message ReadFileContentRequest {
-  string project_id = 1;
-  string path = 2;
-}
-
-message ReadFileContentResponse {
-  bytes content = 1;
 }
 
 message StreamLogsClientRequest {

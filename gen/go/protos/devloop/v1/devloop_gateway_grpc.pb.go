@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             (unknown)
-// source: devloop/v1/devloop_gateway.proto
+// source: protos/devloop/v1/devloop_gateway.proto
 
 package v1
 
@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,12 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DevloopGatewayService_Register_FullMethodName          = "/devloop_gateway.v1.DevloopGatewayService/Register"
-	DevloopGatewayService_Unregister_FullMethodName        = "/devloop_gateway.v1.DevloopGatewayService/Unregister"
-	DevloopGatewayService_StreamLogs_FullMethodName        = "/devloop_gateway.v1.DevloopGatewayService/StreamLogs"
-	DevloopGatewayService_UpdateRuleStatus_FullMethodName  = "/devloop_gateway.v1.DevloopGatewayService/UpdateRuleStatus"
-	DevloopGatewayService_TriggerRule_FullMethodName       = "/devloop_gateway.v1.DevloopGatewayService/TriggerRule"
-	DevloopGatewayService_GetHistoricalLogs_FullMethodName = "/devloop_gateway.v1.DevloopGatewayService/GetHistoricalLogs"
+	DevloopGatewayService_Communicate_FullMethodName = "/devloop_gateway.v1.DevloopGatewayService/Communicate"
 )
 
 // DevloopGatewayServiceClient is the client API for DevloopGatewayService service.
@@ -34,18 +28,8 @@ const (
 //
 // DevloopGatewayService defines the gRPC service for communication between devloop and the gateway.
 type DevloopGatewayServiceClient interface {
-	// Register a devloop instance with the gateway.
-	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
-	// Unregister a devloop instance from the gateway.
-	Unregister(ctx context.Context, in *UnregisterRequest, opts ...grpc.CallOption) (*UnregisterResponse, error)
-	// Stream real-time logs from devloop to the gateway.
-	StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StreamLogsRequest, StreamLogsResponse], error)
-	// Update the status of a rule from devloop to the gateway.
-	UpdateRuleStatus(ctx context.Context, in *UpdateRuleStatusRequest, opts ...grpc.CallOption) (*UpdateRuleStatusResponse, error)
-	// Trigger a rule on a devloop instance from the gateway.
-	TriggerRule(ctx context.Context, in *TriggerRuleRequest, opts ...grpc.CallOption) (*TriggerRuleResponse, error)
-	// Get historical logs from a devloop instance.
-	GetHistoricalLogs(ctx context.Context, in *GetHistoricalLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
+	// Communicate handles all bidirectional communication between devloop and the gateway.
+	Communicate(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DevloopMessage, DevloopMessage], error)
 }
 
 type devloopGatewayServiceClient struct {
@@ -56,77 +40,18 @@ func NewDevloopGatewayServiceClient(cc grpc.ClientConnInterface) DevloopGatewayS
 	return &devloopGatewayServiceClient{cc}
 }
 
-func (c *devloopGatewayServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+func (c *devloopGatewayServiceClient) Communicate(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DevloopMessage, DevloopMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterResponse)
-	err := c.cc.Invoke(ctx, DevloopGatewayService_Register_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DevloopGatewayService_ServiceDesc.Streams[0], DevloopGatewayService_Communicate_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
-}
-
-func (c *devloopGatewayServiceClient) Unregister(ctx context.Context, in *UnregisterRequest, opts ...grpc.CallOption) (*UnregisterResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UnregisterResponse)
-	err := c.cc.Invoke(ctx, DevloopGatewayService_Unregister_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *devloopGatewayServiceClient) StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StreamLogsRequest, StreamLogsResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DevloopGatewayService_ServiceDesc.Streams[0], DevloopGatewayService_StreamLogs_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[StreamLogsRequest, StreamLogsResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[DevloopMessage, DevloopMessage]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type DevloopGatewayService_StreamLogsClient = grpc.BidiStreamingClient[StreamLogsRequest, StreamLogsResponse]
-
-func (c *devloopGatewayServiceClient) UpdateRuleStatus(ctx context.Context, in *UpdateRuleStatusRequest, opts ...grpc.CallOption) (*UpdateRuleStatusResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateRuleStatusResponse)
-	err := c.cc.Invoke(ctx, DevloopGatewayService_UpdateRuleStatus_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *devloopGatewayServiceClient) TriggerRule(ctx context.Context, in *TriggerRuleRequest, opts ...grpc.CallOption) (*TriggerRuleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TriggerRuleResponse)
-	err := c.cc.Invoke(ctx, DevloopGatewayService_TriggerRule_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *devloopGatewayServiceClient) GetHistoricalLogs(ctx context.Context, in *GetHistoricalLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DevloopGatewayService_ServiceDesc.Streams[1], DevloopGatewayService_GetHistoricalLogs_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[GetHistoricalLogsRequest, LogLine]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type DevloopGatewayService_GetHistoricalLogsClient = grpc.ServerStreamingClient[LogLine]
+type DevloopGatewayService_CommunicateClient = grpc.BidiStreamingClient[DevloopMessage, DevloopMessage]
 
 // DevloopGatewayServiceServer is the server API for DevloopGatewayService service.
 // All implementations should embed UnimplementedDevloopGatewayServiceServer
@@ -134,18 +59,8 @@ type DevloopGatewayService_GetHistoricalLogsClient = grpc.ServerStreamingClient[
 //
 // DevloopGatewayService defines the gRPC service for communication between devloop and the gateway.
 type DevloopGatewayServiceServer interface {
-	// Register a devloop instance with the gateway.
-	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
-	// Unregister a devloop instance from the gateway.
-	Unregister(context.Context, *UnregisterRequest) (*UnregisterResponse, error)
-	// Stream real-time logs from devloop to the gateway.
-	StreamLogs(grpc.BidiStreamingServer[StreamLogsRequest, StreamLogsResponse]) error
-	// Update the status of a rule from devloop to the gateway.
-	UpdateRuleStatus(context.Context, *UpdateRuleStatusRequest) (*UpdateRuleStatusResponse, error)
-	// Trigger a rule on a devloop instance from the gateway.
-	TriggerRule(context.Context, *TriggerRuleRequest) (*TriggerRuleResponse, error)
-	// Get historical logs from a devloop instance.
-	GetHistoricalLogs(*GetHistoricalLogsRequest, grpc.ServerStreamingServer[LogLine]) error
+	// Communicate handles all bidirectional communication between devloop and the gateway.
+	Communicate(grpc.BidiStreamingServer[DevloopMessage, DevloopMessage]) error
 }
 
 // UnimplementedDevloopGatewayServiceServer should be embedded to have
@@ -155,23 +70,8 @@ type DevloopGatewayServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDevloopGatewayServiceServer struct{}
 
-func (UnimplementedDevloopGatewayServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
-}
-func (UnimplementedDevloopGatewayServiceServer) Unregister(context.Context, *UnregisterRequest) (*UnregisterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Unregister not implemented")
-}
-func (UnimplementedDevloopGatewayServiceServer) StreamLogs(grpc.BidiStreamingServer[StreamLogsRequest, StreamLogsResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamLogs not implemented")
-}
-func (UnimplementedDevloopGatewayServiceServer) UpdateRuleStatus(context.Context, *UpdateRuleStatusRequest) (*UpdateRuleStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateRuleStatus not implemented")
-}
-func (UnimplementedDevloopGatewayServiceServer) TriggerRule(context.Context, *TriggerRuleRequest) (*TriggerRuleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TriggerRule not implemented")
-}
-func (UnimplementedDevloopGatewayServiceServer) GetHistoricalLogs(*GetHistoricalLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
-	return status.Errorf(codes.Unimplemented, "method GetHistoricalLogs not implemented")
+func (UnimplementedDevloopGatewayServiceServer) Communicate(grpc.BidiStreamingServer[DevloopMessage, DevloopMessage]) error {
+	return status.Errorf(codes.Unimplemented, "method Communicate not implemented")
 }
 func (UnimplementedDevloopGatewayServiceServer) testEmbeddedByValue() {}
 
@@ -193,95 +93,12 @@ func RegisterDevloopGatewayServiceServer(s grpc.ServiceRegistrar, srv DevloopGat
 	s.RegisterService(&DevloopGatewayService_ServiceDesc, srv)
 }
 
-func _DevloopGatewayService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DevloopGatewayServiceServer).Register(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DevloopGatewayService_Register_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DevloopGatewayServiceServer).Register(ctx, req.(*RegisterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DevloopGatewayService_Unregister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnregisterRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DevloopGatewayServiceServer).Unregister(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DevloopGatewayService_Unregister_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DevloopGatewayServiceServer).Unregister(ctx, req.(*UnregisterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DevloopGatewayService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DevloopGatewayServiceServer).StreamLogs(&grpc.GenericServerStream[StreamLogsRequest, StreamLogsResponse]{ServerStream: stream})
+func _DevloopGatewayService_Communicate_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DevloopGatewayServiceServer).Communicate(&grpc.GenericServerStream[DevloopMessage, DevloopMessage]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type DevloopGatewayService_StreamLogsServer = grpc.BidiStreamingServer[StreamLogsRequest, StreamLogsResponse]
-
-func _DevloopGatewayService_UpdateRuleStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateRuleStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DevloopGatewayServiceServer).UpdateRuleStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DevloopGatewayService_UpdateRuleStatus_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DevloopGatewayServiceServer).UpdateRuleStatus(ctx, req.(*UpdateRuleStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DevloopGatewayService_TriggerRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TriggerRuleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DevloopGatewayServiceServer).TriggerRule(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DevloopGatewayService_TriggerRule_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DevloopGatewayServiceServer).TriggerRule(ctx, req.(*TriggerRuleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DevloopGatewayService_GetHistoricalLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetHistoricalLogsRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(DevloopGatewayServiceServer).GetHistoricalLogs(m, &grpc.GenericServerStream[GetHistoricalLogsRequest, LogLine]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type DevloopGatewayService_GetHistoricalLogsServer = grpc.ServerStreamingServer[LogLine]
+type DevloopGatewayService_CommunicateServer = grpc.BidiStreamingServer[DevloopMessage, DevloopMessage]
 
 // DevloopGatewayService_ServiceDesc is the grpc.ServiceDesc for DevloopGatewayService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -289,38 +106,16 @@ type DevloopGatewayService_GetHistoricalLogsServer = grpc.ServerStreamingServer[
 var DevloopGatewayService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "devloop_gateway.v1.DevloopGatewayService",
 	HandlerType: (*DevloopGatewayServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Register",
-			Handler:    _DevloopGatewayService_Register_Handler,
-		},
-		{
-			MethodName: "Unregister",
-			Handler:    _DevloopGatewayService_Unregister_Handler,
-		},
-		{
-			MethodName: "UpdateRuleStatus",
-			Handler:    _DevloopGatewayService_UpdateRuleStatus_Handler,
-		},
-		{
-			MethodName: "TriggerRule",
-			Handler:    _DevloopGatewayService_TriggerRule_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StreamLogs",
-			Handler:       _DevloopGatewayService_StreamLogs_Handler,
+			StreamName:    "Communicate",
+			Handler:       _DevloopGatewayService_Communicate_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
-		{
-			StreamName:    "GetHistoricalLogs",
-			Handler:       _DevloopGatewayService_GetHistoricalLogs_Handler,
-			ServerStreams: true,
-		},
 	},
-	Metadata: "devloop/v1/devloop_gateway.proto",
+	Metadata: "protos/devloop/v1/devloop_gateway.proto",
 }
 
 const (
@@ -341,7 +136,7 @@ const (
 // GatewayClientService defines the gRPC service for MCP clients to interact with the gateway.
 type GatewayClientServiceClient interface {
 	// List all registered devloop projects.
-	ListProjects(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	// Get the configuration for a specific devloop project.
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	// Get the detailed status of a specific rule within a project.
@@ -366,7 +161,7 @@ func NewGatewayClientServiceClient(cc grpc.ClientConnInterface) GatewayClientSer
 	return &gatewayClientServiceClient{cc}
 }
 
-func (c *gatewayClientServiceClient) ListProjects(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ListProjectsResponse, error) {
+func (c *gatewayClientServiceClient) ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProjectsResponse)
 	err := c.cc.Invoke(ctx, GatewayClientService_ListProjects_FullMethodName, in, out, cOpts...)
@@ -471,7 +266,7 @@ type GatewayClientService_GetHistoricalLogsClientClient = grpc.ServerStreamingCl
 // GatewayClientService defines the gRPC service for MCP clients to interact with the gateway.
 type GatewayClientServiceServer interface {
 	// List all registered devloop projects.
-	ListProjects(context.Context, *emptypb.Empty) (*ListProjectsResponse, error)
+	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	// Get the configuration for a specific devloop project.
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	// Get the detailed status of a specific rule within a project.
@@ -495,7 +290,7 @@ type GatewayClientServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedGatewayClientServiceServer struct{}
 
-func (UnimplementedGatewayClientServiceServer) ListProjects(context.Context, *emptypb.Empty) (*ListProjectsResponse, error) {
+func (UnimplementedGatewayClientServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListProjects not implemented")
 }
 func (UnimplementedGatewayClientServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
@@ -540,7 +335,7 @@ func RegisterGatewayClientServiceServer(s grpc.ServiceRegistrar, srv GatewayClie
 }
 
 func _GatewayClientService_ListProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
+	in := new(ListProjectsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -552,7 +347,7 @@ func _GatewayClientService_ListProjects_Handler(srv interface{}, ctx context.Con
 		FullMethod: GatewayClientService_ListProjects_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GatewayClientServiceServer).ListProjects(ctx, req.(*emptypb.Empty))
+		return srv.(GatewayClientServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -713,5 +508,5 @@ var GatewayClientService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "devloop/v1/devloop_gateway.proto",
+	Metadata: "protos/devloop/v1/devloop_gateway.proto",
 }

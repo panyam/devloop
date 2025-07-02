@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "devloop/v1/devloop_gateway.proto",
+    "title": "protos/devloop/v1/devloop_gateway.proto",
     "version": "version not set"
   },
   "tags": [
@@ -380,15 +380,118 @@
         }
       }
     },
+    "v1DevloopMessage": {
+      "type": "object",
+      "properties": {
+        "correlationId": {
+          "type": "string",
+          "title": "Used to correlate requests and responses"
+        },
+        "registerRequest": {
+          "$ref": "#/definitions/v1RegisterRequest",
+          "title": "Messages sent from devloop to gateway"
+        },
+        "unregisterRequest": {
+          "$ref": "#/definitions/v1UnregisterRequest"
+        },
+        "logLine": {
+          "$ref": "#/definitions/v1LogLine"
+        },
+        "updateRuleStatusRequest": {
+          "$ref": "#/definitions/v1UpdateRuleStatusRequest"
+        },
+        "getConfigResponse": {
+          "$ref": "#/definitions/v1GetConfigResponse"
+        },
+        "getRuleStatusResponse": {
+          "$ref": "#/definitions/v1GetRuleStatusResponse"
+        },
+        "triggerRuleResponse": {
+          "$ref": "#/definitions/v1TriggerRuleResponse"
+        },
+        "listWatchedPathsResponse": {
+          "$ref": "#/definitions/v1ListWatchedPathsResponse"
+        },
+        "readFileContentResponse": {
+          "$ref": "#/definitions/v1ReadFileContentResponse"
+        },
+        "triggerRuleRequest": {
+          "$ref": "#/definitions/v1TriggerRuleRequest",
+          "title": "Messages sent from gateway to devloop"
+        },
+        "getConfigRequest": {
+          "$ref": "#/definitions/v1GetConfigRequest"
+        },
+        "getRuleStatusRequest": {
+          "$ref": "#/definitions/v1GetRuleStatusRequest"
+        },
+        "listWatchedPathsRequest": {
+          "$ref": "#/definitions/v1ListWatchedPathsRequest"
+        },
+        "readFileContentRequest": {
+          "$ref": "#/definitions/v1ReadFileContentRequest"
+        },
+        "getHistoricalLogsRequest": {
+          "$ref": "#/definitions/v1GetHistoricalLogsRequest"
+        }
+      },
+      "description": "DevloopMessage is a wrapper for all messages exchanged between devloop and the gateway."
+    },
+    "v1GetConfigRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "description": "GetConfigRequest is sent by the gateway to devloop to request config."
+    },
     "v1GetConfigResponse": {
       "type": "object",
       "properties": {
         "configJson": {
           "type": "string",
-          "format": "byte",
-          "title": "Assuming Config struct from devloop will be mapped here\nFor now, just a placeholder string or bytes"
+          "format": "byte"
         }
-      }
+      },
+      "title": "Responses from devloop to gateway"
+    },
+    "v1GetHistoricalLogsRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp in milliseconds, for logs after this time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp in milliseconds, for logs before this time"
+        }
+      },
+      "description": "GetHistoricalLogsRequest is sent by the gateway to devloop to request historical logs."
+    },
+    "v1GetRuleStatusRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": "string"
+        }
+      },
+      "description": "GetRuleStatusRequest is sent by the gateway to devloop to request rule status."
     },
     "v1GetRuleStatusResponse": {
       "type": "object",
@@ -409,6 +512,15 @@
           }
         }
       }
+    },
+    "v1ListWatchedPathsRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "description": "ListWatchedPathsRequest is sent by the gateway to devloop to request watched paths."
     },
     "v1ListWatchedPathsResponse": {
       "type": "object",
@@ -449,13 +561,21 @@
         },
         "projectRoot": {
           "type": "string"
-        },
-        "internalAddr": {
-          "type": "string",
-          "title": "The internal address (host:port) where this devloop instance's HTTP server is listening"
         }
       },
       "description": "ProjectInfo represents the information about a registered devloop project."
+    },
+    "v1ReadFileContentRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "description": "ReadFileContentRequest is sent by the gateway to devloop to request file content."
     },
     "v1ReadFileContentResponse": {
       "type": "object",
@@ -466,17 +586,14 @@
         }
       }
     },
-    "v1RegisterResponse": {
+    "v1RegisterRequest": {
       "type": "object",
       "properties": {
-        "success": {
-          "type": "boolean"
-        },
-        "message": {
-          "type": "string"
+        "projectInfo": {
+          "$ref": "#/definitions/v1ProjectInfo"
         }
       },
-      "description": "RegisterResponse is sent by the gateway in response to a registration."
+      "description": "RegisterRequest is sent by devloop to register with the gateway."
     },
     "v1RuleStatus": {
       "type": "object",
@@ -507,15 +624,6 @@
       },
       "description": "RuleStatus represents the current status of a rule."
     },
-    "v1StreamLogsResponse": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean"
-        }
-      },
-      "description": "StreamLogsResponse is sent by the gateway in response to a log line."
-    },
     "v1TriggerRuleClientResponse": {
       "type": "object",
       "properties": {
@@ -527,6 +635,18 @@
         }
       }
     },
+    "v1TriggerRuleRequest": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": "string"
+        }
+      },
+      "description": "TriggerRuleRequest is sent by the gateway to devloop to trigger a rule."
+    },
     "v1TriggerRuleResponse": {
       "type": "object",
       "properties": {
@@ -536,29 +656,25 @@
         "message": {
           "type": "string"
         }
-      },
-      "description": "TriggerRuleResponse is sent by devloop in response to a trigger request."
+      }
     },
-    "v1UnregisterResponse": {
+    "v1UnregisterRequest": {
       "type": "object",
       "properties": {
-        "success": {
-          "type": "boolean"
-        },
-        "message": {
+        "projectId": {
           "type": "string"
         }
       },
-      "description": "UnregisterResponse is sent by the gateway in response to unregistration."
+      "description": "UnregisterRequest is sent by devloop to unregister from the gateway."
     },
-    "v1UpdateRuleStatusResponse": {
+    "v1UpdateRuleStatusRequest": {
       "type": "object",
       "properties": {
-        "success": {
-          "type": "boolean"
+        "ruleStatus": {
+          "$ref": "#/definitions/v1RuleStatus"
         }
       },
-      "description": "UpdateRuleStatusResponse is sent by the gateway in response to a status update."
+      "description": "UpdateRuleStatusRequest is sent by devloop to update a rule's status."
     }
   }
 }
