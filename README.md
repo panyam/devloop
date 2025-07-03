@@ -28,7 +28,7 @@ The simplest mode for individual projects. Devloop runs as a single daemon proce
 └─────────────────────┘
 ```
 
-**Use Case:** Single project development, simple setups
+**Use Case:** Single project development, simple setup.
 
 ### 2. Agent Mode
 Devloop connects to a central gateway, ideal for multi-component projects where you want centralized monitoring.
@@ -355,6 +355,19 @@ rules:
 ```
 
 ## 🔄 Comparison with Similar Tools
+
+### Quick Use Case Comparison
+
+| Solution | Good For | Not Great For |
+|----------|----------|---------------|
+| **Docker Compose** | Production-like isolation | Fast local iteration |
+| **tmux/screen** | Terminal management | Process lifecycle |
+| **Make -j** | Build orchestration | Long-running services |
+| **Foreman/Overmind** | Procfile-based apps | File watching & triggers |
+| **Shell scripts** | Simple automation | Complex process management |
+| **devloop** | Multi-service development | Production deployment |
+
+### Feature Comparison
 
 | Feature | devloop | air | nodemon | watchexec |
 |---------|---------|-----|---------|-----------|
@@ -1432,6 +1445,65 @@ Understanding log prefixes:
 - `WARN` - Non-critical issues
 - `INFO` - General information
 - `DEBUG` - Detailed debugging information (verbose mode)
+
+## ❓ FAQ
+
+### Why not just use Docker Compose?
+Docker is excellent for production-like environments, but adds overhead for local development:
+- Container rebuild times vs millisecond restarts
+- File sync delays (especially on macOS)
+- Resource consumption for multiple containers
+- Debugging friction through container layers
+- Configuration complexity for simple watch tasks
+
+Devloop is designed for the tight feedback loop of development, where speed matters more than isolation.
+
+### Why not use tmux/screen with multiple panes?
+Terminal multiplexers manage windows, not processes. Devloop provides:
+- Unified logging with automatic prefixes
+- Proper process lifecycle management
+- Restart on file changes
+- API access for monitoring and control
+- Cross-platform consistency
+
+### How is this different from Foreman/Overmind?
+Foreman and Overmind are great for Procfile-based applications. Devloop adds:
+- File watching with automatic triggers
+- Glob pattern matching for fine-grained control
+- Multi-project orchestration via agent/gateway mode
+- gRPC/REST API for programmatic access
+- Integration with AI tools via MCP
+
+### Why not Make with parallel jobs?
+Make is a build tool, not a process manager. It's not designed for:
+- Long-running processes
+- Restarting on file changes
+- Managing process lifecycles
+- Handling streaming logs from multiple sources
+
+### Can I use devloop in production?
+Devloop is designed for development environments. For production, use proper orchestration tools like:
+- Kubernetes for containerized workloads
+- systemd for system services
+- Docker Swarm or Nomad for distributed applications
+
+### How does devloop handle process cleanup?
+Devloop uses process groups to ensure clean termination:
+- Each rule's commands run in a separate process group
+- On restart or shutdown, SIGTERM is sent to the entire group
+- This prevents orphaned processes and ensures proper cleanup
+
+### Does devloop support Windows?
+Yes, with some limitations:
+- Process group management works differently on Windows
+- Some signal handling features may behave differently
+- File watching generally works well via fsnotify
+
+### Can I mix devloop with other tools?
+Absolutely! Common patterns include:
+- Using devloop to orchestrate multiple tools (air, nodemon, etc.)
+- Running devloop alongside Docker for databases
+- Combining with Make for complex build steps
 
 ## ⚡ Performance & Optimization
 

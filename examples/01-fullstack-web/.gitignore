@@ -1,0 +1,14 @@
+# Backend
+backend/main
+backend/go.sum
+
+# Frontend
+frontend/node_modules/
+frontend/package-lock.json
+
+# Generated files
+docs/api.md
+.migrations_applied
+
+# OS files
+.DS_Store

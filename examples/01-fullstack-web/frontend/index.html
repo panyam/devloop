@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App - Devloop Example</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Todo List</h1>
+        <p class="subtitle">Powered by devloop orchestration</p>
+        
+        <div class="add-todo">
+            <input 
+                type="text" 
+                id="todoInput" 
+                placeholder="What needs to be done?"
+                autocomplete="off"
+            >
+            <button id="addButton">Add</button>
+        </div>
+        
+        <div id="todoList" class="todo-list">
+            <!-- Todos will be rendered here -->
+        </div>
+        
+        <div class="info">
+            <p>Frontend running on :3000 | Backend API on :8080</p>
+            <p>Try editing any file - devloop will automatically rebuild!</p>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+rules:
+  - name: "backend"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "backend/**/*.go"
+          - "backend/go.mod"
+          - "backend/go.sum"
+    commands:
+      - "cd backend && go build -o main ."
+      - "cd backend && ./main"
+    
+  - name: "frontend"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "frontend/**/*.js"
+          - "frontend/**/*.html"
+          - "frontend/**/*.css"
+    commands:
+      - "cd frontend && npx http-server -p 3000 -c-1"
+    
+  - name: "db"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "migrations/*.sql"
+    commands:
+      - "./migrations/run_migrations.sh"
+    
+  - name: "docs"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "docs/api_template.md"
+          - "backend/**/*.go"
+    commands:
+      - "./docs/generate_docs.sh"
