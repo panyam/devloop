@@ -2,7 +2,7 @@
 
 ![Screenshot](images/screenshot.png)
 
-`devloop` is a generic, multi-variant tool designed to streamline development workflows, particularly within Multi-Component Projects (MCPs) (no not *that* MCP). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on simple, configuration-driven orchestration of tasks based on file system changes.
+`devloop` is a versatile tool designed to streamline your inner development loop, particularly within Multi-Component Projects (MCPs) (no not *that* MCP). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on simple, configuration-driven orchestration of tasks based on file system changes.
 
 
 ![Workflow Overview](images/workflow-overview.svg)
