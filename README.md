@@ -110,249 +110,46 @@ Before installing devloop, ensure you have:
 
 ## 📚 Examples
 
-### Example 1: Full-Stack Web Application
+The `examples/` directory contains comprehensive real-world examples demonstrating devloop's capabilities across different development scenarios:
 
-```yaml
-# .devloop.yaml
-settings:
-  prefix_logs: true
-  prefix_max_length: 12
+| Example | Description | Key Technologies | Use Case |
+|---------|-------------|------------------|----------|
+| **[01-fullstack-web](examples/01-fullstack-web/)** | Complete web application with backend, frontend, database, and docs | Go, JavaScript, SQL, HTTP | Traditional web development with multiple parallel services |
+| **[02-microservices](examples/02-microservices/)** | Distributed microservices architecture with gateway pattern | Go, API Gateway, JWT, HTTP | Service-oriented architecture with centralized monitoring |
+| **[03-python-datascience](examples/03-python-datascience/)** | Data science workflow with notebooks, training, and testing | Python, Jupyter, pytest, ML | Data analysis and machine learning development |
+| **[04-docker-compose](examples/04-docker-compose/)** | Multi-container development with orchestrated services | Docker, PostgreSQL, Redis, React, Go, Python | Containerized application development |
+| **[05-frontend-framework](examples/05-frontend-framework/)** | Modern frontend development with multiple frameworks | React, Vue.js, TypeScript, Storybook, Vite | Component-driven frontend development |
+| **[06-ai-ml-development](examples/06-ai-ml-development/)** | Advanced ML pipeline with experiment tracking and serving | MLflow, PyTorch, TensorFlow, FastAPI, Jupyter | MLOps and production machine learning |
 
-rules:
-  - name: "Go API Server"
-    prefix: "api"
-    watch:
-      - action: "include"
-        patterns:
-          - "cmd/api/**/*.go"
-          - "internal/**/*.go"
-          - "go.mod"
-          - "go.sum"
-    commands:
-      - "go build -o bin/api ./cmd/api"
-      - "bin/api"
+### Quick Start with Examples
 
-  - name: "React Frontend"
-    prefix: "frontend"
-    watch:
-      - action: "include"
-        patterns:
-          - "web/src/**/*.{js,jsx,ts,tsx}"
-          - "web/src/**/*.css"
-          - "web/package.json"
-    commands:
-      - "cd web && npm run dev"
+Each example includes:
+- **Complete setup instructions** in their respective README files
+- **Working `.devloop.yaml` configurations** 
+- **Makefile with common commands** (`make run`, `make deps`, `make clean`)
+- **Sample code and realistic project structure**
+- **Testing and deployment guidance**
 
-  - name: "Database Migrations"
-    prefix: "db"
-    watch:
-      - action: "include"
-        patterns:
-          - "migrations/**/*.sql"
-    commands:
-      - "migrate -path ./migrations -database postgres://localhost/myapp up"
-
-  - name: "API Documentation"
-    prefix: "docs"
-    watch:
-      - action: "include"
-        patterns:
-          - "api/**/*.proto"
-          - "docs/**/*.md"
-    commands:
-      - "protoc --doc_out=./docs --doc_opt=markdown,api.md api/*.proto"
-```
-
-### Example 2: Microservices with Agent/Gateway Mode
-
-**Gateway Server** (central monitoring):
-```bash
-# Start the gateway on a dedicated server
-devloop --mode gateway --gateway-port 8080
-```
-
-**Service A** (authentication service):
-```yaml
-# auth-service/.devloop.yaml
-rules:
-  - name: "Auth Service"
-    prefix: "auth"
-    watch:
-      - action: "include"
-        patterns:
-          - "**/*.go"
-          - "go.mod"
-    commands:
-      - "go build -o bin/auth ./cmd/auth"
-      - "bin/auth --port 3001"
-```
+To try any example:
 
 ```bash
-# Connect to gateway
-devloop --mode agent --gateway-url gateway.local:8080 -c .devloop.yaml
+# Navigate to an example
+cd examples/01-fullstack-web
+
+# Install dependencies
+make deps
+
+# Start development environment
+make run
 ```
 
-**Service B** (user service):
-```yaml
-# user-service/.devloop.yaml
-rules:
-  - name: "User Service"
-    prefix: "user"
-    watch:
-      - action: "include"
-        patterns:
-          - "**/*.go"
-          - "go.mod"
-    commands:
-      - "go build -o bin/user ./cmd/user"
-      - "bin/user --port 3002"
-```
+### Example Complexity Levels
 
-### Example 3: Python Data Science Project
+- **Beginner**: Examples 1-3 demonstrate core devloop concepts
+- **Intermediate**: Examples 4-5 show advanced orchestration patterns  
+- **Advanced**: Example 6 illustrates enterprise-grade ML workflows
 
-```yaml
-# .devloop.yaml
-rules:
-  - name: "Jupyter Lab"
-    prefix: "jupyter"
-    watch:
-      - action: "include"
-        patterns:
-          - "notebooks/**/*.ipynb"
-    commands:
-      - "jupyter lab --no-browser --port=8888"
-
-  - name: "Model Training"
-    prefix: "train"
-    watch:
-      - action: "include"
-        patterns:
-          - "src/**/*.py"
-          - "configs/**/*.yaml"
-      - action: "exclude"
-        patterns:
-          - "**/__pycache__/**"
-          - "**/*.pyc"
-    commands:
-      - "python src/train.py --config configs/model.yaml"
-
-  - name: "Tests"
-    prefix: "test"
-    watch:
-      - action: "include"
-        patterns:
-          - "src/**/*.py"
-          - "tests/**/*.py"
-    commands:
-      - "pytest tests/ -v --color=yes"
-```
-
-### Example 4: Rust Project with WASM
-
-```yaml
-# .devloop.yaml
-rules:
-  - name: "Rust Backend"
-    prefix: "rust"
-    watch:
-      - action: "include"
-        patterns:
-          - "src/**/*.rs"
-          - "Cargo.toml"
-          - "Cargo.lock"
-    commands:
-      - "cargo build --release"
-      - "cargo run --release"
-
-  - name: "WASM Build"
-    prefix: "wasm"
-    watch:
-      - action: "include"
-        patterns:
-          - "wasm/**/*.rs"
-          - "wasm/Cargo.toml"
-    commands:
-      - "cd wasm && wasm-pack build --target web --out-dir ../web/pkg"
-
-  - name: "Web Server"
-    prefix: "web"
-    watch:
-      - action: "include"
-        patterns:
-          - "web/**/*.{html,js,css}"
-          - "web/pkg/**/*"
-    commands:
-      - "cd web && python -m http.server 8000"
-```
-
-### Example 5: Mobile App Development
-
-```yaml
-# .devloop.yaml
-settings:
-  prefix_logs: true
-
-rules:
-  - name: "React Native Metro"
-    prefix: "metro"
-    watch:
-      - action: "include"
-        patterns:
-          - "src/**/*.{js,jsx,ts,tsx}"
-          - "package.json"
-    commands:
-      - "npx react-native start --reset-cache"
-
-  - name: "iOS Build"
-    prefix: "ios"
-    watch:
-      - action: "include"
-        patterns:
-          - "ios/**/*.{m,h,swift}"
-          - "ios/**/*.plist"
-    commands:
-      - "cd ios && pod install"
-      - "npx react-native run-ios --simulator='iPhone 14'"
-
-  - name: "Android Build"
-    prefix: "android"
-    watch:
-      - action: "include"
-        patterns:
-          - "android/**/*.{java,kt,xml}"
-          - "android/**/*.gradle"
-    commands:
-      - "cd android && ./gradlew clean"
-      - "npx react-native run-android"
-```
-
-### Example 6: Docker Compose Integration
-
-```yaml
-# .devloop.yaml
-rules:
-  - name: "Docker Services"
-    prefix: "docker"
-    watch:
-      - action: "include"
-        patterns:
-          - "docker-compose.yml"
-          - "**/*.Dockerfile"
-          - ".env"
-    commands:
-      - "docker-compose down"
-      - "docker-compose build"
-      - "docker-compose up"
-
-  - name: "Go Service"
-    prefix: "go"
-    watch:
-      - action: "include"
-        patterns:
-          - "services/api/**/*.go"
-    commands:
-      - "docker-compose restart api"
-```
+Each example builds upon the concepts from previous ones, so we recommend exploring them in order if you're new to devloop.
 
 ## 🔄 Comparison with Similar Tools
 
