@@ -822,15 +822,66 @@ for (const service of startOrder) {
 }
 ```
 
+### 📡 Available Endpoints by Mode
+
+Different devloop modes provide different endpoints and capabilities:
+
+#### Standalone Mode (`--mode standalone`)
+```bash
+devloop --mode standalone --http-port 8080 --grpc-port 50051
+```
+- ✅ HTTP API: `http://localhost:8080/projects`
+- ✅ gRPC API: `localhost:50051` 
+- ✅ MCP via stdio (if `--enable-mcp`)
+- ✅ File watching and rule execution
+
+#### Gateway Mode (`--mode gateway`)
+```bash
+devloop --mode gateway --http-port 8080 --grpc-port 50051
+```
+- ✅ HTTP API: `http://localhost:8080/projects`
+- ✅ gRPC API: `localhost:50051`
+- ✅ Agent management and coordination
+- ✅ MCP via stdio (if `--enable-mcp`)
+- ❌ No direct file watching (agents do the watching)
+
+#### Agent Mode (`--mode agent --gateway-addr localhost:50051`)
+```bash
+devloop --mode agent --gateway-addr localhost:50051
+```
+- ❌ No HTTP endpoints (connects to gateway)
+- ❌ No direct gRPC API (uses gateway's API)
+- ✅ MCP via stdio (if `--enable-mcp`)
+- ✅ File watching and rule execution
+- ✅ Reports to gateway
+
+**Quick Test Commands:**
+```bash
+# Test standalone/gateway HTTP API
+curl http://localhost:8080/projects
+
+# Test if any devloop process is running
+ps aux | grep devloop
+
+# MCP always uses stdio - no curl endpoints
+```
+
 ### Troubleshooting MCP Integration
 
 #### Connection Issues
-```bash
-# Test MCP server connectivity
-curl http://localhost:3000/mcp/tools
 
-# Check gateway logs
-devloop logs --mode gateway --tail 100
+**Note**: MCP runs on stdio (not HTTP) for AI assistant communication.
+
+```bash
+# Check if devloop is running with MCP enabled
+ps aux | grep devloop
+
+# Test HTTP endpoints (only available in standalone/gateway mode)
+curl http://localhost:8080/projects  # If running --mode standalone
+curl http://localhost:8080/projects  # If running --mode gateway
+
+# MCP communication happens via stdio - no HTTP endpoints
+# AI assistants connect directly to devloop's stdin/stdout
 ```
 
 #### Common Problems
@@ -1175,8 +1226,9 @@ To stop `devloop` gracefully, press `Ctrl+C` (SIGINT). `devloop` will attempt to
 **Solutions:**
 - Verify gateway is running: `curl http://gateway-host:8080/projects`
 - Check network connectivity: `ping gateway-host`
-- Ensure correct gateway URL format: `--gateway-url host:port`
+- Ensure correct gateway address format: `--gateway-addr host:port` (note: it's `gateway-addr`, not `gateway-url`)
 - Check firewall rules allow connection
+- Verify gateway is in "gateway" mode, not "agent" mode
 
 #### 9. File Changes Not Detected
 **Symptoms:** Modifying files doesn't trigger rules
