@@ -23,11 +23,12 @@ import (
 
 // OrchestratorV2 manages file watching and delegates execution to RuleRunners
 type OrchestratorV2 struct {
-	ConfigPath string
-	Config     *gateway.Config
-	Verbose    bool
-	Watcher    *fsnotify.Watcher
-	LogManager *LogManager
+	ConfigPath   string
+	Config       *gateway.Config
+	Verbose      bool
+	Watcher      *fsnotify.Watcher
+	LogManager   *LogManager
+	ColorManager *ColorManager
 
 	// Rule management
 	ruleRunners  map[string]RuleRunner
@@ -91,6 +92,9 @@ func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, 
 	}
 	orchestrator.LogManager = logManager
 
+	// Initialize ColorManager
+	orchestrator.ColorManager = NewColorManager(&config.Settings)
+
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {
 		runner := NewRuleRunner(rule, &Orchestrator{
@@ -98,6 +102,7 @@ func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, 
 			Config:           orchestrator.Config,
 			Verbose:          orchestrator.Verbose,
 			LogManager:       orchestrator.LogManager,
+			ColorManager:     orchestrator.ColorManager,
 			projectID:        orchestrator.projectID,
 			gatewayStream:    orchestrator.gatewayStream,
 			gatewaySendChan:  orchestrator.gatewaySendChan,

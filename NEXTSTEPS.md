@@ -16,6 +16,21 @@ This document outlines the immediate next steps for the `devloop` project.
   - Commands now execute sequentially with proper failure propagation (like GNU Make)
   - Added process existence checks before termination to avoid errors
 
+- ✅ **Cross-Platform Command Execution:**
+  - Fixed hardcoded `bash -c` commands that failed on Windows
+  - Implemented `createCrossPlatformCommand()` using `cmd /c` on Windows, `bash -c` on Unix
+  - Added fallback to `sh -c` for POSIX compatibility when bash is unavailable
+  - Fixed WorkDir behavior to default to config file directory instead of current working directory
+
+- ✅ **Color-Coded Rule Output:**
+  - Added comprehensive color support using `github.com/fatih/color` library
+  - Implemented configurable color schemes (auto, dark, light, custom)
+  - Hash-based consistent color assignment ensures same rule always gets same color
+  - Separate handling for terminal (colored) vs file (plain) output
+  - Configuration options: `color_logs`, `color_scheme`, `custom_colors`
+  - Per-rule color overrides via `color` field in rule configuration
+  - Automatic terminal detection with sensible defaults
+
 - ✅ **Testing Infrastructure:**
   - Created factory pattern for testing both orchestrator implementations
   - Environment variable `DEVLOOP_ORCHESTRATOR_VERSION` selects v1 or v2
@@ -26,9 +41,12 @@ This document outlines the immediate next steps for the `devloop` project.
   - Added rule-specific configuration options:
     - `debounce_delay: 500ms` - Per-rule debounce settings
     - `verbose: true` - Per-rule verbose logging
+    - `color: "blue"` - Per-rule color overrides
   - Added global defaults in settings:
     - `default_debounce_delay: 200ms`
     - `verbose: false`
+    - `color_logs: true` - Enable colored output
+    - `color_scheme: "auto"` - Auto-detect terminal theme
   - Rule-specific settings override global defaults
 
 ## Previously Completed (2025-07-02)

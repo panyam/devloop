@@ -1,3 +1,6 @@
+settings:
+  color_logs: true
+
 rules:
   - name: "backend"
     watch:

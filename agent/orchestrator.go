@@ -49,6 +49,7 @@ type Orchestrator struct {
 	Verbose          bool
 	Watcher          *fsnotify.Watcher
 	LogManager       *LogManager                                // New field for log management
+	ColorManager     *ColorManager                              // Color management for rule output
 	gatewayClient    pb.DevloopGatewayServiceClient             // gRPC client to the gateway
 	gatewayStream    pb.DevloopGatewayService_CommunicateClient // Bidirectional stream to gateway
 	projectID        string                                     // Unique ID for this devloop instance/project
@@ -126,7 +127,8 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		log.Printf("[devloop]   Running command: %s", cmdStr)
 		cmd := createCrossPlatformCommand(cmdStr)
 
-		var writers []io.Writer
+		writers := []io.Writer{os.Stdout, logWriter}
+
 		if o.Config.Settings.PrefixLogs {
 			prefix := rule.Name
 			if rule.Prefix != "" {
@@ -142,13 +144,24 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 					}
 				}
 			}
-			writers = []io.Writer{os.Stdout, logWriter}
-			cmd.Stdout = &PrefixWriter{writers: writers, prefix: "[" + prefix + "] "}
-			cmd.Stderr = &PrefixWriter{writers: writers, prefix: "[" + prefix + "] "}
+
+			// Use ColoredPrefixWriter for enhanced output with color support
+			prefixStr := "[" + prefix + "] "
+			coloredWriter := NewColoredPrefixWriter(writers, prefixStr, o.ColorManager, &rule)
+			cmd.Stdout = coloredWriter
+			cmd.Stderr = coloredWriter
 		} else {
-			writers = []io.Writer{os.Stdout, logWriter}
-			cmd.Stdout = io.MultiWriter(writers...)
-			cmd.Stderr = io.MultiWriter(writers...)
+			// For non-prefixed output, still use ColoredPrefixWriter but with empty prefix
+			// This ensures consistent color handling even without prefixes
+			if o.ColorManager.IsEnabled() {
+				coloredWriter := NewColoredPrefixWriter(writers, "", o.ColorManager, &rule)
+				cmd.Stdout = coloredWriter
+				cmd.Stderr = coloredWriter
+			} else {
+				multiWriter := io.MultiWriter(writers...)
+				cmd.Stdout = multiWriter
+				cmd.Stderr = multiWriter
+			}
 		}
 
 		// Set platform-specific process attributes
@@ -362,6 +375,9 @@ func NewOrchestrator(configPath string, gatewayAddr string) (*Orchestrator, erro
 		return nil, fmt.Errorf("failed to create log manager: %w", err)
 	}
 	orchestrator.LogManager = logManager
+
+	// Initialize ColorManager
+	orchestrator.ColorManager = NewColorManager(&config.Settings)
 
 	// Connect to gateway if address is provided
 	if gatewayAddr != "" {

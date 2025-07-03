@@ -14,10 +14,13 @@ type Config struct {
 
 // Settings defines global settings for devloop.
 type Settings struct {
-	PrefixLogs           bool           `yaml:"prefix_logs"`
-	PrefixMaxLength      int            `yaml:"prefix_max_length"`
-	DefaultDebounceDelay *time.Duration `yaml:"default_debounce_delay,omitempty"`
-	Verbose              bool           `yaml:"verbose,omitempty"`
+	PrefixLogs           bool              `yaml:"prefix_logs"`
+	PrefixMaxLength      int               `yaml:"prefix_max_length"`
+	DefaultDebounceDelay *time.Duration    `yaml:"default_debounce_delay,omitempty"`
+	Verbose              bool              `yaml:"verbose,omitempty"`
+	ColorLogs            bool              `yaml:"color_logs,omitempty"`
+	ColorScheme          string            `yaml:"color_scheme,omitempty"`
+	CustomColors         map[string]string `yaml:"custom_colors,omitempty"`
 }
 
 // Rule defines a single watch-and-run rule.
@@ -31,6 +34,7 @@ type Rule struct {
 	RunOnInit     bool              `yaml:"run_on_init,omitempty"`
 	DebounceDelay *time.Duration    `yaml:"debounce_delay,omitempty"`
 	Verbose       *bool             `yaml:"verbose,omitempty"`
+	Color         string            `yaml:"color,omitempty"`
 }
 
 // Matcher defines a single include or exclude directive using glob patterns.

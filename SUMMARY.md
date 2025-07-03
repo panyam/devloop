@@ -80,6 +80,8 @@ rules:
   - name: "backend"
     debounce_delay: 1s    # Override default debounce
     verbose: true         # Enable verbose logging for this rule
+    color: "blue"         # Custom color for this rule's output
+    workdir: "./backend"  # Custom working directory
     commands: [...]
 ```
 
@@ -90,6 +92,11 @@ settings:
   verbose: false
   prefix_logs: true
   prefix_max_length: 10
+  color_logs: true              # Enable colored output
+  color_scheme: "auto"          # Auto-detect terminal theme
+  custom_colors:                # Custom color mappings
+    backend: "blue"
+    frontend: "green"
 ```
 
 ## 7. Progress & Next Steps
@@ -99,6 +106,8 @@ settings:
 - ✅ Dual orchestrator architecture (v1 and v2) with comprehensive testing
 - ✅ Process management issues resolved (no more zombie processes)
 - ✅ Sequential command execution with failure propagation
+- ✅ Cross-platform command execution (Windows, macOS, Linux)
+- ✅ Color-coded rule output with configurable schemes
 - ✅ Rule-specific configuration for fine-grained control
 - ✅ Test infrastructure supporting both implementations:
   - `make test` - runs all tests against both versions

@@ -1,4 +1,4 @@
-# devloop: Intelligent Development Workflow Orchestrator
+# devloop: Multi-Component Project Watcher and Live Loader
 
 ![devloop Logo/Banner (Placeholder)](https://via.placeholder.com/1200x300?text=devloop+Logo)
 
@@ -200,8 +200,10 @@ Each example builds upon the concepts from previous ones, so we recommend explor
 -   **Parallel & Concurrent Task Running**: Define rules for different parts of your project (backend, frontend, etc.) and `devloop` will run them concurrently.
 -   **Intelligent Change Detection**: Uses glob patterns to precisely match file changes, triggering only the necessary commands.
 -   **Robust Process Management**: Automatically terminates old processes before starting new ones, preventing zombie processes and ensuring a clean state.
+-   **Cross-Platform Support**: Commands execute natively on Windows (`cmd /c`), macOS, and Linux (`bash -c` with `sh -c` fallback).
+-   **Color-Coded Output**: Automatically assigns consistent colors to each rule's output, making it easy to distinguish logs in busy development environments.
 -   **Debounced Execution**: Rapid file changes trigger commands only once, preventing unnecessary builds and restarts.
--   **Command Log Prefixing**: Prepends a customizable prefix to each line of your command's output, making it easy to distinguish logs from different processes.
+-   **Command Log Prefixing**: Prepends a customizable prefix to each line of your command's output, with optional color coding for enhanced readability.
 -   **.air.toml Converter**: Includes a built-in tool to convert your existing `.air.toml` configuration into a `devloop` rule.
 
 ## ⚙️ Configuration Reference
@@ -210,21 +212,30 @@ Each example builds upon the concepts from previous ones, so we recommend explor
 
 ```yaml
 # .devloop.yaml
-settings:                    # Optional: Global settings
-  prefix_logs: boolean       # Enable/disable log prefixing (default: true)
-  prefix_max_length: number  # Max length for prefixes (default: unlimited)
+settings:                      # Optional: Global settings
+  prefix_logs: boolean         # Enable/disable log prefixing (default: true)
+  prefix_max_length: number    # Max length for prefixes (default: unlimited)
+  color_logs: boolean          # Enable colored output (default: true)
+  color_scheme: string         # Color scheme: "auto", "dark", "light" (default: "auto")
+  custom_colors:               # Optional: Custom color mappings
+    rule_name: "color"         # Map rule names to specific colors
+  verbose: boolean             # Global verbose logging (default: false)
+  default_debounce_delay: duration  # Global debounce delay (default: 500ms)
 
-rules:                       # Required: Array of rules
-  - name: string            # Required: Unique rule identifier
-    prefix: string          # Optional: Custom log prefix (defaults to name)
-    workdir: string         # Optional: Working directory for commands
-    run_on_init: boolean    # Optional: Run on startup (default: true)
-    env:                    # Optional: Environment variables
+rules:                         # Required: Array of rules
+  - name: string              # Required: Unique rule identifier
+    prefix: string            # Optional: Custom log prefix (defaults to name)
+    color: string             # Optional: Custom color for this rule's output
+    workdir: string           # Optional: Working directory for commands (defaults to config dir)
+    run_on_init: boolean      # Optional: Run on startup (default: true)
+    verbose: boolean          # Optional: Per-rule verbose logging
+    debounce_delay: duration  # Optional: Per-rule debounce delay (e.g., "200ms")
+    env:                      # Optional: Environment variables
       KEY: "value"
-    watch:                  # Required: File watch configuration
-      - action: string      # Required: "include" or "exclude"
-        patterns: [string]  # Required: Glob patterns
-    commands: [string]      # Required: Shell commands to execute
+    watch:                    # Required: File watch configuration
+      - action: string        # Required: "include" or "exclude"
+        patterns: [string]    # Required: Glob patterns
+    commands: [string]        # Required: Shell commands to execute
 ```
 
 ### Settings Options
@@ -233,6 +244,11 @@ rules:                       # Required: Array of rules
 |--------|------|---------|-------------|
 | `prefix_logs` | boolean | `true` | Prepend rule name/prefix to each output line |
 | `prefix_max_length` | integer | unlimited | Truncate/pad prefixes to this length for alignment |
+| `color_logs` | boolean | `true` | Enable colored output to distinguish different rules |
+| `color_scheme` | string | `"auto"` | Color palette: `"auto"` (detect), `"dark"`, `"light"`, or `"custom"` |
+| `custom_colors` | map | `{}` | Map rule names to specific colors (e.g., `rule_name: "blue"`) |
+| `verbose` | boolean | `false` | Enable verbose logging globally |
+| `default_debounce_delay` | duration | `"500ms"` | Default delay before executing commands after file changes |
 
 ### Rule Options
 
@@ -240,7 +256,10 @@ rules:                       # Required: Array of rules
 |--------|------|----------|-------------|
 | `name` | string | ✅ | Unique identifier for the rule |
 | `prefix` | string | ❌ | Custom prefix for log output (overrides name) |
-| `workdir` | string | ❌ | Working directory for command execution |
+| `color` | string | ❌ | Custom color for this rule's output (e.g., `"blue"`, `"red"`, `"bold-green"`) |
+| `workdir` | string | ❌ | Working directory for command execution (defaults to config file directory) |
+| `verbose` | boolean | ❌ | Enable verbose logging for this rule only |
+| `debounce_delay` | duration | ❌ | Delay before executing after file changes (e.g., `"200ms"`) |
 | `env` | map | ❌ | Additional environment variables |
 | `watch` | array | ✅ | File patterns to monitor |
 | `commands` | array | ✅ | Commands to execute when files change |

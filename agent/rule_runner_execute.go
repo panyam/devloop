@@ -102,7 +102,7 @@ func (r *ruleRunner) Execute() error {
 
 // setupCommandOutput configures stdout/stderr for a command
 func (r *ruleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) error {
-	var writers []io.Writer
+	writers := []io.Writer{os.Stdout, logWriter}
 
 	if r.orchestrator.Config.Settings.PrefixLogs {
 		prefix := r.rule.Name
@@ -121,18 +121,23 @@ func (r *ruleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) erro
 			}
 		}
 
-		writers = []io.Writer{os.Stdout, logWriter}
-		prefixWriter := &PrefixWriter{
-			writers: writers,
-			prefix:  "[" + prefix + "] ",
-		}
-		cmd.Stdout = prefixWriter
-		cmd.Stderr = prefixWriter
+		// Use ColoredPrefixWriter for enhanced output with color support
+		prefixStr := "[" + prefix + "] "
+		coloredWriter := NewColoredPrefixWriter(writers, prefixStr, r.orchestrator.ColorManager, &r.rule)
+		cmd.Stdout = coloredWriter
+		cmd.Stderr = coloredWriter
 	} else {
-		writers = []io.Writer{os.Stdout, logWriter}
-		multiWriter := io.MultiWriter(writers...)
-		cmd.Stdout = multiWriter
-		cmd.Stderr = multiWriter
+		// For non-prefixed output, still use ColoredPrefixWriter but with empty prefix
+		// This ensures consistent color handling even without prefixes
+		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() {
+			coloredWriter := NewColoredPrefixWriter(writers, "", r.orchestrator.ColorManager, &r.rule)
+			cmd.Stdout = coloredWriter
+			cmd.Stderr = coloredWriter
+		} else {
+			multiWriter := io.MultiWriter(writers...)
+			cmd.Stdout = multiWriter
+			cmd.Stderr = multiWriter
+		}
 	}
 
 	return nil
