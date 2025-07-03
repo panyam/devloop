@@ -1,3 +1,9 @@
+settings:
+  project_id: "devloop-example-02"
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 15
+
 rules:
   # Shared libraries - other services depend on this
   - name: "shared"

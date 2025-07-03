@@ -41,7 +41,7 @@ type OrchestratorV2 struct {
 	projectID     string
 
 	// Control channels
-	done chan bool
+	done     chan bool
 	doneOnce sync.Once
 
 	// Gateway communication channels
