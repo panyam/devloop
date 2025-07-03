@@ -69,21 +69,28 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	if cmds, ok := o.runningCommands[rule.Name]; ok {
 		for _, cmd := range cmds {
 			if cmd != nil && cmd.Process != nil {
-				if o.Verbose {
-					log.Printf("[devloop] Terminating previous process group %d for rule %q", cmd.Process.Pid, rule.Name)
-				}
-				// Send SIGTERM to the process group
-				err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-				if err != nil {
-					log.Printf("Error sending SIGTERM to process group %d for rule %q: %v", cmd.Process.Pid, rule.Name, err)
-				}
-				// Wait for the process to exit
-				go func(c *exec.Cmd) {
-					_ = c.Wait() // Wait for the process to actually exit
+				pid := cmd.Process.Pid
+				// Check if process still exists
+				if err := syscall.Kill(pid, 0); err == nil {
+					// Process exists, terminate it
 					if o.Verbose {
-						log.Printf("[devloop] Previous process group %d for rule %q terminated.", c.Process.Pid, rule.Name)
+						log.Printf("[devloop] Terminating previous process group %d for rule %q", pid, rule.Name)
 					}
-				}(cmd)
+					// Send SIGTERM to the process group
+					if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+						// Only log if it's not "no such process" error
+						if !strings.Contains(err.Error(), "no such process") {
+							log.Printf("Error sending SIGTERM to process group %d for rule %q: %v", pid, rule.Name, err)
+						}
+					}
+				}
+				// Wait for the process to exit (even if already dead)
+				go func(c *exec.Cmd, pid int) {
+					_ = c.Wait() // This will return immediately if process is already dead
+					if o.Verbose {
+						log.Printf("[devloop] Previous process group %d for rule %q terminated.", pid, rule.Name)
+					}
+				}(cmd, pid)
 			}
 		}
 	}
@@ -825,31 +832,70 @@ func (o *Orchestrator) Stop() error {
 	}
 
 	// Terminate all running commands
+	var wg sync.WaitGroup
 	for ruleName, cmds := range o.runningCommands {
 		for _, cmd := range cmds {
 			if cmd != nil && cmd.Process != nil {
-				log.Printf("Terminating process group %d for rule %q during shutdown", cmd.Process.Pid, ruleName)
-				// First try SIGTERM to allow graceful shutdown
-				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-
-				// Give processes a moment to exit gracefully
-				done := make(chan bool)
-				go func() {
-					cmd.Wait()
-					done <- true
-				}()
-
-				select {
-				case <-done:
-					// Process exited gracefully
-				case <-time.After(2 * time.Second):
-					// Force kill if still running
-					log.Printf("Force killing process group %d for rule %q", cmd.Process.Pid, ruleName)
-					_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-				}
+				wg.Add(1)
+				go func(c *exec.Cmd, rName string) {
+					defer wg.Done()
+					pid := c.Process.Pid
+					log.Printf("Terminating process group %d for rule %q during shutdown", pid, rName)
+					
+					// Check if process still exists before trying to kill it
+					if err := syscall.Kill(pid, 0); err != nil {
+						// Process already dead
+						log.Printf("Process %d for rule %q already terminated", pid, rName)
+						return
+					}
+					
+					// First try SIGTERM to allow graceful shutdown
+					if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+						if !strings.Contains(err.Error(), "no such process") {
+							log.Printf("Error sending SIGTERM to process group %d: %v", pid, err)
+						}
+					}
+					
+					// Give process a moment to exit gracefully
+					done := make(chan bool)
+					go func() {
+						c.Wait()
+						done <- true
+					}()
+					
+					select {
+					case <-done:
+						log.Printf("Process group %d for rule %q terminated gracefully", pid, rName)
+					case <-time.After(2 * time.Second):
+						// Force kill if still running
+						log.Printf("Force killing process group %d for rule %q", pid, rName)
+						if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
+							log.Printf("Error sending SIGKILL to process group %d: %v", pid, err)
+						}
+						// Also try to kill the specific process
+						if err := c.Process.Kill(); err != nil {
+							log.Printf("Error killing process %d: %v", pid, err)
+						}
+						<-done // Wait for the goroutine to finish
+					}
+					
+					// Double-check by trying to kill again (will fail if process is gone)
+					if err := syscall.Kill(pid, 0); err == nil {
+						log.Printf("WARNING: Process %d still exists after termination attempts", pid)
+						// One final attempt with SIGKILL directly to the process
+						syscall.Kill(pid, syscall.SIGKILL)
+					}
+				}(cmd, ruleName)
 			}
 		}
 	}
+	
+	// Wait for all termination goroutines to complete
+	wg.Wait()
+	log.Println("[devloop] All processes terminated")
+	
+	// Final cleanup check for any orphaned processes
+	o.cleanupOrphanedProcesses()
 
 	// Close the log manager
 	if err := o.LogManager.Close(); err != nil {

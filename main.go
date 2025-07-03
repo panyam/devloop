@@ -83,6 +83,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	shutdownComplete := make(chan bool, 1)
 	go func() {
 		<-sigChan
 		log.Println("\n[devloop] Shutting down...")
@@ -90,6 +91,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 			gatewayService.Stop()
 		}
 		orchestrator.Stop()
+		shutdownComplete <- true
 	}()
 
 	if verbose {
@@ -104,5 +106,14 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 	log.Println("[devloop] Starting orchestrator...")
 	if err := orchestrator.Start(); err != nil {
 		log.Fatalf("Error: Failed to start orchestrator: %v\n", err)
+	}
+	
+	// Wait for shutdown to complete if it was triggered
+	select {
+	case <-shutdownComplete:
+		log.Println("[devloop] Shutdown complete")
+		os.Exit(0)
+	default:
+		// Normal exit
 	}
 }
