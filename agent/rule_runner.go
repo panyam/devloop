@@ -85,7 +85,12 @@ func NewRuleRunner(rule gateway.Rule, orchestrator *OrchestratorV2) RuleRunner {
 // Start begins monitoring for this rule
 func (r *ruleRunner) Start() error {
 	// If run_on_init is true (default), execute immediately
-	if r.rule.RunOnInit {
+	shouldRunOnInit := true // Default to true
+	if r.rule.RunOnInit != nil {
+		shouldRunOnInit = *r.rule.RunOnInit
+	}
+
+	if shouldRunOnInit {
 		if r.isVerbose() {
 			log.Printf("[%s] Executing rule %q on initialization (run_on_init: true)", r.rule.Name, r.rule.Name)
 		}

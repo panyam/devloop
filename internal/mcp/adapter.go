@@ -19,7 +19,7 @@ func (s *SelectiveGatewayAdapter) ListProjects(ctx context.Context, req *pb.List
 	// For now, return the current project information
 	// In the future, this could connect to a gateway to list multiple projects
 	config := s.orchestrator.GetConfig()
-	
+
 	// Get project ID from config settings or generate one
 	projectID := config.Settings.ProjectID
 	if projectID == "" {
@@ -40,9 +40,9 @@ func (s *SelectiveGatewayAdapter) ListProjects(ctx context.Context, req *pb.List
 // GetConfig implements the MCP GetConfig tool
 func (s *SelectiveGatewayAdapter) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
 	log.Printf("[mcp] GetConfig called for project: %s", req.GetProjectId())
-	
+
 	config := s.orchestrator.GetConfig()
-	
+
 	// Marshal config to JSON
 	configJSON, err := marshalConfig(config)
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *SelectiveGatewayAdapter) GetConfig(ctx context.Context, req *pb.GetConf
 // GetRuleStatus implements the MCP GetRuleStatus tool
 func (s *SelectiveGatewayAdapter) GetRuleStatus(ctx context.Context, req *pb.GetRuleStatusRequest) (*pb.GetRuleStatusResponse, error) {
 	log.Printf("[mcp] GetRuleStatus called for project: %s, rule: %s", req.GetProjectId(), req.GetRuleName())
-	
+
 	status, ok := s.orchestrator.GetRuleStatus(req.GetRuleName())
 	if !ok {
 		return &pb.GetRuleStatusResponse{}, nil
@@ -78,7 +78,7 @@ func (s *SelectiveGatewayAdapter) GetRuleStatus(ctx context.Context, req *pb.Get
 // TriggerRuleClient implements the MCP TriggerRule tool
 func (s *SelectiveGatewayAdapter) TriggerRuleClient(ctx context.Context, req *pb.TriggerRuleClientRequest) (*pb.TriggerRuleClientResponse, error) {
 	log.Printf("[mcp] TriggerRule called for project: %s, rule: %s", req.GetProjectId(), req.GetRuleName())
-	
+
 	err := s.orchestrator.TriggerRule(req.GetRuleName())
 	if err != nil {
 		return &pb.TriggerRuleClientResponse{
@@ -96,7 +96,7 @@ func (s *SelectiveGatewayAdapter) TriggerRuleClient(ctx context.Context, req *pb
 // ReadFileContent implements the MCP ReadFileContent tool
 func (s *SelectiveGatewayAdapter) ReadFileContent(ctx context.Context, req *pb.ReadFileContentRequest) (*pb.ReadFileContentResponse, error) {
 	log.Printf("[mcp] ReadFileContent called for project: %s, path: %s", req.GetProjectId(), req.GetPath())
-	
+
 	content, err := s.orchestrator.ReadFileContent(req.GetPath())
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (s *SelectiveGatewayAdapter) ReadFileContent(ctx context.Context, req *pb.R
 // ListWatchedPaths implements the MCP ListWatchedPaths tool
 func (s *SelectiveGatewayAdapter) ListWatchedPaths(ctx context.Context, req *pb.ListWatchedPathsRequest) (*pb.ListWatchedPathsResponse, error) {
 	log.Printf("[mcp] ListWatchedPaths called for project: %s", req.GetProjectId())
-	
+
 	paths := s.orchestrator.GetWatchedPaths()
 	return &pb.ListWatchedPathsResponse{
 		Paths: paths,
@@ -143,6 +143,6 @@ func marshalConfig(config *gateway.Config) ([]byte, error) {
 	}
 	configStr += "  ]\n"
 	configStr += "}"
-	
+
 	return []byte(configStr), nil
 }

@@ -78,7 +78,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 
 	var gatewayService *gateway.GatewayService
 	var mcpService *mcp.MCPService
-	
+
 	if mode == "standalone" || mode == "gateway" {
 		gatewayService = gateway.NewGatewayService(orchestrator)
 		err = gatewayService.Start(grpcPort, httpPort)
@@ -137,4 +137,3 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		// Normal exit
 	}
 }
-

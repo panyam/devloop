@@ -259,8 +259,8 @@ func (cm *ColorManager) isTerminalColorCapable() bool {
 	}
 
 	// If TERM indicates color support, enable it
-	if strings.Contains(term, "color") || strings.Contains(term, "256") || 
-	   term == "xterm" || term == "screen" || term == "tmux" {
+	if strings.Contains(term, "color") || strings.Contains(term, "256") ||
+		term == "xterm" || term == "screen" || term == "tmux" {
 		return true
 	}
 

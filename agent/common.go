@@ -72,7 +72,7 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 	// Resolve all patterns in all rules to be absolute paths.
 	for i := range config.Rules {
 		rule := &config.Rules[i]
-		
+
 		// Default to global setting if not specified on rule
 		if rule.DefaultAction == "" {
 			rule.DefaultAction = config.Settings.DefaultWatchAction

@@ -33,7 +33,7 @@ type Rule struct {
 	Watch         []*Matcher        `yaml:"watch"`
 	Env           map[string]string `yaml:"env,omitempty"`
 	WorkDir       string            `yaml:"workdir,omitempty"`
-	RunOnInit     bool              `yaml:"run_on_init,omitempty"`
+	RunOnInit     *bool             `yaml:"run_on_init,omitempty"`
 	DebounceDelay *time.Duration    `yaml:"debounce_delay,omitempty"`
 	Verbose       *bool             `yaml:"verbose,omitempty"`
 	Color         string            `yaml:"color,omitempty"`
