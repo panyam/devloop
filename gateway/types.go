@@ -25,6 +25,21 @@ type Settings struct {
 	DefaultWatchAction   string            `yaml:"default_watch_action,omitempty"` // "include" or "exclude"
 }
 
+// GetColorLogs returns whether color logs are enabled (implements ColorSettings interface)
+func (s *Settings) GetColorLogs() bool {
+	return s.ColorLogs
+}
+
+// GetColorScheme returns the color scheme (implements ColorSettings interface)
+func (s *Settings) GetColorScheme() string {
+	return s.ColorScheme
+}
+
+// GetCustomColors returns the custom color mappings (implements ColorSettings interface)
+func (s *Settings) GetCustomColors() map[string]string {
+	return s.CustomColors
+}
+
 // Rule defines a single watch-and-run rule.
 type Rule struct {
 	Name          string            `yaml:"name"`
@@ -38,6 +53,21 @@ type Rule struct {
 	Verbose       *bool             `yaml:"verbose,omitempty"`
 	Color         string            `yaml:"color,omitempty"`
 	DefaultAction string            `yaml:"default_action,omitempty"` // "include" or "exclude"
+}
+
+// GetName returns the rule name (implements Nameable interface for color generation)
+func (r *Rule) GetName() string {
+	return r.Name
+}
+
+// GetColor returns the rule color (implements ColorRule interface)
+func (r *Rule) GetColor() string {
+	return r.Color
+}
+
+// GetPrefix returns the rule prefix (implements ColorRule interface)
+func (r *Rule) GetPrefix() string {
+	return r.Prefix
 }
 
 // Matcher defines a single include or exclude directive using glob patterns.

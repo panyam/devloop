@@ -19,6 +19,7 @@ import (
 
 	"github.com/panyam/devloop/gateway"
 	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	"github.com/panyam/devloop/utils"
 )
 
 // OrchestratorV2 manages file watching and delegates execution to RuleRunners
@@ -27,8 +28,8 @@ type OrchestratorV2 struct {
 	Config       *gateway.Config
 	Verbose      bool
 	Watcher      *fsnotify.Watcher
-	LogManager   *LogManager
-	ColorManager *ColorManager
+	LogManager   *utils.LogManager
+	ColorManager *utils.ColorManager
 
 	// Rule management
 	ruleRunners  map[string]RuleRunner
@@ -92,14 +93,14 @@ func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, 
 	}
 
 	// Create log manager
-	logManager, err := NewLogManager("./logs")
+	logManager, err := utils.NewLogManager("./logs")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log manager: %w", err)
 	}
 	orchestrator.LogManager = logManager
 
 	// Initialize ColorManager
-	orchestrator.ColorManager = NewColorManager(&config.Settings)
+	orchestrator.ColorManager = utils.NewColorManager(&config.Settings)
 
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {

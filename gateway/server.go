@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	"github.com/panyam/devloop/utils"
 )
 
 // ProjectInstance represents a registered devloop instance.
@@ -68,7 +69,7 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 	pb.RegisterGatewayClientServiceServer(gs.grpcServer, gs)
 
 	go func() {
-		log.Printf("[gateway] gRPC server listening on port %d", grpcPort)
+		utils.LogGateway("gRPC server listening on port %d", grpcPort)
 		if err := gs.grpcServer.Serve(grpcListener); err != nil {
 			log.Fatalf("[gateway] gRPC server failed to serve: %v", err)
 		}
@@ -96,7 +97,7 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 
 	// Start HTTP server in a goroutine
 	go func() {
-		log.Printf("[gateway] Starting HTTP server on port %d...", httpPort)
+		utils.LogGateway("Starting HTTP server on port %d...", httpPort)
 		if err := gs.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[gateway] HTTP server failed: %v", err)
 		}
@@ -105,7 +106,7 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 }
 
 func (gs *GatewayService) Stop() {
-	log.Println("[gateway] Shutting down gateway...")
+	utils.LogGateway("Shutting down gateway...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -113,16 +114,16 @@ func (gs *GatewayService) Stop() {
 		if err := gs.httpServer.Shutdown(ctx); err != nil {
 			log.Fatalf("[gateway] HTTP server shutdown failed: %v", err)
 		}
-		log.Println("[gateway] HTTP server shut down.")
+		utils.LogGateway("HTTP server shut down.")
 	}
 
 	// Stop gRPC server
 	if gs.grpcServer != nil {
 		gs.grpcServer.GracefulStop()
-		log.Println("[gateway] gRPC server shut down.")
+		utils.LogGateway("gRPC server shut down.")
 	}
 
-	log.Println("[gateway] Gateway shut down gracefully.")
+	utils.LogGateway("Gateway shut down gracefully.")
 }
 
 // Orchestrator is an interface that defines the methods that the gateway service needs to interact with the orchestrator.

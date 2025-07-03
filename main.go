@@ -58,7 +58,7 @@ func main() {
 		switch flag.Args()[0] {
 		case "convert":
 			convertCmd.Parse(flag.Args()[1:])
-			if err := utils.ConvertAirToml(*convertInputPath); err != nil {
+			if err := gateway.ConvertAirToml(*convertInputPath); err != nil {
 				log.Fatalf("Error: Failed to convert .air.toml: %v\n", err)
 			}
 			return
@@ -75,6 +75,13 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
 	}
 	orchestrator.Verbose = verbose
+
+	// Initialize global logger for consistent formatting across all components
+	utils.InitGlobalLogger(
+		orchestrator.Config.Settings.PrefixLogs,
+		orchestrator.Config.Settings.PrefixMaxLength,
+		orchestrator.ColorManager,
+	)
 
 	var gatewayService *gateway.GatewayService
 	var mcpService *mcp.MCPService
@@ -94,7 +101,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		if err != nil {
 			log.Fatalf("Error: Failed to start MCP service: %v\n", err)
 		}
-		log.Printf("[devloop] MCP server enabled alongside %s mode", mode)
+		utils.LogDevloop("MCP server enabled alongside %s mode", mode)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -103,7 +110,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 	shutdownComplete := make(chan bool, 1)
 	go func() {
 		<-sigChan
-		log.Println("\n[devloop] Shutting down...")
+		utils.LogDevloop("Shutting down...")
 		if gatewayService != nil {
 			gatewayService.Stop()
 		}
@@ -115,7 +122,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 	}()
 
 	if verbose {
-		fmt.Println("[devloop] Config loaded successfully:")
+		utils.LogDevloop("Config loaded successfully:")
 		for _, rule := range orchestrator.Config.Rules {
 			fmt.Printf("  Rule Name: %s\n", rule.Name)
 			fmt.Printf("    Watch: %v\n", rule.Watch)
@@ -123,7 +130,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		}
 	}
 
-	log.Println("[devloop] Starting orchestrator...")
+	utils.LogDevloop("Starting orchestrator...")
 	if err := orchestrator.Start(); err != nil {
 		log.Fatalf("Error: Failed to start orchestrator: %v\n", err)
 	}
@@ -131,7 +138,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 	// Wait for shutdown to complete if it was triggered
 	select {
 	case <-shutdownComplete:
-		log.Println("[devloop] Shutdown complete")
+		utils.LogDevloop("Shutdown complete")
 		os.Exit(0)
 	default:
 		// Normal exit

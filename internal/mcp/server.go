@@ -6,6 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/panyam/devloop/gateway"
 	v1mcp "github.com/panyam/devloop/gen/go/protos/devloop/v1/v1mcp"
+	"github.com/panyam/devloop/utils"
 )
 
 // MCPService manages the MCP server for devloop
@@ -36,7 +37,7 @@ func (m *MCPService) Start() error {
 
 	// Start MCP server via stdio (MCP standard)
 	go func() {
-		log.Printf("[mcp] MCP server starting on stdio")
+		utils.LogMCP("MCP server starting on stdio")
 		if err := server.ServeStdio(m.mcpServer); err != nil {
 			log.Printf("[mcp] MCP server failed: %v", err)
 		}
@@ -48,7 +49,7 @@ func (m *MCPService) Start() error {
 // Stop gracefully shuts down the MCP server
 func (m *MCPService) Stop() {
 	if m.mcpServer != nil {
-		log.Println("[mcp] Shutting down MCP server...")
+		utils.LogMCP("Shutting down MCP server...")
 		// The mcp-go server doesn't seem to have a graceful shutdown method
 		// so we'll rely on the listener being closed
 	}

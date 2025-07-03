@@ -11,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/panyam/devloop/utils"
 )
 
 // Execute runs the commands for this rule
@@ -37,7 +39,7 @@ func (r *ruleRunner) Execute() error {
 	var lastCmd *exec.Cmd
 
 	for i, cmdStr := range r.rule.Commands {
-		log.Printf("[devloop]   Running command: %s", cmdStr)
+		r.orchestrator.logDevloop("Running command: %s", cmdStr)
 		cmd := createCrossPlatformCommand(cmdStr)
 
 		// Setup output handling
@@ -126,14 +128,14 @@ func (r *ruleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) erro
 
 		// Use ColoredPrefixWriter for enhanced output with color support
 		prefixStr := "[" + prefix + "] "
-		coloredWriter := NewColoredPrefixWriter(writers, prefixStr, r.orchestrator.ColorManager, &r.rule)
+		coloredWriter := utils.NewColoredPrefixWriter(writers, prefixStr, r.orchestrator.ColorManager, &r.rule)
 		cmd.Stdout = coloredWriter
 		cmd.Stderr = coloredWriter
 	} else {
 		// For non-prefixed output, still use ColoredPrefixWriter but with empty prefix
 		// This ensures consistent color handling even without prefixes
 		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() {
-			coloredWriter := NewColoredPrefixWriter(writers, "", r.orchestrator.ColorManager, &r.rule)
+			coloredWriter := utils.NewColoredPrefixWriter(writers, "", r.orchestrator.ColorManager, &r.rule)
 			cmd.Stdout = coloredWriter
 			cmd.Stderr = coloredWriter
 		} else {
