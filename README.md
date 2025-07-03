@@ -78,7 +78,7 @@ Before installing devloop, ensure you have:
 
 - **Linux** (amd64, arm64)
 - **macOS** (Intel, Apple Silicon)
-- **Windows** (amd64) - Note: Process management may have limitations on Windows
+- **Windows** (amd64)
 
 ## 🚀 Getting Started
 
@@ -325,7 +325,7 @@ rules:
 ### Command Execution Behavior
 
 1. **Sequential Execution**: Commands run in the order specified
-2. **Shell Execution**: Each command runs via `bash -c`
+2. **Cross-Platform Shell Execution**: Commands run via platform-specific shells (`bash -c` on Unix, `cmd /c` on Windows)
 3. **Process Groups**: Commands run in separate process groups for clean termination
 4. **Environment Inheritance**: Commands inherit parent environment plus `env` variables
 5. **Working Directory**: Commands execute in `workdir` (or directory containing the config file if not set)
@@ -1293,10 +1293,15 @@ Devloop uses process groups to ensure clean termination:
 - This prevents orphaned processes and ensures proper cleanup
 
 ### Does devloop support Windows?
-Yes, with some limitations:
-- Process group management works differently on Windows
-- Some signal handling features may behave differently
-- File watching generally works well via fsnotify
+Yes, devloop is fully cross-platform:
+- **Command execution**: Uses `cmd /c` on Windows, `bash -c` (or `sh -c`) on Unix
+- **Process management**: Adapted for Windows process group differences
+- **File watching**: Works reliably via fsnotify on all platforms
+- **Signal handling**: Platform-appropriate termination signals
+
+Minor differences:
+- Process group management implementation varies by OS
+- Some signal handling features may behave slightly differently
 
 ### Can I mix devloop with other tools?
 Absolutely! Common patterns include:

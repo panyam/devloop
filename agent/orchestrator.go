@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -24,6 +25,22 @@ import (
 	"github.com/panyam/devloop/gateway"
 	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
 )
+
+// createCrossPlatformCommand creates a command that works on both Unix and Windows
+func createCrossPlatformCommand(cmdStr string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("cmd", "/c", cmdStr)
+	default:
+		// Unix-like systems (Linux, macOS, BSD, etc.)
+		shell := "bash"
+		// Check if bash exists, fallback to sh for better POSIX compatibility
+		if _, err := exec.LookPath("bash"); err != nil {
+			shell = "sh"
+		}
+		return exec.Command(shell, "-c", cmdStr)
+	}
+}
 
 // Orchestrator manages file watching and rule execution.
 type Orchestrator struct {
@@ -107,7 +124,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	var lastCmd *exec.Cmd
 	for i, cmdStr := range rule.Commands {
 		log.Printf("[devloop]   Running command: %s", cmdStr)
-		cmd := exec.Command("bash", "-c", cmdStr)
+		cmd := createCrossPlatformCommand(cmdStr)
 
 		var writers []io.Writer
 		if o.Config.Settings.PrefixLogs {
@@ -137,10 +154,12 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		// Set platform-specific process attributes
 		setSysProcAttr(cmd)
 
-		// Set working directory if specified
-		if rule.WorkDir != "" {
-			cmd.Dir = rule.WorkDir
+		// Set working directory - default to config file directory if not specified
+		workDir := rule.WorkDir
+		if workDir == "" {
+			workDir = filepath.Dir(o.ConfigPath)
 		}
+		cmd.Dir = workDir
 
 		// Set environment variables
 		cmd.Env = os.Environ() // Inherit parent environment

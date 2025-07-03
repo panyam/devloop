@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,7 +38,7 @@ func (r *ruleRunner) Execute() error {
 
 	for i, cmdStr := range r.rule.Commands {
 		log.Printf("[devloop]   Running command: %s", cmdStr)
-		cmd := exec.Command("bash", "-c", cmdStr)
+		cmd := createCrossPlatformCommand(cmdStr)
 
 		// Setup output handling
 		if err := r.setupCommandOutput(cmd, logWriter); err != nil {
@@ -47,10 +48,12 @@ func (r *ruleRunner) Execute() error {
 		// Set platform-specific process attributes
 		setSysProcAttr(cmd)
 
-		// Set working directory if specified
-		if r.rule.WorkDir != "" {
-			cmd.Dir = r.rule.WorkDir
+		// Set working directory - default to config file directory if not specified
+		workDir := r.rule.WorkDir
+		if workDir == "" {
+			workDir = filepath.Dir(r.orchestrator.ConfigPath)
 		}
+		cmd.Dir = workDir
 
 		// Set environment variables
 		cmd.Env = os.Environ() // Inherit parent environment
