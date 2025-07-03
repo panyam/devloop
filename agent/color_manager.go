@@ -46,6 +46,12 @@ func NewColorManager(settings *gateway.Settings) *ColorManager {
 	// Check if colors should be enabled based on settings and terminal capability
 	if !cm.enabled || !cm.isTerminalColorCapable() {
 		cm.enabled = false
+	} else {
+		// If we want colors enabled, override the global NoColor setting
+		// This is necessary because fatih/color sets NoColor=true by default
+		// when it detects non-terminal output, but we want to enable colors
+		// when the user explicitly requests them and the terminal supports them
+		color.NoColor = false
 	}
 
 	return cm

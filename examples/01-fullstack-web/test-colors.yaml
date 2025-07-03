@@ -1,0 +1,30 @@
+settings:
+  color_logs: true
+  prefix_logs: true
+
+rules:
+  - name: "test-red"
+    color: "red"
+    watch:
+      - action: "include"
+        patterns:
+          - "/tmp/test-trigger.txt"
+    commands:
+      - "echo 'This should be RED output from test-red rule'"
+      
+  - name: "test-blue"
+    color: "blue"
+    watch:
+      - action: "include"
+        patterns:
+          - "/tmp/test-trigger.txt"
+    commands:
+      - "echo 'This should be BLUE output from test-blue rule'"
+      
+  - name: "test-auto"
+    watch:
+      - action: "include"
+        patterns:
+          - "/tmp/test-trigger.txt"
+    commands:
+      - "echo 'This should be AUTO-COLORED output from test-auto rule'"

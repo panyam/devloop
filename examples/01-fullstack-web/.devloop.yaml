@@ -1,5 +1,6 @@
 settings:
   color_logs: true
+  prefix_logs: true
 
 rules:
   - name: "backend"
