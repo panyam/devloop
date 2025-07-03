@@ -63,22 +63,51 @@ The tool can operate in three distinct modes:
 - Utilities moved to `utils/` directory
 - Clear separation between agent logic, gateway logic, and main application
 
-## 5. Progress & Next Steps
+## 5. Architecture Evolution
 
-**Current Status (as of 2025-07-02):**
-- ✅ All core functionalities (configuration loading, file watching, glob matching, command execution, debouncing, and process management) are implemented and tested
-- ✅ The architecture has been successfully migrated from a simple HTTP server to a unified gRPC and gRPC-Gateway foundation
-- ✅ The three operating modes (`standalone`, `agent`, `gateway`) are defined at the CLI level
-- ✅ The `standalone` mode is functional and tested
-- ✅ Complete test suite with 100% passing tests after recent fixes:
-  - Fixed file watcher initialization to start from project root
-  - Fixed log manager channel signaling
-  - Fixed path resolution issues in tests after code reorganization
-  - Migrated from deprecated grpc.Dial to grpc.NewClient
-- ✅ Improved glob pattern matching to follow developer conventions
+**OrchestratorV2 Architecture (as of 2025-07-03):**
+- **Separation of Concerns:** File watching (Orchestrator) is now separate from command execution (RuleRunner)
+- **RuleRunner Pattern:** Each rule has its own RuleRunner instance managing its lifecycle, debouncing, and process management
+- **Improved Process Management:** Platform-specific handling (Linux uses Pdeathsig, Darwin uses Setpgid) prevents zombie processes
+- **Sequential Execution:** Commands within a rule execute sequentially with proper failure propagation (like GNU Make)
+- **Testing Infrastructure:** Factory pattern allows testing both v1 and v2 implementations side-by-side
+
+## 6. Configuration Enhancements
+
+**Rule-Specific Settings:**
+```yaml
+rules:
+  - name: "backend"
+    debounce_delay: 1s    # Override default debounce
+    verbose: true         # Enable verbose logging for this rule
+    commands: [...]
+```
+
+**Global Defaults:**
+```yaml
+settings:
+  default_debounce_delay: 500ms
+  verbose: false
+  prefix_logs: true
+  prefix_max_length: 10
+```
+
+## 7. Progress & Next Steps
+
+**Current Status (as of 2025-07-03):**
+- ✅ All core functionalities fully implemented and tested
+- ✅ Dual orchestrator architecture (v1 and v2) with comprehensive testing
+- ✅ Process management issues resolved (no more zombie processes)
+- ✅ Sequential command execution with failure propagation
+- ✅ Rule-specific configuration for fine-grained control
+- ✅ Test infrastructure supporting both implementations:
+  - `make test` - runs all tests against both versions
+  - `make testv1` - tests v1 orchestrator only
+  - `make testv2` - tests v2 orchestrator only
 
 **Next Steps:**
+- Complete gateway integration for OrchestratorV2
+- Performance benchmarking between v1 and v2
+- Migration guide for switching to v2 as default
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
-- Continue to improve documentation and user guides for the new architecture
-- Optimize performance for large-scale projects with many file changes

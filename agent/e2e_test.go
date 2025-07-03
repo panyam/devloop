@@ -40,7 +40,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -101,12 +101,12 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
 		// Set a shorter debounce duration for testing
-		orchestrator.debounceDuration = 200 * time.Millisecond
+		orchestrator.SetGlobalDebounceDelay(200 * time.Millisecond)
 
 		// Start the orchestrator in a goroutine
 		go func() {
@@ -126,7 +126,7 @@ rules:
 		}
 
 		// Wait for longer than debounce duration to ensure command executes once
-		time.Sleep(orchestrator.debounceDuration + 10000*time.Millisecond)
+		time.Sleep(200*time.Millisecond + 10000*time.Millisecond)
 
 		// 4. Verify command execution count
 		content, readErr := os.ReadFile(outputFilePath)
@@ -162,12 +162,12 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
 		// Set a shorter debounce duration for testing
-		orchestrator.debounceDuration = 200 * time.Millisecond
+		orchestrator.SetGlobalDebounceDelay(200 * time.Millisecond)
 
 		// Start the orchestrator in a goroutine
 		go func() {
@@ -183,11 +183,11 @@ rules:
 		for i := range 3 {
 			err = os.WriteFile(triggerFilePath, []byte(fmt.Sprintf("trigger %d", i)), 0644)
 			assert.NoError(t, err)
-			time.Sleep(orchestrator.debounceDuration / 2) // Trigger within debounce duration
+			time.Sleep(100 * time.Millisecond) // Trigger within debounce duration
 		}
 
 		// Wait for a bit longer to allow processes to start and heartbeats to write
-		time.Sleep(orchestrator.debounceDuration * 2)
+		time.Sleep(400 * time.Millisecond)
 
 		// 4. Verify process termination
 		content, readErr := os.ReadFile(heartbeatFilePath)
@@ -235,7 +235,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run runApp in a goroutine
-		orchestrator, err := NewOrchestrator(customMultiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(customMultiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -311,14 +311,13 @@ rules:
 		assert.NoError(t, err)
 
 		// Run Orchestrator
-		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
 		// Enable verbose mode for debugging
-		oldVerbose := orchestrator.Verbose
-		orchestrator.Verbose = true
-		defer func() { orchestrator.Verbose = oldVerbose }()
+		orchestrator.SetVerbose(true)
+		defer func() { orchestrator.SetVerbose(false) }()
 
 		// Start the orchestrator
 		go func() {
@@ -403,7 +402,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestrator(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 

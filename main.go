@@ -107,7 +107,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 	if err := orchestrator.Start(); err != nil {
 		log.Fatalf("Error: Failed to start orchestrator: %v\n", err)
 	}
-	
+
 	// Wait for shutdown to complete if it was triggered
 	select {
 	case <-shutdownComplete:

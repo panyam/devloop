@@ -51,19 +51,18 @@ func TestLoadConfig(t *testing.T) {
 func TestNewOrchestrator(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful creation
-		orchestrator, err := NewOrchestrator("../testdata/test_devloop.yaml", "")
+		orchestrator, err := NewOrchestratorForTesting("../testdata/test_devloop.yaml", "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
-		assert.NotNil(t, orchestrator.Config)
-		assert.NotNil(t, orchestrator.Watcher)
+		assert.NotNil(t, orchestrator.GetConfig())
 
 		// Test with non-existent config file
-		_, err = NewOrchestrator("non_existent.yaml", "")
+		_, err = NewOrchestratorForTesting("non_existent.yaml", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 
 		// Test with invalid config file
-		_, err = NewOrchestrator("../testdata/invalid.yaml", "")
+		_, err = NewOrchestratorForTesting("../testdata/invalid.yaml", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 	})
@@ -86,7 +85,7 @@ rules:
 		err := os.WriteFile(configPath, []byte(dummyConfigContent), 0644)
 		assert.NoError(t, err)
 
-		orchestrator, err := NewOrchestrator(configPath, "")
+		orchestrator, err := NewOrchestratorForTesting(configPath, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 

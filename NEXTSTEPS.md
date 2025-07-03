@@ -2,26 +2,52 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-07-02)
+## Recently Completed (2025-07-03)
 
-- ✅ **Fixed All Failing Tests:** Successfully resolved all test failures including:
-  - `orchestrator_test.go` - Fixed config file path resolution after code reorganization
-  - `graceful_shutdown_test.go` - Fixed file watcher initialization from project root
-  - `log_manager_test.go` - Fixed channel signaling for rule start events
-  - `e2e_test.go` - Fixed output file path issues in test commands
-  - Fixed grpc.Dial deprecation warning by migrating to grpc.NewClient
-  
-- ✅ **Improved Glob Pattern Matching:** 
-  - Switched from `gobwas/glob` to `bmatcuk/doublestar` library
-  - Now follows standard glob conventions where `**` matches zero or more directories
-  - Pattern `src/**/*.go` now correctly matches both `src/main.go` AND `src/pkg/utils.go`
-  
-- ✅ **Code Reorganization:**
-  - Moved all Go files (except main.go) into `agent/` directory
-  - Updated all import paths and test references accordingly
-  - All tests pass after reorganization
+- ✅ **Architecture Refactoring:**
+  - Separated file watching (Orchestrator) from command execution (RuleRunner)
+  - Implemented OrchestratorV2 with cleaner separation of concerns
+  - Each rule now has its own RuleRunner managing its lifecycle
+  - Fixed various race conditions in process management
+
+- ✅ **Process Management Improvements:**
+  - Fixed zombie process issues when devloop is killed
+  - Implemented platform-specific process management (Pdeathsig on Linux, Setpgid on Darwin)
+  - Commands now execute sequentially with proper failure propagation (like GNU Make)
+  - Added process existence checks before termination to avoid errors
+
+- ✅ **Testing Infrastructure:**
+  - Created factory pattern for testing both orchestrator implementations
+  - Environment variable `DEVLOOP_ORCHESTRATOR_VERSION` selects v1 or v2
+  - Added make targets: `testv1`, `testv2`, and `test` (runs both)
+  - All tests pass for both implementations
+
+- ✅ **Configuration Enhancements:**
+  - Added rule-specific configuration options:
+    - `debounce_delay: 500ms` - Per-rule debounce settings
+    - `verbose: true` - Per-rule verbose logging
+  - Added global defaults in settings:
+    - `default_debounce_delay: 200ms`
+    - `verbose: false`
+  - Rule-specific settings override global defaults
+
+## Previously Completed (2025-07-02)
+
+- ✅ **Fixed All Failing Tests:** Successfully resolved all test failures
+- ✅ **Improved Glob Pattern Matching:** Switched to `bmatcuk/doublestar` library
+- ✅ **Code Reorganization:** Moved files into `agent/` directory
 
 ## High Priority
+
+- **Complete OrchestratorV2 Gateway Integration:**
+  - Port missing gateway communication methods from v1 to v2
+  - Implement handleGatewayStreamRecv methods (GetConfig, GetRuleStatus, TriggerRule, etc.)
+  - Test gateway integration with both orchestrator versions
+
+- **Production Readiness:**
+  - Switch default orchestrator to v2 after thorough testing
+  - Add migration guide for users
+  - Performance benchmarking between v1 and v2
 
 - **Finalize Agent/Gateway Implementation:**
   - Implement the client logic in `agent` mode for registering with and sending data to the gateway

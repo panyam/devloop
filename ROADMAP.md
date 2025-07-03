@@ -20,10 +20,24 @@ This document outlines the high-level roadmap for the `devloop` project.
 
 ## Phase 2: Multi-Instance Architecture & Usability (In Progress)
 
+- [x] **Architecture Refactoring:**
+  - [x] Separated concerns: Orchestrator (file watching) and RuleRunner (command execution)
+  - [x] Implemented OrchestratorV2 with cleaner architecture using RuleRunners
+  - [x] Created comprehensive testing infrastructure supporting both v1 and v2
+  - [x] Rule-specific configuration (debounce delay, verbose logging)
+- [x] **Process Management Improvements:**
+  - [x] Fixed zombie process issues with proper signal handling
+  - [x] Implemented sequential command execution with failure propagation
+  - [x] Platform-specific process management (Linux, Darwin, Windows)
+- [x] **Testing Infrastructure:**
+  - [x] Factory pattern for testing both orchestrator versions
+  - [x] Environment variable based version selection (DEVLOOP_ORCHESTRATOR_VERSION)
+  - [x] Separate make targets: `testv1` and `testv2`
 - [ ] **Agent & Gateway Modes:**
   - [ ] Finalize implementation for the `agent` mode, allowing a `devloop` instance to connect to a central gateway.
   - [ ] Finalize implementation for the `gateway` mode, allowing a `devloop` instance to act as a central hub for multiple agents.
   - [ ] Add comprehensive tests for agent-gateway communication and interaction.
+  - [ ] Port missing gateway methods from v1 to v2
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.

@@ -61,7 +61,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	status.LastBuildStatus = "RUNNING"
 	o.mu.Unlock()
 
-	if o.Verbose {
+	if o.isVerboseForRule(rule) {
 		log.Printf("[devloop] Executing commands for rule %q", rule.Name)
 	}
 
@@ -73,7 +73,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 				// Check if process still exists
 				if err := syscall.Kill(pid, 0); err == nil {
 					// Process exists, terminate it
-					if o.Verbose {
+					if o.isVerboseForRule(rule) {
 						log.Printf("[devloop] Terminating previous process group %d for rule %q", pid, rule.Name)
 					}
 					// Send SIGTERM to the process group
@@ -85,12 +85,12 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 					}
 				}
 				// Wait for the process to exit (even if already dead)
-				go func(c *exec.Cmd, pid int) {
+				go func(c *exec.Cmd, pid int, r gateway.Rule) {
 					_ = c.Wait() // This will return immediately if process is already dead
-					if o.Verbose {
-						log.Printf("[devloop] Previous process group %d for rule %q terminated.", pid, rule.Name)
+					if o.isVerboseForRule(r) {
+						log.Printf("[devloop] Previous process group %d for rule %q terminated.", pid, r.Name)
 					}
-				}(cmd, pid)
+				}(cmd, pid, rule)
 			}
 		}
 	}
@@ -147,7 +147,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		for key, value := range rule.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 		}
-		
+
 		err := cmd.Start()
 		if err != nil {
 			log.Printf("[devloop] Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
@@ -177,7 +177,7 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 	if lastCmd != nil {
 		go func() {
 			waitErr := lastCmd.Wait() // Wait for the last command to finish
-			
+
 			o.mu.Lock()
 			defer o.mu.Unlock()
 			status := o.ruleStatuses[rule.Name]
@@ -191,30 +191,30 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 					status.LastBuildStatus = "FAILED"
 				}
 
-			// Send rule status update to gateway
-			if o.gatewayStream != nil {
-				statusMsg := &pb.DevloopMessage{
-					Content: &pb.DevloopMessage_UpdateRuleStatusRequest{
-						UpdateRuleStatusRequest: &pb.UpdateRuleStatusRequest{
-							RuleStatus: &pb.RuleStatus{
-								ProjectId:       o.projectID,
-								RuleName:        status.RuleName,
-								IsRunning:       status.IsRunning,
-								StartTime:       status.StartTime.UnixMilli(),
-								LastBuildTime:   status.LastBuildTime.UnixMilli(),
-								LastBuildStatus: status.LastBuildStatus,
+				// Send rule status update to gateway
+				if o.gatewayStream != nil {
+					statusMsg := &pb.DevloopMessage{
+						Content: &pb.DevloopMessage_UpdateRuleStatusRequest{
+							UpdateRuleStatusRequest: &pb.UpdateRuleStatusRequest{
+								RuleStatus: &pb.RuleStatus{
+									ProjectId:       o.projectID,
+									RuleName:        status.RuleName,
+									IsRunning:       status.IsRunning,
+									StartTime:       status.StartTime.UnixMilli(),
+									LastBuildTime:   status.LastBuildTime.UnixMilli(),
+									LastBuildStatus: status.LastBuildStatus,
+								},
 							},
 						},
-					},
-				}
-				select {
-				case o.gatewaySendChan <- statusMsg:
-				default:
-					log.Printf("[devloop] Failed to send rule status update for %q: channel full", rule.Name)
+					}
+					select {
+					case o.gatewaySendChan <- statusMsg:
+					default:
+						log.Printf("[devloop] Failed to send rule status update for %q: channel full", rule.Name)
+					}
 				}
 			}
-			}
-			
+
 			o.LogManager.SignalFinished(rule.Name)
 			log.Printf("[devloop] Rule %q commands finished.", rule.Name)
 		}()
@@ -226,7 +226,11 @@ func (o *Orchestrator) debounce(rule gateway.Rule) {
 	if timer, ok := o.debounceTimers[rule.Name]; ok {
 		timer.Stop() // Reset the existing timer
 	}
-	o.debounceTimers[rule.Name] = time.AfterFunc(o.debounceDuration, func() {
+
+	// Get the effective debounce delay for this rule
+	delay := o.getDebounceDelayForRule(rule)
+
+	o.debounceTimers[rule.Name] = time.AfterFunc(delay, func() {
 		o.debouncedEvents <- rule // Send rule to debouncedEvents channel after duration
 	})
 }
@@ -724,7 +728,7 @@ func (o *Orchestrator) Start() error {
 	// Execute rules with RunOnInit: true before starting file watching
 	for _, rule := range o.Config.Rules {
 		if rule.RunOnInit {
-			if o.Verbose {
+			if o.isVerboseForRule(rule) {
 				log.Printf("[devloop] Executing rule %q on initialization (run_on_init: true)", rule.Name)
 			}
 			o.executeCommands(rule)
@@ -775,7 +779,7 @@ func (o *Orchestrator) Start() error {
 				for _, rule := range o.Config.Rules {
 					matcher := rule.Matches(event.Name)
 					if matcher != nil {
-						if o.Verbose {
+						if o.isVerboseForRule(rule) {
 							log.Printf("[devloop] Rule %q matched for file %s", rule.Name, event.Name)
 						}
 						// Use a map to debounce rules by name, ensuring each rule is only debounced once per event burst
@@ -813,6 +817,78 @@ func (o *Orchestrator) StreamLogs(ruleName string, filter string, stream pb.Gate
 	return o.LogManager.StreamLogs(ruleName, filter, stream)
 }
 
+// SetGlobalDebounceDelay sets the default debounce delay for all rules
+func (o *Orchestrator) SetGlobalDebounceDelay(duration time.Duration) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.debounceDuration = duration
+}
+
+// SetRuleDebounceDelay sets the debounce delay for a specific rule
+func (o *Orchestrator) SetRuleDebounceDelay(ruleName string, duration time.Duration) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Find the rule and update its debounce delay
+	for i := range o.Config.Rules {
+		if o.Config.Rules[i].Name == ruleName {
+			o.Config.Rules[i].DebounceDelay = &duration
+			return nil
+		}
+	}
+	return fmt.Errorf("rule %q not found", ruleName)
+}
+
+// SetVerbose sets the global verbose flag
+func (o *Orchestrator) SetVerbose(verbose bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.Verbose = verbose
+	o.Config.Settings.Verbose = verbose
+}
+
+// SetRuleVerbose sets the verbose flag for a specific rule
+func (o *Orchestrator) SetRuleVerbose(ruleName string, verbose bool) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// Find the rule and update its verbose flag
+	for i := range o.Config.Rules {
+		if o.Config.Rules[i].Name == ruleName {
+			o.Config.Rules[i].Verbose = &verbose
+			return nil
+		}
+	}
+	return fmt.Errorf("rule %q not found", ruleName)
+}
+
+// getDebounceDelayForRule returns the effective debounce delay for a rule
+func (o *Orchestrator) getDebounceDelayForRule(rule gateway.Rule) time.Duration {
+	// Check rule-specific setting first
+	if rule.DebounceDelay != nil {
+		return *rule.DebounceDelay
+	}
+
+	// Check global setting
+	if o.Config.Settings.DefaultDebounceDelay != nil {
+		return *o.Config.Settings.DefaultDebounceDelay
+	}
+
+	// Fall back to orchestrator's default
+	return o.debounceDuration
+}
+
+// isVerboseForRule returns whether verbose logging is enabled for a rule
+func (o *Orchestrator) isVerboseForRule(rule gateway.Rule) bool {
+	// Check rule-specific setting first
+	if rule.Verbose != nil {
+		return *rule.Verbose
+	}
+
+	// Fall back to global setting
+	return o.Verbose || o.Config.Settings.Verbose
+}
+
 // Stop gracefully shuts down the orchestrator.
 func (o *Orchestrator) Stop() error {
 	log.Println("[devloop] Stopping orchestrator...")
@@ -841,28 +917,28 @@ func (o *Orchestrator) Stop() error {
 					defer wg.Done()
 					pid := c.Process.Pid
 					log.Printf("Terminating process group %d for rule %q during shutdown", pid, rName)
-					
+
 					// Check if process still exists before trying to kill it
 					if err := syscall.Kill(pid, 0); err != nil {
 						// Process already dead
 						log.Printf("Process %d for rule %q already terminated", pid, rName)
 						return
 					}
-					
+
 					// First try SIGTERM to allow graceful shutdown
 					if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 						if !strings.Contains(err.Error(), "no such process") {
 							log.Printf("Error sending SIGTERM to process group %d: %v", pid, err)
 						}
 					}
-					
+
 					// Give process a moment to exit gracefully
 					done := make(chan bool)
 					go func() {
 						c.Wait()
 						done <- true
 					}()
-					
+
 					select {
 					case <-done:
 						log.Printf("Process group %d for rule %q terminated gracefully", pid, rName)
@@ -878,7 +954,7 @@ func (o *Orchestrator) Stop() error {
 						}
 						<-done // Wait for the goroutine to finish
 					}
-					
+
 					// Double-check by trying to kill again (will fail if process is gone)
 					if err := syscall.Kill(pid, 0); err == nil {
 						log.Printf("WARNING: Process %d still exists after termination attempts", pid)
@@ -889,11 +965,11 @@ func (o *Orchestrator) Stop() error {
 			}
 		}
 	}
-	
+
 	// Wait for all termination goroutines to complete
 	wg.Wait()
 	log.Println("[devloop] All processes terminated")
-	
+
 	// Final cleanup check for any orphaned processes
 	o.cleanupOrphanedProcesses()
 

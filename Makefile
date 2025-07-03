@@ -13,11 +13,18 @@ versionup:
 	git push origin --tags
 	git push
 
-test:
+checks:
 	go fmt ./...
 	go vet ./...
 	staticcheck ./...
-	go test -v ./...
+
+test: checks testv1 testv2
+
+testv1: checks
+	DEVLOOP_ORCHESTRATOR_VERSION=v1 go test -v ./...
+
+testv2: checks
+	DEVLOOP_ORCHESTRATOR_VERSION=v2 go test -v ./...
 
 # Install required Go tools
 install-tools:
