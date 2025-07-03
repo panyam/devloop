@@ -1,0 +1,112 @@
+rules:
+  - name: "Docker Infrastructure"
+    prefix: "infra"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "docker-compose.yml"
+          - "docker-compose.*.yml"
+          - "**/Dockerfile"
+          - ".env"
+    commands:
+      - "echo 'Updating Docker infrastructure...'"
+      - "docker-compose down --remove-orphans"
+      - "docker-compose build"
+      - "docker-compose up -d"
+      - "echo 'Waiting for services to be ready...'"
+      - "sleep 10"
+      - "docker-compose ps"
+
+  - name: "API Development"
+    prefix: "api"
+    watch:
+      - action: "include"
+        patterns:
+          - "api/**/*.go"
+          - "api/go.mod"
+          - "api/go.sum"
+      - action: "exclude"
+        patterns:
+          - "api/api"
+    commands:
+      - "echo 'Rebuilding API service...'"
+      - "docker-compose build api"
+      - "docker-compose restart api"
+      - "echo 'API service restarted'"
+
+  - name: "Frontend Development"
+    prefix: "frontend"
+    watch:
+      - action: "include"
+        patterns:
+          - "frontend/src/**/*.js"
+          - "frontend/src/**/*.jsx"
+          - "frontend/src/**/*.css"
+          - "frontend/public/**/*"
+          - "frontend/package.json"
+      - action: "exclude"
+        patterns:
+          - "frontend/node_modules/**"
+          - "frontend/build/**"
+    commands:
+      - "echo 'Frontend changes detected - hot reload will handle updates'"
+      - "docker-compose restart frontend"
+
+  - name: "Worker Development"
+    prefix: "worker"
+    watch:
+      - action: "include"
+        patterns:
+          - "worker/**/*.py"
+          - "worker/requirements.txt"
+      - action: "exclude"
+        patterns:
+          - "worker/**/__pycache__/**"
+          - "worker/**/*.pyc"
+    commands:
+      - "echo 'Restarting background worker...'"
+      - "docker-compose restart worker"
+      - "echo 'Worker service restarted'"
+
+  - name: "Database Migrations"
+    prefix: "db"
+    watch:
+      - action: "include"
+        patterns:
+          - "migrations/**/*.sql"
+    commands:
+      - "echo 'Running database migrations...'"
+      - "docker-compose exec -T db psql -U postgres -d devloop_app -f /migrations/migrate.sql"
+      - "echo 'Migrations completed'"
+
+  - name: "Nginx Configuration"
+    prefix: "nginx"
+    watch:
+      - action: "include"
+        patterns:
+          - "nginx/**/*.conf"
+          - "nginx/nginx.conf"
+    commands:
+      - "echo 'Reloading Nginx configuration...'"
+      - "docker-compose exec nginx nginx -s reload"
+      - "echo 'Nginx configuration reloaded'"
+
+  - name: "Environment & Config"
+    prefix: "config"
+    watch:
+      - action: "include"
+        patterns:
+          - ".env*"
+          - "config/**/*.yml"
+          - "config/**/*.yaml"
+          - "config/**/*.json"
+    commands:
+      - "echo 'Environment configuration changed, restarting affected services...'"
+      - "docker-compose restart api worker"
+      - "echo 'Services restarted with new configuration'"
+
+settings:
+  prefix_logs: true
+  prefix_max_length: 10
+  debounce_delay: 2000ms
