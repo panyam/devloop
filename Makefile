@@ -2,6 +2,9 @@
 deps: install-tools
 	@echo "✓ All dependencies installed successfully!"
 
+install:
+	go install main.go
+
 buf:
 	buf generate
 

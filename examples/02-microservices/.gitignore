@@ -1,0 +1,10 @@
+# Binaries
+auth-service/auth-server
+user-service/user-server
+api-gateway/gateway
+
+# Go
+**/go.sum
+
+# OS files
+.DS_Store

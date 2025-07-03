@@ -1,0 +1,43 @@
+rules:
+  # Shared libraries - other services depend on this
+  - name: "shared"
+    watch:
+      - action: "include"
+        patterns:
+          - "shared/**/*.go"
+    commands:
+      - "echo '[shared] Shared libraries changed, dependent services will rebuild...'"
+    
+  # Auth service
+  - name: "auth"
+    watch:
+      - action: "include"
+        patterns:
+          - "auth-service/**/*.go"
+          - "shared/**/*.go"  # Also watch shared libs
+    commands:
+      - "cd auth-service && go build -o auth-server ."
+      - "cd auth-service && ./auth-server"
+    
+  # User service
+  - name: "user"
+    watch:
+      - action: "include" 
+        patterns:
+          - "user-service/**/*.go"
+          - "shared/**/*.go"  # Also watch shared libs
+    commands:
+      - "cd user-service && go build -o user-server ."
+      - "cd user-service && ./user-server"
+    
+  # API Gateway - depends on all services being up
+  - name: "gateway"
+    watch:
+      - action: "include"
+        patterns:
+          - "api-gateway/**/*.go"
+          - "shared/**/*.go"  # Also watch shared libs
+    commands:
+      - "sleep 2"  # Give other services time to start
+      - "cd api-gateway && go build -o gateway ."
+      - "cd api-gateway && ./gateway"
