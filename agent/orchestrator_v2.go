@@ -134,7 +134,7 @@ func (o *OrchestratorV2) Start() error {
 	// Setup file watching
 	projectRoot := o.ProjectRoot()
 	if o.Verbose {
-		log.Printf("[devloop] Starting file watcher from project root: %s", projectRoot)
+		o.logDevloop("Starting file watcher from project root: %s", projectRoot)
 	}
 
 	err := filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
@@ -182,7 +182,7 @@ func (o *OrchestratorV2) watchFiles() {
 			}
 
 			if o.Verbose {
-				log.Printf("[devloop] File event: %s on %s", event.Op, event.Name)
+				o.logDevloop("File event: %s on %s", event.Op, event.Name)
 			}
 
 			// Check which rules match this file
@@ -193,12 +193,12 @@ func (o *OrchestratorV2) watchFiles() {
 					// Pattern matched - check action
 					if matcher.Action == "include" {
 						if o.Verbose {
-							log.Printf("[devloop] Rule %q matched (included) for file %s", rule.Name, event.Name)
+							o.logDevloop("Rule %q matched (included) for file %s", rule.Name, event.Name)
 						}
 						runner.TriggerDebounced()
 					} else if matcher.Action == "exclude" {
 						if o.Verbose {
-							log.Printf("[devloop] Rule %q matched (excluded) for file %s", rule.Name, event.Name)
+							o.logDevloop("Rule %q matched (excluded) for file %s", rule.Name, event.Name)
 						}
 						// Don't trigger for excluded files
 					}
@@ -206,7 +206,7 @@ func (o *OrchestratorV2) watchFiles() {
 					// No patterns matched - check default behavior
 					if o.shouldTriggerByDefault(&rule) {
 						if o.Verbose {
-							log.Printf("[devloop] Rule %q matched (default) for file %s", rule.Name, event.Name)
+							o.logDevloop("Rule %q matched (default) for file %s", rule.Name, event.Name)
 						}
 						runner.TriggerDebounced()
 					}
@@ -568,4 +568,39 @@ func (o *OrchestratorV2) SetRuleVerbose(ruleName string, verbose bool) error {
 		}
 	}
 	return fmt.Errorf("rule %q not found", ruleName)
+}
+
+// logDevloop logs devloop internal messages with consistent formatting
+func (o *OrchestratorV2) logDevloop(format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
+
+	if o.Config.Settings.PrefixLogs && o.Config.Settings.PrefixMaxLength > 0 {
+		// Format with centered "devloop" prefix to match rule output format
+		prefix := "devloop"
+		totalPadding := o.Config.Settings.PrefixMaxLength - len(prefix)
+		leftPadding := totalPadding / 2
+		rightPadding := totalPadding - leftPadding
+
+		centeredPrefix := strings.Repeat(" ", leftPadding) + prefix + strings.Repeat(" ", rightPadding)
+		prefixStr := "[" + centeredPrefix + "] "
+
+		// Add color if enabled
+		if o.ColorManager != nil && o.ColorManager.IsEnabled() {
+			// Create a fake rule for devloop messages to get consistent coloring
+			devloopRule := &gateway.Rule{Name: "devloop"}
+			coloredPrefix := o.ColorManager.FormatPrefix(prefixStr, devloopRule)
+			fmt.Printf("%s%s\n", coloredPrefix, message)
+		} else {
+			fmt.Printf("%s%s\n", prefixStr, message)
+		}
+	} else {
+		// Standard log format but with devloop color if available
+		if o.ColorManager != nil && o.ColorManager.IsEnabled() {
+			devloopRule := &gateway.Rule{Name: "devloop"}
+			coloredDevloop := o.ColorManager.FormatPrefix("[devloop]", devloopRule)
+			log.Printf("%s %s", coloredDevloop, message)
+		} else {
+			log.Printf("[devloop] %s", message)
+		}
+	}
 }

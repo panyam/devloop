@@ -110,14 +110,17 @@ func (r *ruleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) erro
 			prefix = r.rule.Prefix
 		}
 
-		// Apply prefix length constraints
+		// Apply prefix length constraints and center the text
 		if r.orchestrator.Config.Settings.PrefixMaxLength > 0 {
 			if len(prefix) > r.orchestrator.Config.Settings.PrefixMaxLength {
 				prefix = prefix[:r.orchestrator.Config.Settings.PrefixMaxLength]
 			} else {
-				for len(prefix) < r.orchestrator.Config.Settings.PrefixMaxLength {
-					prefix += " "
-				}
+				// Center the prefix within the max length
+				totalPadding := r.orchestrator.Config.Settings.PrefixMaxLength - len(prefix)
+				leftPadding := totalPadding / 2
+				rightPadding := totalPadding - leftPadding
+
+				prefix = strings.Repeat(" ", leftPadding) + prefix + strings.Repeat(" ", rightPadding)
 			}
 		}
 
