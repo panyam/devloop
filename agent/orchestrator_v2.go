@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -320,16 +321,65 @@ func (o *OrchestratorV2) disconnectFromGateway() {
 
 // handleGatewayStreamRecv handles incoming messages from gateway
 func (o *OrchestratorV2) handleGatewayStreamRecv() {
+	log.Println("[devloop] Starting gateway stream receiver.")
 	for {
-		_, err := o.gatewayStream.Recv()
-		if err != nil {
-			log.Printf("[devloop] Gateway stream recv error: %v", err)
-			close(o.done)
+		select {
+		case <-o.done:
+			log.Println("[devloop] Gateway stream receiver stopping.")
 			return
-		}
+		default:
+			msg, err := o.gatewayStream.Recv()
+			if err == io.EOF {
+				log.Println("[devloop] Gateway closed stream (EOF). Shutting down.")
+				close(o.done)
+				return
+			}
+			if err != nil {
+				log.Printf("[devloop] Error receiving from gateway stream: %v. Shutting down.", err)
+				close(o.done)
+				return
+			}
 
-		// Handle different message types
-		// TODO: Implementation depends on gateway protocol
+			switch content := msg.GetContent().(type) {
+			case *pb.DevloopMessage_TriggerRuleRequest:
+				go o.handleTriggerRuleRequest(msg.GetCorrelationId(), content.TriggerRuleRequest)
+			case *pb.DevloopMessage_GetConfigRequest:
+				go o.handleGetConfigRequest(msg.GetCorrelationId(), content.GetConfigRequest)
+			case *pb.DevloopMessage_GetRuleStatusRequest:
+				go o.handleGetRuleStatusRequest(msg.GetCorrelationId(), content.GetRuleStatusRequest)
+			case *pb.DevloopMessage_ListWatchedPathsRequest:
+				go o.handleListWatchedPathsRequest(msg.GetCorrelationId(), content.ListWatchedPathsRequest)
+			case *pb.DevloopMessage_ReadFileContentRequest:
+				go o.handleReadFileContentRequest(msg.GetCorrelationId(), content.ReadFileContentRequest)
+			case *pb.DevloopMessage_GetHistoricalLogsRequest:
+				go o.handleGetHistoricalLogsRequest(msg.GetCorrelationId(), content.GetHistoricalLogsRequest)
+			// Handle responses to devloop-initiated requests
+			case *pb.DevloopMessage_RegisterRequest:
+				log.Printf("[devloop] Received unexpected RegisterRequest from gateway.")
+			case *pb.DevloopMessage_UnregisterRequest:
+				log.Printf("[devloop] Received unexpected UnregisterRequest from gateway.")
+			case *pb.DevloopMessage_LogLine:
+				log.Printf("[devloop] Received unexpected LogLine from gateway.")
+			case *pb.DevloopMessage_UpdateRuleStatusRequest:
+				log.Printf("[devloop] Received unexpected UpdateRuleStatusRequest from gateway.")
+			default:
+				// This is a response to a devloop-initiated request
+				if msg.GetCorrelationId() != "" {
+					o.runnersMutex.RLock()
+					respChan, ok := o.responseChan[msg.GetCorrelationId()]
+					o.runnersMutex.RUnlock()
+					if ok {
+						select {
+						case respChan <- msg:
+						default:
+							log.Printf("[devloop] Response channel for correlation ID %s is full, dropping response.", msg.GetCorrelationId())
+						}
+					} else {
+						log.Printf("[devloop] Received response for unknown correlation ID %s: %T", msg.GetCorrelationId(), content)
+					}
+				}
+			}
+		}
 	}
 }
 

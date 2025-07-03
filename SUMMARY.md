@@ -104,10 +104,12 @@ settings:
   - `make test` - runs all tests against both versions
   - `make testv1` - tests v1 orchestrator only
   - `make testv2` - tests v2 orchestrator only
+- ✅ Complete gateway integration for OrchestratorV2 (all handler methods ported)
+- ✅ All tests passing for both v1 and v2 implementations
 
 **Next Steps:**
-- Complete gateway integration for OrchestratorV2
 - Performance benchmarking between v1 and v2
 - Migration guide for switching to v2 as default
+- Switch default orchestrator to v2
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints

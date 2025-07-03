@@ -37,7 +37,7 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [ ] Finalize implementation for the `agent` mode, allowing a `devloop` instance to connect to a central gateway.
   - [ ] Finalize implementation for the `gateway` mode, allowing a `devloop` instance to act as a central hub for multiple agents.
   - [ ] Add comprehensive tests for agent-gateway communication and interaction.
-  - [ ] Port missing gateway methods from v1 to v2
+  - [x] Port missing gateway methods from v1 to v2 (completed)
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.
