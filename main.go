@@ -39,7 +39,7 @@ func main() {
 	flag.IntVar(&mcpPort, "mcp-port", 3000, "Port for the MCP server.")
 	flag.BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration.")
 	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50051). If set, devloop will register with the gateway.")
-	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, gateway, or mcp")
+	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
 
 	// Define subcommands
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
@@ -70,12 +70,6 @@ func main() {
 }
 
 func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, gatewayAddr string, enableMCP bool) {
-	// Handle MCP mode separately
-	if mode == "mcp" {
-		runMCPServer(configPath)
-		return
-	}
-
 	orchestrator, err := agent.NewOrchestratorV2(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
@@ -83,6 +77,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 	orchestrator.Verbose = verbose
 
 	var gatewayService *gateway.GatewayService
+	var mcpService *mcp.MCPService
 	
 	if mode == "standalone" || mode == "gateway" {
 		gatewayService = gateway.NewGatewayService(orchestrator)
@@ -90,6 +85,16 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		if err != nil {
 			log.Fatalf("Error: Failed to start gateway service: %v\n", err)
 		}
+	}
+
+	// Start MCP server if enabled (can run alongside any core mode)
+	if enableMCP {
+		mcpService = mcp.NewMCPService(orchestrator, mcpPort)
+		err = mcpService.Start()
+		if err != nil {
+			log.Fatalf("Error: Failed to start MCP service: %v\n", err)
+		}
+		log.Printf("[devloop] MCP server enabled alongside %s mode", mode)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -101,6 +106,9 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 		log.Println("\n[devloop] Shutting down...")
 		if gatewayService != nil {
 			gatewayService.Stop()
+		}
+		if mcpService != nil {
+			mcpService.Stop()
 		}
 		orchestrator.Stop()
 		shutdownComplete <- true
@@ -130,27 +138,3 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 	}
 }
 
-// runMCPServer starts devloop in MCP server mode for AI tool integration
-func runMCPServer(configPath string) {
-	// Create orchestrator for this specific project
-	orchestrator, err := agent.NewOrchestratorV2(configPath, "")
-	if err != nil {
-		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
-	}
-	orchestrator.Verbose = verbose
-
-	// Create MCP service
-	mcpService := mcp.NewMCPService(orchestrator, 0) // stdio mode doesn't need port
-	err = mcpService.Start()
-	if err != nil {
-		log.Fatalf("Error: Failed to start MCP service: %v\n", err)
-	}
-
-	// Keep running until interrupted
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	
-	log.Println("[mcp] Shutting down MCP server...")
-	mcpService.Stop()
-}

@@ -103,17 +103,7 @@ func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, 
 
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {
-		runner := NewRuleRunner(rule, &Orchestrator{
-			ConfigPath:       orchestrator.ConfigPath,
-			Config:           orchestrator.Config,
-			Verbose:          orchestrator.Verbose,
-			LogManager:       orchestrator.LogManager,
-			ColorManager:     orchestrator.ColorManager,
-			projectID:        orchestrator.projectID,
-			gatewayStream:    orchestrator.gatewayStream,
-			gatewaySendChan:  orchestrator.gatewaySendChan,
-			debounceDuration: orchestrator.debounceDuration,
-		})
+		runner := NewRuleRunner(rule, orchestrator)
 		orchestrator.ruleRunners[rule.Name] = runner
 	}
 
@@ -200,11 +190,26 @@ func (o *OrchestratorV2) watchFiles() {
 			for _, runner := range o.ruleRunners {
 				rule := runner.GetRule()
 				if matcher := rule.Matches(event.Name); matcher != nil {
-					if o.Verbose {
-						log.Printf("[devloop] Rule %q matched for file %s", rule.Name, event.Name)
+					// Pattern matched - check action
+					if matcher.Action == "include" {
+						if o.Verbose {
+							log.Printf("[devloop] Rule %q matched (included) for file %s", rule.Name, event.Name)
+						}
+						runner.TriggerDebounced()
+					} else if matcher.Action == "exclude" {
+						if o.Verbose {
+							log.Printf("[devloop] Rule %q matched (excluded) for file %s", rule.Name, event.Name)
+						}
+						// Don't trigger for excluded files
 					}
-					// Trigger debounced execution
-					runner.TriggerDebounced()
+				} else {
+					// No patterns matched - check default behavior
+					if o.shouldTriggerByDefault(&rule) {
+						if o.Verbose {
+							log.Printf("[devloop] Rule %q matched (default) for file %s", rule.Name, event.Name)
+						}
+						runner.TriggerDebounced()
+					}
 				}
 			}
 			o.runnersMutex.RUnlock()
@@ -219,6 +224,40 @@ func (o *OrchestratorV2) watchFiles() {
 			return
 		}
 	}
+}
+
+// shouldTriggerByDefault determines if a rule should trigger when no patterns match
+func (o *OrchestratorV2) shouldTriggerByDefault(rule *gateway.Rule) bool {
+	// Check rule-specific default first
+	if rule.DefaultAction != "" {
+		return rule.DefaultAction == "include"
+	}
+	// Fall back to global default
+	return o.Config.Settings.DefaultWatchAction == "include"
+}
+
+// getDebounceDelayForRule returns the effective debounce delay for a rule
+func (o *OrchestratorV2) getDebounceDelayForRule(rule gateway.Rule) time.Duration {
+	// Rule-specific delay takes precedence
+	if rule.DebounceDelay != nil {
+		return *rule.DebounceDelay
+	}
+	// Fall back to global default
+	if o.Config.Settings.DefaultDebounceDelay != nil {
+		return *o.Config.Settings.DefaultDebounceDelay
+	}
+	// Final fallback to hardcoded default
+	return 500 * time.Millisecond
+}
+
+// isVerboseForRule returns whether verbose logging is enabled for a rule
+func (o *OrchestratorV2) isVerboseForRule(rule gateway.Rule) bool {
+	// Rule-specific setting takes precedence
+	if rule.Verbose != nil {
+		return *rule.Verbose
+	}
+	// Fall back to global setting
+	return o.Config.Settings.Verbose
 }
 
 // Stop gracefully shuts down the orchestrator

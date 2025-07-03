@@ -4,24 +4,32 @@ This guide explains how to integrate devloop with MCP (Model Context Protocol) c
 
 ## Overview
 
-The devloop MCP server exposes development tools through the Model Context Protocol, allowing AI assistants to:
+The devloop MCP server is an **add-on capability** that can be enabled alongside any devloop operating mode (standalone, agent, or gateway). It exposes development tools through the Model Context Protocol, allowing AI assistants to:
 - Discover and monitor development projects
-- Trigger builds and tests
+- Trigger builds and tests  
 - Read configuration and source files
 - Monitor build status and logs
 - Understand project structure and dependencies
 
+**Key Design Principle:** MCP is not a separate mode but an additional interface that enhances existing devloop functionality.
+
 ## Quick Start
 
-### 1. Start devloop in MCP mode
+### 1. Enable MCP alongside any devloop mode
 
 ```bash
-# Start MCP server for a specific project
-devloop --mode mcp --c /path/to/project/.devloop.yaml
+# Enable MCP with standalone mode (default)
+devloop --enable-mcp --c /path/to/project/.devloop.yaml
+
+# Enable MCP with gateway mode
+devloop --mode gateway --enable-mcp --grpc-port 50051 --http-port 8080
+
+# Enable MCP with agent mode
+devloop --mode agent --enable-mcp --gateway-addr localhost:50051
 
 # Or use default config location
 cd /path/to/project
-devloop --mode mcp
+devloop --enable-mcp
 ```
 
 ### 2. Configure MCP Client
@@ -33,7 +41,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "devloop": {
       "command": "devloop",
-      "args": ["--mode", "mcp", "--c", "/path/to/project/.devloop.yaml"],
+      "args": ["--enable-mcp", "--c", "/path/to/project/.devloop.yaml"],
       "env": {}
     }
   }
@@ -174,15 +182,15 @@ The MCP server provides detailed error messages for:
 
 Enable verbose logging:
 ```bash
-devloop --mode mcp --v --c /path/to/project/.devloop.yaml
+devloop --enable-mcp --v --c /path/to/project/.devloop.yaml
 ```
 
 ### Integration Testing
 
 Test MCP integration:
 ```bash
-# Start devloop MCP server
-devloop --mode mcp --c .devloop.yaml
+# Start devloop with MCP enabled
+devloop --enable-mcp --c .devloop.yaml
 
 # In another terminal, test with MCP client
 # (specific commands depend on your MCP client)
@@ -192,22 +200,35 @@ devloop --mode mcp --c .devloop.yaml
 
 ### Multiple Projects
 
-To manage multiple projects, start separate MCP servers:
+To manage multiple projects, you have two options:
 
+**Option 1: Separate MCP servers per project**
 ```json
 {
   "mcpServers": {
     "devloop-backend": {
       "command": "devloop",
-      "args": ["--mode", "mcp", "--c", "/path/to/backend/.devloop.yaml"]
+      "args": ["--enable-mcp", "--c", "/path/to/backend/.devloop.yaml"]
     },
     "devloop-frontend": {
       "command": "devloop", 
-      "args": ["--mode", "mcp", "--c", "/path/to/frontend/.devloop.yaml"]
+      "args": ["--enable-mcp", "--c", "/path/to/frontend/.devloop.yaml"]
     }
   }
 }
 ```
+
+**Option 2: Gateway mode with single MCP server (Recommended)**
+```bash
+# Start gateway with MCP
+devloop --mode gateway --enable-mcp --grpc-port 50051
+
+# Connect agents from different projects
+cd /path/to/backend && devloop --mode agent --gateway-addr localhost:50051
+cd /path/to/frontend && devloop --mode agent --gateway-addr localhost:50051
+```
+
+The gateway approach provides a unified view of all projects through a single MCP interface.
 
 ### Custom Rule Workflows
 

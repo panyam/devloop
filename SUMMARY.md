@@ -112,35 +112,43 @@ settings:
 
 **Current Status (as of 2025-07-03):**
 - ✅ All core functionalities fully implemented and tested
-- ✅ Dual orchestrator architecture (v1 and v2) with comprehensive testing
+- ✅ **Single Orchestrator Architecture (V2 only):** Removed OrchestratorV1 and simplified codebase
+- ✅ **Fixed Rule Matching Logic:** Resolved critical bug where exclude patterns were ignored
 - ✅ Process management issues resolved (no more zombie processes)
 - ✅ Sequential command execution with failure propagation
 - ✅ Cross-platform command execution (Windows, macOS, Linux)
 - ✅ Color-coded rule output with configurable schemes
 - ✅ Rule-specific configuration for fine-grained control
-- ✅ Test infrastructure supporting both implementations:
-  - `make test` - runs all tests against both versions
-  - `make testv1` - tests v1 orchestrator only
-  - `make testv2` - tests v2 orchestrator only
-- ✅ Complete gateway integration for OrchestratorV2 (all handler methods ported)
-- ✅ All tests passing for both v1 and v2 implementations
+- ✅ **Action-Based File Filtering:** Rules now properly respect include/exclude actions
+- ✅ **Configurable Default Behavior:** Rule-level and global `default_action` settings
+- ✅ Complete gateway integration for OrchestratorV2
+- ✅ All tests passing with simplified test infrastructure
 - ✅ MCP (Model Context Protocol) server integration completed:
+  - **MCP as Add-On Capability:** Can be enabled alongside any core mode (`--enable-mcp`)
   - Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
   - Comprehensive protobuf documentation with field descriptions and usage examples
-  - MCP server mode (`--mode mcp`) for AI assistant integration
   - Six core tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
   - Complete integration guide and workflow documentation (MCP_INTEGRATION.md)
   - Manual project ID configuration support for consistent AI tool identification
 
+**Major Bug Fixes:**
+- **Rule Matching Logic (Critical):** Fixed orchestrator ignoring `Action` field in matchers
+  - Before: Exclude patterns matched but still triggered rules
+  - After: Exclude patterns properly skip rule execution
+  - Impact: SDL project's `web/**` exclusions now work correctly
+
 **Current Architecture Strengths:**
+- **Simplified Single Implementation:** Only OrchestratorV2, no dual architecture complexity
+- **Correct Pattern Matching:** First-match semantics with proper action-based filtering
+- **Orthogonal MCP Integration:** MCP server runs alongside core modes, not as separate mode
 - **Auto-generated MCP Tools:** Leverages protoc-gen-go-mcp for automatic tool generation from protobuf
 - **Comprehensive Documentation:** Enhanced protobuf comments provide clear tool descriptions and usage examples
 - **Clean Separation:** MCP functionality isolated in `internal/mcp/` package using adapter pattern
 - **Flexible Project Management:** Manual project ID configuration for consistent cross-session identification
 
 **Next Steps:**
-- Performance benchmarking between v1 and v2
-- ✅ Switch default orchestrator to v2 (completed)
+- ✅ V1 orchestrator removal completed
+- ✅ Rule matching logic fixed
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
 - Consider adding streaming log support to MCP tools

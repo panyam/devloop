@@ -38,7 +38,7 @@ type RuleRunner interface {
 // ruleRunner is the concrete implementation of RuleRunner
 type ruleRunner struct {
 	rule         gateway.Rule
-	orchestrator *Orchestrator // Back reference for config, logging, etc.
+	orchestrator *OrchestratorV2 // Back reference for config, logging, etc.
 
 	// Process management
 	runningCommands []*exec.Cmd
@@ -63,7 +63,7 @@ type ruleRunner struct {
 }
 
 // NewRuleRunner creates a new RuleRunner for the given rule
-func NewRuleRunner(rule gateway.Rule, orchestrator *Orchestrator) RuleRunner {
+func NewRuleRunner(rule gateway.Rule, orchestrator *OrchestratorV2) RuleRunner {
 	runner := &ruleRunner{
 		rule:            rule,
 		orchestrator:    orchestrator,

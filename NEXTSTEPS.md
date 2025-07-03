@@ -4,6 +4,23 @@ This document outlines the immediate next steps for the `devloop` project.
 
 ## Recently Completed (2025-07-03)
 
+- ✅ **Complete OrchestratorV1 Removal:**
+  - Deleted legacy V1 orchestrator and factory pattern implementations
+  - Simplified codebase to single OrchestratorV2 implementation
+  - Updated all tests to use V2 directly without version switching
+  - Backed up legacy cleanup files while preserving modern process management
+
+- ✅ **Critical Rule Matching Bug Fix:**
+  - **Root Cause**: Orchestrator was ignoring `Action` field in matcher patterns
+  - **Impact**: Exclude patterns matched but still triggered rule execution
+  - **Solution**: Implemented proper action-based filtering logic
+  - **Result**: SDL project's `web/**` exclusions now work correctly
+
+- ✅ **Enhanced Configuration System:**
+  - Added `default_action` field to Rule struct for per-rule defaults
+  - Added `default_watch_action` field to Settings struct for global defaults
+  - Implemented proper precedence: rule-specific → global → hardcoded fallback
+
 - ✅ **Architecture Refactoring:**
   - Separated file watching (Orchestrator) from command execution (RuleRunner)
   - Implemented OrchestratorV2 with cleaner separation of concerns
@@ -68,7 +85,7 @@ This document outlines the immediate next steps for the `devloop` project.
   - Performance benchmarking between v1 and v2
 
 - ✅ **MCP (Model Context Protocol) Integration:**
-  - ✅ Added MCP server mode (`--mode mcp`) for AI assistant integration
+  - ✅ **Redesigned MCP as Add-On Capability:** Changed from exclusive mode to optional feature alongside core modes
   - ✅ Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
   - ✅ Enhanced protobuf documentation with comprehensive field descriptions and usage examples
   - ✅ Implemented six core MCP tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
@@ -104,8 +121,9 @@ This document outlines the immediate next steps for the `devloop` project.
 ## Ongoing
 
 - **Documentation:** Update all project documentation (README, etc.) to reflect:
-  - The new gRPC-based architecture and the four operating modes (including MCP)
-  - The glob pattern behavior with doublestar
+  - The simplified single-orchestrator architecture
+  - The three core operating modes (standalone, agent, gateway) + MCP as add-on
+  - The glob pattern behavior with doublestar and proper action-based filtering
   - The new `agent/` directory structure
   - MCP integration capabilities and AI assistant workflows
   

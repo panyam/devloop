@@ -22,6 +22,7 @@ type Settings struct {
 	ColorLogs            bool              `yaml:"color_logs,omitempty"`
 	ColorScheme          string            `yaml:"color_scheme,omitempty"`
 	CustomColors         map[string]string `yaml:"custom_colors,omitempty"`
+	DefaultWatchAction   string            `yaml:"default_watch_action,omitempty"` // "include" or "exclude"
 }
 
 // Rule defines a single watch-and-run rule.
@@ -36,6 +37,7 @@ type Rule struct {
 	DebounceDelay *time.Duration    `yaml:"debounce_delay,omitempty"`
 	Verbose       *bool             `yaml:"verbose,omitempty"`
 	Color         string            `yaml:"color,omitempty"`
+	DefaultAction string            `yaml:"default_action,omitempty"` // "include" or "exclude"
 }
 
 // Matcher defines a single include or exclude directive using glob patterns.
