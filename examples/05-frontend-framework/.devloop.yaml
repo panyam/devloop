@@ -1,0 +1,156 @@
+rules:
+  - name: "React Development"
+    prefix: "react"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "react-app/src/**/*.{ts,tsx,js,jsx}"
+          - "react-app/src/**/*.{css,scss,sass}"
+          - "react-app/public/**/*"
+          - "shared/**/*.{ts,js}"
+      - action: "exclude"
+        patterns:
+          - "react-app/node_modules/**"
+          - "react-app/dist/**"
+          - "react-app/build/**"
+    commands:
+      - "echo 'Starting React development server...'"
+      - "cd react-app && npm run dev"
+
+  - name: "Vue Components"
+    prefix: "vue"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "vue-components/src/**/*.{vue,ts,js}"
+          - "vue-components/src/**/*.{css,scss,sass}"
+          - "shared/**/*.{ts,js}"
+      - action: "exclude"
+        patterns:
+          - "vue-components/node_modules/**"
+          - "vue-components/dist/**"
+    commands:
+      - "echo 'Starting Vue component development...'"
+      - "cd vue-components && npm run dev"
+
+  - name: "Storybook"
+    prefix: "story"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "storybook/stories/**/*.{js,jsx,ts,tsx,mdx}"
+          - "storybook/.storybook/**/*.{js,ts}"
+          - "react-app/src/components/**/*.{ts,tsx}"
+          - "vue-components/src/components/**/*.vue"
+      - action: "exclude"
+        patterns:
+          - "storybook/node_modules/**"
+          - "storybook/storybook-static/**"
+    commands:
+      - "echo 'Starting Storybook...'"
+      - "cd storybook && npm run dev"
+
+  - name: "TypeScript Checking"
+    prefix: "tsc"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/*.{ts,tsx}"
+          - "**/tsconfig.json"
+      - action: "exclude"
+        patterns:
+          - "**/node_modules/**"
+          - "**/dist/**"
+          - "**/build/**"
+    commands:
+      - "echo 'Running TypeScript type checking...'"
+      - "npm run type-check"
+
+  - name: "Testing"
+    prefix: "test"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/__tests__/**/*.{ts,tsx,js,jsx}"
+          - "**/*.{test,spec}.{ts,tsx,js,jsx}"
+          - "**/src/**/*.{ts,tsx,js,jsx,vue}"
+      - action: "exclude"
+        patterns:
+          - "**/node_modules/**"
+          - "**/coverage/**"
+    commands:
+      - "echo 'Running tests...'"
+      - "npm run test"
+
+  - name: "Linting"
+    prefix: "lint"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/*.{ts,tsx,js,jsx,vue}"
+          - "**/.eslintrc.*"
+          - "**/eslint.config.*"
+      - action: "exclude"
+        patterns:
+          - "**/node_modules/**"
+          - "**/dist/**"
+          - "**/build/**"
+    commands:
+      - "echo 'Running ESLint...'"
+      - "npm run lint"
+
+  - name: "Styling"
+    prefix: "style"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/*.{css,scss,sass,less}"
+          - "shared/styles/**/*"
+          - "**/postcss.config.*"
+          - "**/tailwind.config.*"
+      - action: "exclude"
+        patterns:
+          - "**/node_modules/**"
+          - "**/dist/**"
+    commands:
+      - "echo 'Processing styles...'"
+      - "npm run build:styles"
+
+  - name: "Package Management"
+    prefix: "deps"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/package.json"
+          - "**/package-lock.json"
+          - "**/yarn.lock"
+          - "**/pnpm-lock.yaml"
+    commands:
+      - "echo 'Installing dependencies...'"
+      - "npm run install:all"
+      - "echo 'Dependencies updated'"
+
+  - name: "Configuration"
+    prefix: "config"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/vite.config.*"
+          - "**/webpack.config.*"
+          - "**/rollup.config.*"
+          - "**/.prettierrc*"
+          - "**/prettier.config.*"
+          - "**/jest.config.*"
+    commands:
+      - "echo 'Configuration changed, restarting affected services...'"
+      - "pkill -f 'vite\\|webpack\\|rollup' || true"
+      - "sleep 2"
+      - "echo 'Services will restart automatically'"
+
+settings:
+  prefix_logs: true
+  prefix_max_length: 8
+  debounce_delay: 1000ms

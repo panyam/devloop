@@ -1,0 +1,26 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./styles": "./styles/index.scss",
+    "./types": "./dist/types/index.d.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:styles": "sass styles:dist/styles",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint . --ext .ts,.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules",
+    "clean:build": "rm -rf dist"
+  },
+  "devDependencies": {
+    "sass": "^1.69.5",
+    "typescript": "^5.3.2"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "storybook",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "storybook dev -p 6006",
+    "build": "storybook build",
+    "preview": "npx http-server storybook-static",
+    "test": "test-storybook",
+    "test:coverage": "test-storybook --coverage",
+    "lint": "eslint stories --ext .js,.jsx,.ts,.tsx",
+    "clean": "rm -rf storybook-static node_modules",
+    "clean:build": "rm -rf storybook-static"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vue": "^3.3.8",
+    "shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@storybook/addon-essentials": "^7.5.3",
+    "@storybook/addon-interactions": "^7.5.3",
+    "@storybook/addon-links": "^7.5.3",
+    "@storybook/addon-viewport": "^7.5.3",
+    "@storybook/blocks": "^7.5.3",
+    "@storybook/react": "^7.5.3",
+    "@storybook/react-vite": "^7.5.3",
+    "@storybook/test": "^7.5.3",
+    "@storybook/test-runner": "^0.16.0",
+    "@storybook/vue3": "^7.5.3",
+    "@storybook/vue3-vite": "^7.5.3",
+    "storybook": "^7.5.3"
+  }
+}

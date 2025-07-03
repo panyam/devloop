@@ -1,0 +1,76 @@
+{
+  "name": "frontend-framework-devloop-example",
+  "version": "1.0.0",
+  "description": "Multi-framework frontend development with devloop",
+  "private": true,
+  "workspaces": [
+    "react-app",
+    "vue-components", 
+    "storybook",
+    "shared"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:workspaces",
+    "install:workspaces": "npm install --workspaces",
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:vue\" \"npm run dev:storybook\"",
+    "dev:react": "npm run dev --workspace=react-app",
+    "dev:vue": "npm run dev --workspace=vue-components",
+    "dev:storybook": "npm run dev --workspace=storybook",
+    "build:all": "npm run build --workspaces",
+    "build:react": "npm run build --workspace=react-app",
+    "build:vue": "npm run build --workspace=vue-components", 
+    "build:storybook": "npm run build --workspace=storybook",
+    "build:styles": "npm run build:styles --workspace=shared",
+    "test": "npm run test --workspaces",
+    "test:all": "npm run test --workspaces",
+    "test:react": "npm run test --workspace=react-app",
+    "test:vue": "npm run test --workspace=vue-components",
+    "lint": "npm run lint --workspaces",
+    "lint:all": "npm run lint --workspaces",
+    "lint:fix": "npm run lint:fix --workspaces",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,md,json}\"",
+    "format:all": "npm run format",
+    "type-check": "npm run type-check --workspaces",
+    "type-check:all": "npm run type-check --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "clean:build": "npm run clean:build --workspaces",
+    "clean:deps": "npm run clean:deps --workspaces && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-vue": "^9.18.1",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,scss,sass,md,json}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "devloop",
+    "frontend",
+    "react",
+    "vue",
+    "storybook",
+    "typescript",
+    "development"
+  ]
+}
