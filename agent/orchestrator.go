@@ -296,6 +296,16 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 	var rawConfig map[string]interface{}
 	yaml.Unmarshal(data, &rawConfig)
 
+	// Set default for color_logs to true if not explicitly set
+	if settings, ok := rawConfig["settings"].(map[string]interface{}); ok {
+		if _, hasColorLogs := settings["color_logs"]; !hasColorLogs {
+			config.Settings.ColorLogs = true // Default to true if not specified
+		}
+	} else {
+		// No settings section, apply defaults
+		config.Settings.ColorLogs = true
+	}
+
 	for i := range config.Rules {
 		rule := &config.Rules[i]
 

@@ -43,9 +43,8 @@ func NewColorManager(settings *gateway.Settings) *ColorManager {
 	// Initialize color palettes
 	cm.initializePalettes()
 
-	// Disable colors if terminal doesn't support them or if explicitly disabled
+	// Check if colors should be enabled based on settings and terminal capability
 	if !cm.enabled || !cm.isTerminalColorCapable() {
-		color.NoColor = true
 		cm.enabled = false
 	}
 
@@ -237,23 +236,35 @@ func (cm *ColorManager) parseColorString(colorStr string) *color.Color {
 
 // isTerminalColorCapable checks if the terminal supports colors
 func (cm *ColorManager) isTerminalColorCapable() bool {
-	// Check if we're outputting to a terminal
-	if !isTerminal() {
+	// Check for explicit NO_COLOR environment variable (https://no-color.org/)
+	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
 
 	// Check TERM environment variable
 	term := os.Getenv("TERM")
-	if term == "" || term == "dumb" {
+	if term == "dumb" {
 		return false
 	}
 
-	// Check for NO_COLOR environment variable (https://no-color.org/)
-	if os.Getenv("NO_COLOR") != "" {
-		return false
+	// If COLORTERM is set, assume color support
+	if os.Getenv("COLORTERM") != "" {
+		return true
 	}
 
-	return true
+	// If TERM indicates color support, enable it
+	if strings.Contains(term, "color") || strings.Contains(term, "256") || 
+	   term == "xterm" || term == "screen" || term == "tmux" {
+		return true
+	}
+
+	// Check if we're outputting to a terminal as fallback
+	if isTerminal() {
+		return true
+	}
+
+	// Default to false for unknown cases
+	return false
 }
 
 // FormatPrefix applies color formatting to a prefix string
@@ -275,10 +286,9 @@ func (cm *ColorManager) IsEnabled() bool {
 	return cm.enabled
 }
 
-// DisableColors explicitly disables color output
+// DisableColors explicitly disables color output for this ColorManager only
 func (cm *ColorManager) DisableColors() {
 	cm.enabled = false
-	color.NoColor = true
 }
 
 // GetColoredString returns a colored version of the input string for the given rule
