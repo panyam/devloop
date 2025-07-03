@@ -368,9 +368,9 @@ Returns all registered devloop projects and their connection status.
 {
   "projects": [
     {
-      "project_id": "auth-service",
-      "project_root": "/path/to/auth-service",
-      "connection_status": "CONNECTED"
+      "projectId": "auth-service",
+      "projectRoot": "/path/to/auth-service",
+      "status": "CONNECTED"
     }
   ]
 }
@@ -385,7 +385,7 @@ Returns the full configuration for a specific project.
 **Response:**
 ```json
 {
-  "config_json": "{\"rules\":[{\"name\":\"backend\",\"commands\":[\"go run .\"]}]}"
+  "configJson": "{\"rules\":[{\"name\":\"backend\",\"commands\":[\"go run .\"]}]}"
 }
 ```
 
@@ -398,11 +398,14 @@ Returns the current status of a specific rule.
 **Response:**
 ```json
 {
-  "rule_name": "backend",
-  "is_running": true,
-  "started_at": "1704092400000",
-  "last_build_time": "1704092400000",
-  "last_build_status": "SUCCESS"
+  "ruleStatus": {
+    "projectId": "backend",
+    "ruleName": "backend", 
+    "isRunning": true,
+    "startTime": "1704092400000",
+    "lastBuildTime": "1704092400000",
+    "lastBuildStatus": "SUCCESS"
+  }
 }
 ```
 
@@ -429,9 +432,9 @@ Returns all glob patterns being watched by the project.
 **Response:**
 ```json
 {
-  "patterns": [
+  "paths": [
     "**/*.go",
-    "go.mod",
+    "go.mod", 
     "go.sum"
   ]
 }
@@ -458,9 +461,9 @@ Server-sent events stream for real-time logs.
 
 **Response (SSE):**
 ```
-data: {"project_id":"backend","rule_name":"api","line":"Starting server...","timestamp":"1704092400000"}
+data: {"projectId":"backend","ruleName":"api","line":"Starting server...","timestamp":"1704092400000"}
 
-data: {"project_id":"backend","rule_name":"api","line":"Server listening on :8080","timestamp":"1704092401000"}
+data: {"projectId":"backend","ruleName":"api","line":"Server listening on :8080","timestamp":"1704092401000"}
 ```
 
 #### Get Historical Logs
@@ -479,8 +482,8 @@ Retrieve historical logs with optional time range.
 {
   "logs": [
     {
-      "project_id": "backend",
-      "rule_name": "api",
+      "projectId": "backend",
+      "ruleName": "api", 
       "line": "Request processed",
       "timestamp": "1704092400000"
     }
@@ -517,7 +520,7 @@ const data = await response.json();
 const events = new EventSource('http://localhost:8080/projects/backend/stream/logs/api');
 events.onmessage = (event) => {
   const log = JSON.parse(event.data);
-  console.log(`[${log.rule_name}] ${log.line}`);
+  console.log(`[${log.ruleName}] ${log.line}`);
 };
 ```
 
@@ -535,19 +538,19 @@ response = requests.get('http://localhost:8080/projects/backend/stream/logs/api'
 client = sseclient.SSEClient(response)
 for event in client.events():
     log = json.loads(event.data)
-    print(f"[{log['rule_name']}] {log['line']}")
+    print(f"[{log['ruleName']}] {log['line']}")
 ```
 
 #### Go
 ```go
 // Using the generated gRPC client
-conn, _ := grpc.Dial("localhost:8080", grpc.WithInsecure())
+conn, _ := grpc.Dial("localhost:50051", grpc.WithInsecure())
 client := pb.NewGatewayClientServiceClient(conn)
 
 // List projects
 resp, _ := client.ListProjects(context.Background(), &pb.ListProjectsRequest{})
 for _, project := range resp.Projects {
-    fmt.Printf("Project: %s (%s)\n", project.ProjectId, project.ConnectionStatus)
+    fmt.Printf("Project: %s (%s)\n", project.ProjectId, project.Status)
 }
 ```
 
