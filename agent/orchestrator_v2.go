@@ -42,6 +42,7 @@ type OrchestratorV2 struct {
 
 	// Control channels
 	done chan bool
+	doneOnce sync.Once
 
 	// Gateway communication channels
 	gatewaySendChan chan *pb.DevloopMessage
@@ -261,10 +262,17 @@ func (o *OrchestratorV2) isVerboseForRule(rule gateway.Rule) bool {
 	return o.Config.Settings.Verbose
 }
 
+// safeDone closes the done channel safely using sync.Once
+func (o *OrchestratorV2) safeDone() {
+	o.doneOnce.Do(func() {
+		close(o.done)
+	})
+}
+
 // Stop gracefully shuts down the orchestrator
 func (o *OrchestratorV2) Stop() error {
 	log.Println("[devloop] Stopping orchestrator...")
-	close(o.done)
+	o.safeDone()
 
 	// Stop all RuleRunners
 	var wg sync.WaitGroup
@@ -382,12 +390,12 @@ func (o *OrchestratorV2) handleGatewayStreamRecv() {
 			msg, err := o.gatewayStream.Recv()
 			if err == io.EOF {
 				log.Println("[devloop] Gateway closed stream (EOF). Shutting down.")
-				close(o.done)
+				o.safeDone()
 				return
 			}
 			if err != nil {
 				log.Printf("[devloop] Error receiving from gateway stream: %v. Shutting down.", err)
-				close(o.done)
+				o.safeDone()
 				return
 			}
 
@@ -443,7 +451,7 @@ func (o *OrchestratorV2) handleGatewayStreamSend() {
 		case msg := <-o.gatewaySendChan:
 			if err := o.gatewayStream.Send(msg); err != nil {
 				log.Printf("[devloop] Error sending message to gateway: %v", err)
-				close(o.done)
+				o.safeDone()
 				return
 			}
 		}
