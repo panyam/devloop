@@ -67,11 +67,17 @@ func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, 
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
-	// Generate project ID
-	projectRoot := filepath.Dir(absConfigPath)
-	hasher := sha1.New()
-	hasher.Write([]byte(projectRoot))
-	projectID := hex.EncodeToString(hasher.Sum(nil))[:16]
+	// Determine project ID - use config value if provided, otherwise generate from path
+	var projectID string
+	if config.Settings.ProjectID != "" {
+		projectID = config.Settings.ProjectID
+	} else {
+		// Generate project ID from path
+		projectRoot := filepath.Dir(absConfigPath)
+		hasher := sha1.New()
+		hasher.Write([]byte(projectRoot))
+		projectID = hex.EncodeToString(hasher.Sum(nil))[:16]
+	}
 
 	orchestrator := &OrchestratorV2{
 		ConfigPath:       absConfigPath,

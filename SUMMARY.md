@@ -17,7 +17,10 @@ This document summarizes the design, progress, and future plans for the `devloop
 
 `devloop` has evolved to a gRPC-based architecture to provide a robust and flexible API for monitoring and interaction. The API is defined in Protobuf (`protos/devloop/v1/devloop_gateway.proto`) and exposed via a gRPC-Gateway, providing both gRPC and RESTful HTTP/JSON endpoints.
 
-The tool can operate in three distinct modes:
+**MCP (Model Context Protocol) Integration:**
+As of 2025-07-03, devloop now supports MCP server mode for AI-powered development automation. The MCP server exposes devloop's capabilities through the Model Context Protocol, allowing AI assistants to discover projects, trigger builds, monitor status, and read project files. Tools are auto-generated from protobuf definitions using protoc-gen-go-mcp.
+
+The tool can operate in four distinct modes:
 
 1.  **Standalone Mode (Default):**
     *   This is the standard mode for individual projects.
@@ -33,6 +36,12 @@ The tool can operate in three distinct modes:
     *   This instance acts as a central hub.
     *   It runs the gRPC server and gateway, but does not perform any file watching or command execution itself.
     *   Its primary role is to accept connections from multiple `devloop` instances running in **Agent Mode**, aggregate their logs and statuses, and provide a unified API for clients to interact with the entire project ecosystem.
+
+4.  **MCP Mode:**
+    *   This mode starts devloop as an MCP (Model Context Protocol) server for AI assistant integration.
+    *   It exposes devloop operations through auto-generated MCP tools that AI assistants can discover and use.
+    *   Available tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths.
+    *   Communication occurs via stdio following MCP 2025-06-18 specification.
 
 ## 3. Execution Flow (Standalone Mode)
 
@@ -115,10 +124,23 @@ settings:
   - `make testv2` - tests v2 orchestrator only
 - ✅ Complete gateway integration for OrchestratorV2 (all handler methods ported)
 - ✅ All tests passing for both v1 and v2 implementations
+- ✅ MCP (Model Context Protocol) server integration completed:
+  - Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
+  - Comprehensive protobuf documentation with field descriptions and usage examples
+  - MCP server mode (`--mode mcp`) for AI assistant integration
+  - Six core tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
+  - Complete integration guide and workflow documentation (MCP_INTEGRATION.md)
+  - Manual project ID configuration support for consistent AI tool identification
+
+**Current Architecture Strengths:**
+- **Auto-generated MCP Tools:** Leverages protoc-gen-go-mcp for automatic tool generation from protobuf
+- **Comprehensive Documentation:** Enhanced protobuf comments provide clear tool descriptions and usage examples
+- **Clean Separation:** MCP functionality isolated in `internal/mcp/` package using adapter pattern
+- **Flexible Project Management:** Manual project ID configuration for consistent cross-session identification
 
 **Next Steps:**
 - Performance benchmarking between v1 and v2
-- Migration guide for switching to v2 as default
 - ✅ Switch default orchestrator to v2 (completed)
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
+- Consider adding streaming log support to MCP tools

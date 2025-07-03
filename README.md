@@ -1,4 +1,4 @@
-# devloop: Multi-Component Project Watcher and Live Loader
+# devloop: Multi-Component Project Watcher
 
 ![devloop Logo/Banner (Placeholder)](https://via.placeholder.com/1200x300?text=devloop+Logo)
 

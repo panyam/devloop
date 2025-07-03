@@ -358,10 +358,16 @@ func NewOrchestrator(configPath string, gatewayAddr string) (*Orchestrator, erro
 	// The project root is the directory containing the config file.
 	projectRoot := filepath.Dir(absConfigPath)
 
-	// Generate a unique project ID based on the project root.
-	hasher := sha1.New()
-	hasher.Write([]byte(projectRoot))
-	projectID := hex.EncodeToString(hasher.Sum(nil))
+	// Determine project ID - use config value if provided, otherwise generate from path
+	var projectID string
+	if config.Settings.ProjectID != "" {
+		projectID = config.Settings.ProjectID
+	} else {
+		// Generate a unique project ID based on the project root.
+		hasher := sha1.New()
+		hasher.Write([]byte(projectRoot))
+		projectID = hex.EncodeToString(hasher.Sum(nil))
+	}
 
 	orchestrator := &Orchestrator{
 		ConfigPath:       absConfigPath,

@@ -67,6 +67,15 @@ This document outlines the immediate next steps for the `devloop` project.
   - Add migration guide for users
   - Performance benchmarking between v1 and v2
 
+- ✅ **MCP (Model Context Protocol) Integration:**
+  - ✅ Added MCP server mode (`--mode mcp`) for AI assistant integration
+  - ✅ Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
+  - ✅ Enhanced protobuf documentation with comprehensive field descriptions and usage examples
+  - ✅ Implemented six core MCP tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
+  - ✅ Created complete integration guide (MCP_INTEGRATION.md) with workflow patterns and usage examples
+  - ✅ Added manual project ID configuration for consistent AI tool identification
+  - ✅ Clean separation of MCP functionality in `internal/mcp/` package using adapter pattern
+
 - **Finalize Agent/Gateway Implementation:**
   - Implement the client logic in `agent` mode for registering with and sending data to the gateway
   - Implement the aggregation and proxying logic in the `gateway` mode to handle multiple agents
@@ -75,6 +84,12 @@ This document outlines the immediate next steps for the `devloop` project.
 - **Add gRPC API Tests:** Create a new suite of tests specifically for the gRPC and HTTP endpoints to ensure the API is robust and reliable
 
 ## Medium Priority
+
+- **MCP Enhancement Opportunities:**
+  - Add streaming log support to MCP tools for real-time build/test monitoring
+  - Consider implementing MCP resources for project files and configurations
+  - Explore MCP prompts for common development workflows
+  - Add support for multiple project instances in single MCP server
 
 - **Performance Optimization:**
   - Profile the file watching and command execution pipeline
@@ -89,9 +104,10 @@ This document outlines the immediate next steps for the `devloop` project.
 ## Ongoing
 
 - **Documentation:** Update all project documentation (README, etc.) to reflect:
-  - The new gRPC-based architecture and the three operating modes
+  - The new gRPC-based architecture and the four operating modes (including MCP)
   - The glob pattern behavior with doublestar
   - The new `agent/` directory structure
+  - MCP integration capabilities and AI assistant workflows
   
 - **User Experience:** 
   - Refine the CLI flags and output for the new modes to ensure they are clear and intuitive

@@ -9,27 +9,66 @@ import "google/api/http.proto";
 import "google/protobuf/empty.proto";
 
 // ProjectInfo represents the information about a registered devloop project.
+// This contains the core identification and location data for a project.
 message ProjectInfo {
+  // Unique identifier for the project. This can be:
+  // - Manually set in devloop.yaml settings.project_id (recommended for AI tools)
+  // - Auto-generated from the project directory path (fallback)
+  // Examples: "my-backend", "frontend-app", "user-service"
   string project_id = 1;
+  
+  // Absolute path to the project's root directory containing .devloop.yaml
+  // This is where all relative paths in commands and file operations are resolved from.
+  // Example: "/Users/dev/projects/my-app"
   string project_root = 2;
 }
 
-// LogLine represents a single log entry from a rule.
+// LogLine represents a single log entry from a rule execution.
+// Used for streaming real-time logs and retrieving historical log data.
 message LogLine {
+  // The project that generated this log line
   string project_id = 1;
+  
+  // The specific rule that produced this output (e.g., "backend", "frontend", "tests")
   string rule_name = 2;
+  
+  // The actual log content/output line from the command
+  // This includes all stdout/stderr from the rule's commands
   string line = 3;
-  int64 timestamp = 4; // Unix timestamp in milliseconds
+  
+  // When this log line was generated (Unix timestamp in milliseconds)
+  // Use this for time-based filtering and chronological ordering
+  int64 timestamp = 4;
 }
 
-// RuleStatus represents the current status of a rule.
+// RuleStatus represents the current execution status and history of a rule.
+// Use this to monitor build/test progress and check for failures.
 message RuleStatus {
+  // The project this rule belongs to
   string project_id = 1;
+  
+  // The rule name (e.g., "backend", "frontend", "tests")
+  // Must match a rule name from the project's .devloop.yaml configuration
   string rule_name = 2;
+  
+  // Whether the rule is currently executing commands
+  // true = commands are running, false = rule is idle
   bool is_running = 3;
-  int64 start_time = 4;       // Unix timestamp in milliseconds, if running
-  int64 last_build_time = 5;  // Unix timestamp in milliseconds, if not running
-  string last_build_status = 6; // e.g., "SUCCESS", "FAILED", "RUNNING", "IDLE"
+  
+  // When the current execution started (Unix timestamp in milliseconds)
+  // Only meaningful when is_running = true
+  int64 start_time = 4;
+  
+  // When the last execution completed (Unix timestamp in milliseconds)
+  // Use this to check how recently a rule was executed
+  int64 last_build_time = 5;
+  
+  // Result of the last execution. Possible values:
+  // - "SUCCESS": All commands completed successfully (exit code 0)
+  // - "FAILED": One or more commands failed (non-zero exit code)
+  // - "RUNNING": Rule is currently executing
+  // - "IDLE": Rule has not been executed yet
+  string last_build_status = 6;
 }
 
 // DevloopMessage is a wrapper for all messages exchanged between devloop and the gateway.
@@ -87,47 +126,85 @@ message GetHistoricalLogsRequest {
   int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
 }
 
-// GetConfigRequest is sent by the gateway to devloop to request config.
+// GetConfigRequest retrieves the complete configuration for a specific project.
 message GetConfigRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  // Examples: "my-backend", "frontend-app", "user-service"
   string project_id = 1;
 }
 
-// GetRuleStatusRequest is sent by the gateway to devloop to request rule status.
+// GetRuleStatusRequest retrieves the execution status of a specific rule.
 message GetRuleStatusRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
   string project_id = 1;
+  
+  // Required: The name of the rule to check status for.
+  // Must match a rule name from GetConfig() response (rules[].name).
+  // Examples: "backend", "frontend", "tests", "build"
   string rule_name = 2;
 }
 
-// ListWatchedPathsRequest is sent by the gateway to devloop to request watched paths.
+// ListWatchedPathsRequest retrieves all file patterns being monitored by a project.
 message ListWatchedPathsRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
   string project_id = 1;
 }
 
-// ReadFileContentRequest is sent by the gateway to devloop to request file content.
+// ReadFileContentRequest retrieves the content of a specific file within a project.
 message ReadFileContentRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
   string project_id = 1;
+  
+  // Required: Relative path to the file within the project root.
+  // Must be within the project directory (no ../ path traversal).
+  // Examples: "src/main.go", "package.json", ".devloop.yaml", "logs/build.log"
   string path = 2;
 }
 
-// Responses from devloop to gateway
+// GetConfigResponse contains the complete project configuration.
 message GetConfigResponse {
+  // Complete project configuration as JSON string.
+  // Contains: settings (project_id, logging, colors), rules (name, commands, watch patterns)
+  // Parse this JSON to understand available rule names and their configurations.
   bytes config_json = 1;
 }
 
+// GetRuleStatusResponse contains the current status and history of a rule.
 message GetRuleStatusResponse {
+  // Detailed status information including execution state, timing, and results.
+  // Check rule_status.is_running to see if currently executing.
+  // Check rule_status.last_build_status for SUCCESS/FAILED/IDLE state.
   RuleStatus rule_status = 1;
 }
 
+// TriggerRuleResponse indicates whether a rule trigger was accepted.
 message TriggerRuleResponse {
+  // Whether the trigger request was accepted and rule execution started.
+  // true = rule is now running, false = trigger rejected (invalid rule/project)
   bool success = 1;
+  
+  // Human-readable message explaining the result.
+  // On success: "Rule 'backend' triggered successfully"
+  // On failure: "Rule 'invalid' not found in project"
   string message = 2;
 }
 
+// ListWatchedPathsResponse contains all file patterns being monitored.
 message ListWatchedPathsResponse {
+  // Array of glob patterns that trigger rule execution when matched files change.
+  // Examples: "**/*.go", "src/**/*.js", "package.json", "**/test_*.py"
   repeated string paths = 1;
 }
 
+// ReadFileContentResponse contains the raw content of a requested file.
 message ReadFileContentResponse {
+  // Raw file content as bytes. For text files, convert to string.
+  // For binary files, handle appropriately based on file type.
+  // Empty if file doesn't exist or is not accessible.
   bytes content = 1;
 }
 
@@ -137,37 +214,115 @@ service DevloopGatewayService {
   rpc Communicate(stream DevloopMessage) returns (stream DevloopMessage);
 }
 
-// GatewayClientService defines the gRPC service for MCP clients to interact with the gateway.
+// GatewayClientService defines the gRPC service for clients to interact with
+// devloop projects for automated development workflows and monitoring.
+//
+// Common Workflow Patterns:
+// 1. Discovery: ListProjects() -> GetConfig(project_id) -> understand available rules
+// 2. Build/Test: TriggerRuleClient(project_id, rule_name) -> GetRuleStatus() -> monitor progress
+// 3. Debugging: GetRuleStatus() -> ReadFileContent() -> analyze issues
+// 4. Monitoring: ListWatchedPaths() -> understand what files trigger rebuilds
 service GatewayClientService {
-  // List all registered devloop projects.
+  // Discover all available devloop projects for automation and monitoring.
+  // 
+  // Use this as the starting point for any development workflow automation.
+  // Projects must be running in agent mode and connected to appear in results.
+  //
+  // Typical workflow:
+  // 1. Call ListProjects() to see what's available
+  // 2. Choose a project_id from the results
+  // 3. Call GetConfig(project_id) to see available rules
+  // 4. Use TriggerRuleClient(project_id, rule_name) to run builds/tests
+  //
+  // Returns: List of projects with their IDs, paths, and connection status
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
     option (google.api.http) = {
       get: "/projects"
     };
   }
 
-  // Get the configuration for a specific devloop project.
+  // Retrieve the complete devloop configuration for a project to understand
+  // available rules, commands, file watch patterns, and project settings.
+  //
+  // Essential information provided:
+  // - Available build/test rules (rules[].name)
+  // - Commands executed by each rule (rules[].commands)
+  // - File patterns that trigger each rule (rules[].watch patterns)
+  // - Project settings like colors, logging, debouncing
+  //
+  // Usage Examples:
+  // - Discover available rules: Parse rules[].name from response
+  // - Find test commands: Look for rules with "test" in name or commands
+  // - Understand file triggers: Examine rules[].watch.patterns
+  //
+  // Response Format: JSON string containing the complete .devloop.yaml content
+  // with resolved settings and rule definitions.
   rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/config"
     };
   }
 
-  // Get the detailed status of a specific rule within a project.
+  // Get the current execution status and history of a specific rule.
+  // Use this to monitor build/test progress and check for failures.
+  //
+  // Status Information Provided:
+  // - Whether the rule is currently running
+  // - When the current/last execution started
+  // - Result of the last execution (SUCCESS, FAILED, RUNNING, IDLE)
+  // - Execution history timestamps
+  //
+  // Common Use Cases:
+  // - Check if a build is still running after triggering
+  // - Verify if tests passed or failed
+  // - Monitor long-running development servers
+  // - Debug why a rule isn't executing
+  //
+  // Returns: Detailed status including timing and execution results
   rpc GetRuleStatus(GetRuleStatusRequest) returns (GetRuleStatusResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/status/{rule_name}"
     };
   }
 
-  // Manually trigger a specific rule in a devloop project.
+  // Manually execute a specific rule to run builds, tests, or other commands.
+  // This bypasses file watching and immediately starts the rule's command sequence.
+  //
+  // Trigger Behavior:
+  // - Terminates any currently running instance of the rule
+  // - Executes all commands in the rule definition sequentially
+  // - Updates rule status to RUNNING, then SUCCESS/FAILED based on results
+  // - Generates log output that can be retrieved via streaming endpoints
+  //
+  // Common Use Cases:
+  // - Run builds on demand ("trigger the backend build")
+  // - Execute test suites ("run the test rule")
+  // - Restart development servers ("trigger the dev-server rule")
+  // - Force regeneration ("trigger the protobuf rule")
+  //
+  // Returns: Immediate response indicating if trigger was accepted
+  // Use GetRuleStatus() to monitor actual execution progress
   rpc TriggerRuleClient(TriggerRuleClientRequest) returns (TriggerRuleClientResponse) {
     option (google.api.http) = {
       post: "/projects/{project_id}/trigger/{rule_name}"
     };
   }
 
-  // List all glob patterns being watched by a specific devloop project.
+  // List all file glob patterns being monitored by a project for automatic rule triggering.
+  // Use this to understand what files cause rebuilds and which rules will execute.
+  //
+  // Pattern Information:
+  // - All include/exclude patterns from all rules combined
+  // - Glob syntax: **/*.go, src/**/*.js, **/test_*.py, etc.
+  // - Patterns are resolved relative to the project root
+  //
+  // Common Use Cases:
+  // - Understand what file changes trigger builds
+  // - Debug why edits aren't triggering rules
+  // - Plan file organization to optimize build triggers
+  // - Analyze project structure and dependencies
+  //
+  // Returns: Array of glob patterns currently being watched
   rpc ListWatchedPaths(ListWatchedPathsRequest) returns (ListWatchedPathsResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/watched-paths"
@@ -175,6 +330,22 @@ service GatewayClientService {
   }
 
   // Read and return the content of a specific file within a devloop project.
+  // Provides secure access to project files for analysis and debugging.
+  //
+  // File Access:
+  // - Paths are relative to the project root directory
+  // - Access is restricted to files within the project
+  // - Supports text and binary files
+  // - No path traversal (../) allowed for security
+  //
+  // Common Use Cases:
+  // - Read configuration files (.devloop.yaml, package.json, go.mod)
+  // - Analyze source code for debugging build failures
+  // - Examine log files generated by rules
+  // - Inspect test output and error messages
+  //
+  // Security: Only files within the project root are accessible
+  // Returns: Raw file content as bytes
   rpc ReadFileContent(ReadFileContentRequest) returns (ReadFileContentResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/file-content"
@@ -198,25 +369,50 @@ service GatewayClientService {
 
 // Messages for GatewayClientService
 
+// ListProjectsRequest retrieves all available projects. No parameters needed.
 message ListProjectsRequest {
 }
 
+// ListProjectsResponse contains all discovered devloop projects.
 message ListProjectsResponse {
+  // Individual project information
   message Project {
+    // Unique identifier for the project (from devloop.yaml or auto-generated)
     string project_id = 1;
+    
+    // Absolute path to the project's root directory
     string project_root = 2;
-    string status = 3; // e.g., "CONNECTED", "DISCONNECTED"
+    
+    // Current connection status:
+    // "CONNECTED" = project is online and responsive
+    // "DISCONNECTED" = project is offline or unreachable
+    string status = 3;
   }
+  
+  // Array of all available projects. Use project_id for subsequent calls.
   repeated Project projects = 1;
 }
 
+// TriggerRuleClientRequest starts execution of a specific rule.
 message TriggerRuleClientRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
   string project_id = 1;
+  
+  // Required: The name of the rule to execute.
+  // Must match a rule name from GetConfig() response (rules[].name).
+  // Examples: "backend", "frontend", "tests", "build"
   string rule_name = 2;
 }
 
+// TriggerRuleClientResponse indicates whether the rule trigger was accepted.
 message TriggerRuleClientResponse {
+  // Whether the trigger request was accepted and rule execution started.
+  // true = rule is now running, false = trigger rejected
   bool success = 1;
+  
+  // Human-readable message explaining the result.
+  // Use GetRuleStatus() to monitor actual execution progress.
   string message = 2;
 }
 

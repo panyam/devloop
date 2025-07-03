@@ -14,6 +14,7 @@ type Config struct {
 
 // Settings defines global settings for devloop.
 type Settings struct {
+	ProjectID            string            `yaml:"project_id,omitempty"`
 	PrefixLogs           bool              `yaml:"prefix_logs"`
 	PrefixMaxLength      int               `yaml:"prefix_max_length"`
 	DefaultDebounceDelay *time.Duration    `yaml:"default_debounce_delay,omitempty"`
