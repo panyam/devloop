@@ -110,6 +110,6 @@ settings:
 **Next Steps:**
 - Performance benchmarking between v1 and v2
 - Migration guide for switching to v2 as default
-- Switch default orchestrator to v2
+- ✅ Switch default orchestrator to v2 (completed)
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
