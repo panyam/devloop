@@ -11,31 +11,34 @@
 Devloop operates in three distinct modes to support different development scenarios:
 
 ### 1. Standalone Mode (Default)
-The simplest mode for individual projects. Devloop runs as a single daemon process with an embedded gRPC server.
+Like Air but for multiple components. Devloop runs as a local file watcher that monitors multiple file types and components within a single project directory. No network servers or connectivity.
 
 ![Standalone Mode Architecture](images/standalone-mode.svg)
 
-**Use Case:** Single project development, simple setup.
+**Use Case:** Single project development, local development only, no external API needed.
 
 ### 2. Agent Mode
-Devloop connects to a central gateway, ideal for multi-component projects where you want centralized monitoring.
+Like Standalone mode but with an embedded gRPC server. Devloop watches multiple components in a single project while also providing API access for external clients to connect directly to this agent.
 
 ![Agent Mode Architecture](images/agent-mode.svg)
 
-**Use Case:** Microservices, monorepos, distributed development
+**Use Case:** Single project that needs API access, AI integration, remote monitoring.
 
 ### 3. Gateway Mode
-Acts as a central hub accepting connections from multiple agents, providing a unified interface for monitoring and control.
+Multiple separate daemon processes (each watching their own project components) connect to a central gateway hub. Clients connect only to the gateway, which aggregates information from all connected daemons.
 
-```
-devloop --mode gateway --gateway-port 8080
+![Gateway Mode Architecture](images/gateway-mode.svg)
+
+```bash
+# Start the central gateway
+devloop --mode gateway --http-port 8080 --grpc-port 50051
+
+# Connect individual project daemons to the gateway
+devloop --mode agent --gateway-addr localhost:50051 -c project-a/.devloop.yaml
+devloop --mode agent --gateway-addr localhost:50051 -c project-b/.devloop.yaml
 ```
 
-**Features:**
-- Centralized logging and monitoring
-- Unified HTTP/gRPC API for all connected projects
-- Real-time status updates from all agents
-- Cross-project orchestration capabilities
+**Use Case:** Microservices, monorepos, multi-project development with centralized monitoring.
 
 ## 📋 Prerequisites
 

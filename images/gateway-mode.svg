@@ -1,0 +1,130 @@
+<svg width="700" height="500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#343a40">Gateway Mode - Multiple Daemons + Central Hub</text>
+  
+  <!-- Project A -->
+  <rect x="50" y="50" width="180" height="120" fill="#e3f2fd" stroke="#1976d2" stroke-width="2" rx="10"/>
+  <text x="140" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976d2">Project A - Backend Service</text>
+  
+  <!-- Components in Project A -->
+  <rect x="60" y="85" width="50" height="25" fill="#ffffff" stroke="#1976d2" stroke-width="1" rx="3"/>
+  <text x="85" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#1976d2">*.go</text>
+  
+  <rect x="120" y="85" width="50" height="25" fill="#ffffff" stroke="#1976d2" stroke-width="1" rx="3"/>
+  <text x="145" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#1976d2">*.yaml</text>
+  
+  <rect x="180" y="85" width="40" height="25" fill="#ffffff" stroke="#1976d2" stroke-width="1" rx="3"/>
+  <text x="200" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#1976d2">Dockerfile</text>
+  
+  <!-- Daemon A -->
+  <rect x="70" y="120" width="140" height="35" fill="#fff8e1" stroke="#ff9800" stroke-width="2" rx="5"/>
+  <text x="140" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ff9800">devloop daemon A</text>
+  <text x="140" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#ff9800">File Watcher Only</text>
+  
+  <!-- Project B -->
+  <rect x="470" y="50" width="180" height="120" fill="#e8f5e8" stroke="#4caf50" stroke-width="2" rx="10"/>
+  <text x="560" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#4caf50">Project B - Frontend App</text>
+  
+  <!-- Components in Project B -->
+  <rect x="480" y="85" width="50" height="25" fill="#ffffff" stroke="#4caf50" stroke-width="1" rx="3"/>
+  <text x="505" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#4caf50">*.js</text>
+  
+  <rect x="540" y="85" width="50" height="25" fill="#ffffff" stroke="#4caf50" stroke-width="1" rx="3"/>
+  <text x="565" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#4caf50">*.css</text>
+  
+  <rect x="600" y="85" width="40" height="25" fill="#ffffff" stroke="#4caf50" stroke-width="1" rx="3"/>
+  <text x="620" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#4caf50">*.html</text>
+  
+  <!-- Daemon B -->
+  <rect x="490" y="120" width="140" height="35" fill="#fff8e1" stroke="#ff9800" stroke-width="2" rx="5"/>
+  <text x="560" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ff9800">devloop daemon B</text>
+  <text x="560" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#ff9800">File Watcher Only</text>
+  
+  <!-- Project C -->
+  <rect x="50" y="200" width="180" height="120" fill="#fce4ec" stroke="#e91e63" stroke-width="2" rx="10"/>
+  <text x="140" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#e91e63">Project C - Database</text>
+  
+  <!-- Components in Project C -->
+  <rect x="60" y="235" width="50" height="25" fill="#ffffff" stroke="#e91e63" stroke-width="1" rx="3"/>
+  <text x="85" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e91e63">*.sql</text>
+  
+  <rect x="120" y="235" width="50" height="25" fill="#ffffff" stroke="#e91e63" stroke-width="1" rx="3"/>
+  <text x="145" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e91e63">migrations</text>
+  
+  <rect x="180" y="235" width="40" height="25" fill="#ffffff" stroke="#e91e63" stroke-width="1" rx="3"/>
+  <text x="200" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#e91e63">scripts</text>
+  
+  <!-- Daemon C -->
+  <rect x="70" y="270" width="140" height="35" fill="#fff8e1" stroke="#ff9800" stroke-width="2" rx="5"/>
+  <text x="140" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ff9800">devloop daemon C</text>
+  <text x="140" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#ff9800">File Watcher Only</text>
+  
+  <!-- Project D -->
+  <rect x="470" y="200" width="180" height="120" fill="#f3e5f5" stroke="#9c27b0" stroke-width="2" rx="10"/>
+  <text x="560" y="225" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#9c27b0">Project D - Auth Service</text>
+  
+  <!-- Components in Project D -->
+  <rect x="480" y="235" width="50" height="25" fill="#ffffff" stroke="#9c27b0" stroke-width="1" rx="3"/>
+  <text x="505" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#9c27b0">*.py</text>
+  
+  <rect x="540" y="235" width="50" height="25" fill="#ffffff" stroke="#9c27b0" stroke-width="1" rx="3"/>
+  <text x="565" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#9c27b0">*.json</text>
+  
+  <rect x="600" y="235" width="40" height="25" fill="#ffffff" stroke="#9c27b0" stroke-width="1" rx="3"/>
+  <text x="620" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#9c27b0">tests</text>
+  
+  <!-- Daemon D -->
+  <rect x="490" y="270" width="140" height="35" fill="#fff8e1" stroke="#ff9800" stroke-width="2" rx="5"/>
+  <text x="560" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ff9800">devloop daemon D</text>
+  <text x="560" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#ff9800">File Watcher Only</text>
+  
+  <!-- Central Gateway -->
+  <rect x="290" y="150" width="120" height="70" fill="#fff8e1" stroke="#ff9800" stroke-width="4" rx="10"/>
+  <text x="350" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ff9800">Gateway</text>
+  <text x="350" y="195" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#ff9800">HTTP :8080</text>
+  <text x="350" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#ff9800">gRPC :50051</text>
+  
+  <!-- Connection lines from daemons to gateway -->
+  <path d="M 210 137 L 290 175" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 490 137 L 410 175" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 210 287 L 290 205" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 490 287 L 410 205" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- External Clients -->
+  <rect x="100" y="380" width="80" height="40" fill="#f3e5f5" stroke="#9c27b0" stroke-width="1" rx="5"/>
+  <text x="140" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#9c27b0">Web Dashboard</text>
+  <text x="140" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#9c27b0">Monitor All</text>
+  
+  <rect x="200" y="380" width="80" height="40" fill="#e1f5fe" stroke="#0288d1" stroke-width="1" rx="5"/>
+  <text x="240" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#0288d1">AI Orchestrator</text>
+  <text x="240" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#0288d1">Claude MCP</text>
+  
+  <rect x="310" y="380" width="80" height="40" fill="#f1f8e9" stroke="#689f38" stroke-width="1" rx="5"/>
+  <text x="350" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#689f38">DevOps Tools</text>
+  <text x="350" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#689f38">CI/CD</text>
+  
+  <rect x="420" y="380" width="80" height="40" fill="#fff3e0" stroke="#f57c00" stroke-width="1" rx="5"/>
+  <text x="460" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#f57c00">CLI Tools</text>
+  <text x="460" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#f57c00">grpcurl</text>
+  
+  <rect x="520" y="380" width="80" height="40" fill="#fce4ec" stroke="#e91e63" stroke-width="1" rx="5"/>
+  <text x="560" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#e91e63">Custom Apps</text>
+  <text x="560" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#e91e63">Monitoring</text>
+  
+  <!-- Connection arrows from clients to gateway -->
+  <path d="M 140 380 L 320 220" stroke="#9c27b0" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  <path d="M 240 380 L 335 220" stroke="#0288d1" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  <path d="M 350 380 L 350 220" stroke="#689f38" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  <path d="M 460 380 L 365 220" stroke="#f57c00" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  <path d="M 560 380 L 380 220" stroke="#e91e63" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  
+  <!-- Note -->
+  <text x="350" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#6c757d">Multiple daemons connect to central gateway - clients connect to gateway only</text>
+  
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+    </marker>
+  </defs>
+</svg>
