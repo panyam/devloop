@@ -30,20 +30,26 @@ This example demonstrates devloop orchestrating a typical full-stack web develop
 
 3. Access the application:
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8080/api/todos
+   - Backend API: http://localhost:20202/api/todos
 
 ## What to Expect
 
-When you run `make run`, you'll see:
+When you run `make run`, devloop will start all services immediately:
 
 ```
-[devloop]   Starting orchestrator...
-[devloop]   Loaded 4 rules
+[devloop] Starting orchestrator...
+[devloop] Executing rule "backend" on initialization (run_on_init: true)
+[devloop] Executing rule "frontend" on initialization (run_on_init: true)
+[devloop] Executing rule "db" on initialization (run_on_init: true)
+[devloop] Executing rule "docs" on initialization (run_on_init: true)
 [backend]   Building Go server...
+[backend]   Starting server on http://localhost:20202
 [frontend]  Starting web server...
-[db]        No pending migrations
+[db]        Checking for pending migrations...
 [docs]      Generating API documentation...
 ```
+
+Devloop will continue monitoring for file changes and automatically rebuild/restart services as needed.
 
 ## Try It Out
 
@@ -69,7 +75,7 @@ When you run `make run`, you'll see:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Frontend  │────▶│   Backend   │────▶│  Database   │
 │  localhost  │     │     API     │     │ (in-memory) │
-│    :3000    │     │    :8080    │     │             │
+│    :3000    │     │    :20202   │     │             │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 

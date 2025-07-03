@@ -421,6 +421,7 @@ rules:                       # Required: Array of rules
   - name: string            # Required: Unique rule identifier
     prefix: string          # Optional: Custom log prefix (defaults to name)
     workdir: string         # Optional: Working directory for commands
+    run_on_init: boolean    # Optional: Run on startup (default: true)
     env:                    # Optional: Environment variables
       KEY: "value"
     watch:                  # Required: File watch configuration
@@ -446,6 +447,7 @@ rules:                       # Required: Array of rules
 | `env` | map | ❌ | Additional environment variables |
 | `watch` | array | ✅ | File patterns to monitor |
 | `commands` | array | ✅ | Commands to execute when files change |
+| `run_on_init` | boolean | ❌ | Run commands on startup (default: `true`) |
 
 ### Watch Configuration
 

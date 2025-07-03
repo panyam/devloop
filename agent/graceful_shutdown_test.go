@@ -20,7 +20,7 @@ func TestGracefulShutdown(t *testing.T) {
 		// Get the project root to build the binary correctly.
 		originalDir, err := os.Getwd()
 		assert.NoError(t, err)
-		
+
 		// Get the actual project root (parent of agent directory)
 		projectRoot := filepath.Dir(originalDir)
 

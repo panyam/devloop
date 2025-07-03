@@ -87,6 +87,7 @@ func TestDebouncing(t *testing.T) {
 		multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Debounce Test Rule"
+    run_on_init: false
     watch:
       - action: include
         patterns:
@@ -369,7 +370,9 @@ rules:
 
 		// Verify both rules were triggered
 		lines := strings.Split(strings.TrimSpace(string(content)), "\n")
-		assert.Len(t, lines, 2, "Should have exactly 2 lines in output")
+		// With run_on_init defaulting to true, we expect 4 lines:
+		// 2 from initialization + 2 from file changes
+		assert.Len(t, lines, 4, "Should have exactly 4 lines in output (2 from init + 2 from file changes)")
 	})
 }
 

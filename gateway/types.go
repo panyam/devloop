@@ -20,12 +20,13 @@ type Settings struct {
 
 // Rule defines a single watch-and-run rule.
 type Rule struct {
-	Name     string            `yaml:"name"`
-	Prefix   string            `yaml:"prefix,omitempty"`
-	Commands []string          `yaml:"commands"`
-	Watch    []*Matcher        `yaml:"watch"`
-	Env      map[string]string `yaml:"env,omitempty"`
-	WorkDir  string            `yaml:"workdir,omitempty"`
+	Name      string            `yaml:"name"`
+	Prefix    string            `yaml:"prefix,omitempty"`
+	Commands  []string          `yaml:"commands"`
+	Watch     []*Matcher        `yaml:"watch"`
+	Env       map[string]string `yaml:"env,omitempty"`
+	WorkDir   string            `yaml:"workdir,omitempty"`
+	RunOnInit bool              `yaml:"run_on_init,omitempty"`
 }
 
 // Matcher defines a single include or exclude directive using glob patterns.

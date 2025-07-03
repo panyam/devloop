@@ -1,0 +1,32 @@
+settings:
+  prefix_logs: true
+  prefix_max_length: 10
+
+rules:
+  - name: init-setup
+    prefix: INIT
+    run_on_init: true
+    commands:
+      - echo "This rule runs on initialization!"
+      - echo "Setting up initial environment..."
+      - date
+
+  - name: watch-go
+    prefix: GO
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"
+    commands:
+      - echo "Go file changed!"
+
+  - name: init-and-watch
+    prefix: BOTH
+    run_on_init: true
+    watch:
+      - action: include
+        patterns:
+          - "**/*.txt"
+    commands:
+      - echo "This rule runs on init AND watches txt files"
+      - pwd

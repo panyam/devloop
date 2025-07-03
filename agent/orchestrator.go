@@ -235,14 +235,33 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 		return nil, fmt.Errorf("failed to parse config file %q: %w", absConfigPath, err)
 	}
 
-	// Resolve relative watch paths to be absolute.
+	// Set defaults and resolve relative watch paths to be absolute.
 	configDir := filepath.Dir(absConfigPath)
-	for _, rule := range config.Rules {
+
+	// First pass: parse YAML to check which fields were explicitly set
+	var rawConfig map[string]interface{}
+	yaml.Unmarshal(data, &rawConfig)
+
+	for i := range config.Rules {
+		rule := &config.Rules[i]
+
+		// Set default for RunOnInit to true if not explicitly set
+		if rules, ok := rawConfig["rules"].([]interface{}); ok && i < len(rules) {
+			if ruleMap, ok := rules[i].(map[string]interface{}); ok {
+				if _, hasRunOnInit := ruleMap["run_on_init"]; !hasRunOnInit {
+					rule.RunOnInit = true // Default to true if not specified
+				}
+			}
+		} else {
+			// If we can't determine, default to true
+			rule.RunOnInit = true
+		}
+
 		for _, matcher := range rule.Watch {
-			for i, pattern := range matcher.Patterns {
+			for j, pattern := range matcher.Patterns {
 				if !filepath.IsAbs(pattern) {
 					absPattern := filepath.Join(configDir, pattern)
-					matcher.Patterns[i] = absPattern
+					matcher.Patterns[j] = absPattern
 				}
 			}
 		}
@@ -684,6 +703,16 @@ func (o *Orchestrator) handleGatewayStreamSend() {
 
 // Start begins the file watching and command execution loop.
 func (o *Orchestrator) Start() error {
+	// Execute rules with RunOnInit: true before starting file watching
+	for _, rule := range o.Config.Rules {
+		if rule.RunOnInit {
+			if o.Verbose {
+				log.Printf("[devloop] Executing rule %q on initialization (run_on_init: true)", rule.Name)
+			}
+			o.executeCommands(rule)
+		}
+	}
+
 	// Walk the project root directory and add all subdirectories to the watcher
 	projectRoot := o.ProjectRoot()
 	if o.Verbose {

@@ -69,6 +69,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
 	}
+	orchestrator.Verbose = verbose
 
 	var gatewayService *gateway.GatewayService
 	if mode == "standalone" || mode == "gateway" {
