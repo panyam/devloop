@@ -4,9 +4,9 @@ This example demonstrates devloop managing a microservices architecture with mul
 
 ## What's Included
 
-- **API Gateway**: Routes requests to appropriate microservices (port 8080)
-- **Auth Service**: Handles authentication and JWT tokens (port 8081)
-- **User Service**: Manages user data and profiles (port 8082)
+- **API Gateway**: Routes requests to appropriate microservices (port 20201)
+- **Auth Service**: Handles authentication and JWT tokens (port 20202)
+- **User Service**: Manages user data and profiles (port 20203)
 - **Shared Libraries**: Common utilities and types used across services
 
 ## Prerequisites
@@ -30,15 +30,15 @@ This example demonstrates devloop managing a microservices architecture with mul
 3. Test the services:
    ```bash
    # Health check
-   curl http://localhost:8080/health
+   curl http://localhost:20201/health
 
    # Get auth token
-   curl -X POST http://localhost:8080/auth/login \
+   curl -X POST http://localhost:20201/auth/login \
      -H "Content-Type: application/json" \
      -d '{"username":"demo","password":"demo123"}'
 
    # Get user info (requires token from above)
-   curl http://localhost:8080/users/123 \
+   curl http://localhost:20201/users/123 \
      -H "Authorization: Bearer <token>"
    ```
 
@@ -47,13 +47,13 @@ This example demonstrates devloop managing a microservices architecture with mul
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Client    │────▶│ API Gateway │────▶│Auth Service │
-│             │     │    :8080    │     │    :8081    │
+│             │     │    :20201   │     │    :20202   │
 └─────────────┘     └──────┬──────┘     └─────────────┘
                            │
                            ▼
                     ┌─────────────┐     ┌─────────────┐
                     │User Service │     │   Shared    │
-                    │    :8082    │────▶│  Libraries  │
+                    │    :20203    │────▶│  Libraries  │
                     └─────────────┘     └─────────────┘
 ```
 
@@ -87,6 +87,6 @@ This example demonstrates devloop managing a microservices architecture with mul
 
 ## Troubleshooting
 
-- **Port conflicts**: Ensure ports 8080-8082 are available
+- **Port conflicts**: Ensure ports 20201-20203 are available
 - **Service discovery**: Services use hardcoded ports for simplicity
 - **Compilation errors**: Check shared library changes don't break services

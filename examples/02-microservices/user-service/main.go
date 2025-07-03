@@ -27,7 +27,7 @@ var store = &UserStore{
 
 // verifyToken checks with auth service if token is valid
 func verifyToken(token string) (*shared.User, error) {
-	req, err := http.NewRequest("GET", "http://localhost:8081/auth/verify", nil)
+	req, err := http.NewRequest("GET", "http://localhost:20202/auth/verify", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +200,8 @@ func main() {
 		log.Printf("[user] Updated user %s", userID)
 	}))
 
-	log.Println("[user] User service starting on :8082")
-	if err := http.ListenAndServe(":8082", nil); err != nil {
+	log.Println("[user] User service starting on :20203")
+	if err := http.ListenAndServe(":20203", nil); err != nil {
 		log.Fatal(err)
 	}
 }

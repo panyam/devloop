@@ -124,8 +124,8 @@ func main() {
 		json.NewEncoder(w).Encode(user)
 	})
 
-	log.Println("[auth] Auth service starting on :8081")
-	if err := http.ListenAndServe(":8081", nil); err != nil {
+	log.Println("[auth] Auth service starting on :20202")
+	if err := http.ListenAndServe(":20202", nil); err != nil {
 		log.Fatal(err)
 	}
 }

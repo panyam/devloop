@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"example.com/microservices/shared"
@@ -19,8 +18,8 @@ var startTime = time.Now()
 
 // Service endpoints
 const (
-	authServiceURL = "http://localhost:8081"
-	userServiceURL = "http://localhost:8082"
+	authServiceURL = "http://localhost:20202"
+	userServiceURL = "http://localhost:20203"
 )
 
 // createReverseProxy creates a reverse proxy for a service
@@ -29,9 +28,9 @@ func createReverseProxy(targetURL string) (*httputil.ReverseProxy, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	
+
 	// Custom error handler
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("[gateway] Proxy error for %s: %v", r.URL.Path, err)
@@ -42,7 +41,7 @@ func createReverseProxy(targetURL string) (*httputil.ReverseProxy, error) {
 			Code:    502,
 		})
 	}
-	
+
 	return proxy, nil
 }
 
@@ -52,7 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create auth proxy: %v", err)
 	}
-	
+
 	userProxy, err := createReverseProxy(userServiceURL)
 	if err != nil {
 		log.Fatalf("Failed to create user proxy: %v", err)
@@ -65,10 +64,10 @@ func main() {
 			"auth": authServiceURL + "/health",
 			"user": userServiceURL + "/health",
 		}
-		
+
 		allHealthy := true
 		serviceStatuses := make(map[string]string)
-		
+
 		for name, url := range services {
 			resp, err := http.Get(url)
 			if err != nil || resp.StatusCode != http.StatusOK {
@@ -79,20 +78,20 @@ func main() {
 				resp.Body.Close()
 			}
 		}
-		
+
 		status := "healthy"
 		if !allHealthy {
 			status = "degraded"
 		}
-		
-		health := map[string]interface{}{
+
+		health := map[string]any{
 			"service":  "api-gateway",
 			"status":   status,
 			"uptime":   time.Since(startTime).String(),
 			"time":     time.Now(),
 			"services": serviceStatuses,
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(health)
 	})
@@ -100,19 +99,19 @@ func main() {
 	// Auth routes - proxy to auth service
 	http.HandleFunc("/auth/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[gateway] Proxying %s %s to auth service", r.Method, r.URL.Path)
-		
+
 		// For login requests, intercept and log
 		if r.URL.Path == "/auth/login" && r.Method == http.MethodPost {
 			// Read body to log username (but still forward it)
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(bytes.NewReader(body))
-			
+
 			var req shared.AuthRequest
 			if json.Unmarshal(body, &req) == nil {
 				log.Printf("[gateway] Login attempt for user: %s", req.Username)
 			}
 		}
-		
+
 		authProxy.ServeHTTP(w, r)
 	})
 
@@ -121,7 +120,7 @@ func main() {
 		log.Printf("[gateway] Proxying %s %s to user service", r.Method, r.URL.Path)
 		userProxy.ServeHTTP(w, r)
 	})
-	
+
 	http.HandleFunc("/users/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[gateway] Proxying %s %s to user service", r.Method, r.URL.Path)
 		userProxy.ServeHTTP(w, r)
@@ -138,17 +137,17 @@ func main() {
 			})
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"service": "api-gateway",
 			"version": "1.0.0",
 			"endpoints": map[string]string{
-				"health":      "GET /health",
-				"auth_login":  "POST /auth/login",
-				"auth_verify": "GET /auth/verify",
-				"users_list":  "GET /users",
-				"users_get":   "GET /users/{id}",
+				"health":       "GET /health",
+				"auth_login":   "POST /auth/login",
+				"auth_verify":  "GET /auth/verify",
+				"users_list":   "GET /users",
+				"users_get":    "GET /users/{id}",
 				"users_update": "PUT /users/update",
 			},
 		})
@@ -159,18 +158,18 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		
+
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		
+
 		http.DefaultServeMux.ServeHTTP(w, r)
 	})
 
-	log.Println("[gateway] API Gateway starting on :8080")
+	log.Println("[gateway] API Gateway starting on :20201")
 	log.Println("[gateway] Routes: /auth/* → Auth Service, /users/* → User Service")
-	if err := http.ListenAndServe(":8080", handler); err != nil {
+	if err := http.ListenAndServe(":20201", handler); err != nil {
 		log.Fatal(err)
 	}
 }
