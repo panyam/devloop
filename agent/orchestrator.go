@@ -96,7 +96,9 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		return
 	}
 
-	for _, cmdStr := range rule.Commands {
+	// Execute commands sequentially
+	var lastCmd *exec.Cmd
+	for i, cmdStr := range rule.Commands {
 		log.Printf("[devloop]   Running command: %s", cmdStr)
 		cmd := exec.Command("bash", "-c", cmdStr)
 
@@ -138,42 +140,49 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 		for key, value := range rule.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 		}
+		
 		err := cmd.Start()
 		if err != nil {
 			log.Printf("[devloop] Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
-			continue
+			// Stop executing further commands in this rule
+			break
 		}
 		currentCmds = append(currentCmds, cmd)
 
-		// For long-running commands, we don't wait here. They run in background.
-		// For now, we'll assume all commands might be long-running and don't wait.
+		// For the last command or if it's a long-running command (like a server),
+		// we don't wait. Otherwise, wait for the command to complete before proceeding.
+		if i < len(rule.Commands)-1 {
+			// Wait for non-final commands to complete
+			waitErr := cmd.Wait()
+			if waitErr != nil {
+				log.Printf("[devloop] Command failed for rule %q: %v", rule.Name, waitErr)
+				// Stop executing further commands if one fails
+				break
+			}
+		} else {
+			// This is the last command
+			lastCmd = cmd
+		}
 	}
 	o.runningCommands[rule.Name] = currentCmds
 
-	// Signal that the rule has finished when all commands are done
-	go func() {
-		allCommandsSuccessful := true
-		for _, cmd := range currentCmds {
-			if cmd != nil && cmd.Process != nil {
-				waitErr := cmd.Wait() // Wait for each command to finish
-				if waitErr != nil {
+	// Signal that the rule has finished when the last command is done
+	if lastCmd != nil {
+		go func() {
+			waitErr := lastCmd.Wait() // Wait for the last command to finish
+			
+			o.mu.Lock()
+			defer o.mu.Unlock()
+			status := o.ruleStatuses[rule.Name]
+			if status != nil {
+				status.IsRunning = false
+				status.LastBuildTime = time.Now()
+				if waitErr == nil {
+					status.LastBuildStatus = "SUCCESS"
+				} else {
 					log.Printf("[devloop] Command for rule %q failed: %v", rule.Name, waitErr)
-					allCommandsSuccessful = false
+					status.LastBuildStatus = "FAILED"
 				}
-			}
-		}
-
-		o.mu.Lock()
-		defer o.mu.Unlock()
-		status := o.ruleStatuses[rule.Name]
-		if status != nil {
-			status.IsRunning = false
-			status.LastBuildTime = time.Now()
-			if allCommandsSuccessful {
-				status.LastBuildStatus = "SUCCESS"
-			} else {
-				status.LastBuildStatus = "FAILED"
-			}
 
 			// Send rule status update to gateway
 			if o.gatewayStream != nil {
@@ -197,11 +206,12 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 					log.Printf("[devloop] Failed to send rule status update for %q: channel full", rule.Name)
 				}
 			}
-		}
-
-		o.LogManager.SignalFinished(rule.Name)
-		log.Printf("[devloop] Rule %q commands finished.", rule.Name)
-	}()
+			}
+			
+			o.LogManager.SignalFinished(rule.Name)
+			log.Printf("[devloop] Rule %q commands finished.", rule.Name)
+		}()
+	}
 }
 
 // debounce manages the debounce timer for a given rule.
