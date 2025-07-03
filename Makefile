@@ -20,7 +20,7 @@ checks:
 
 
 test: checks
-	go test -v ./...
+	go test ./...
 
 # Install required Go tools
 install-tools:

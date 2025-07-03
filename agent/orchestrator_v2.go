@@ -584,14 +584,11 @@ func (o *OrchestratorV2) logDevloop(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
 
 	if o.Config.Settings.PrefixLogs && o.Config.Settings.PrefixMaxLength > 0 {
-		// Format with centered "devloop" prefix to match rule output format
+		// Format with left-aligned "devloop" prefix to match rule output format
 		prefix := "devloop"
 		totalPadding := o.Config.Settings.PrefixMaxLength - len(prefix)
-		leftPadding := totalPadding / 2
-		rightPadding := totalPadding - leftPadding
-
-		centeredPrefix := strings.Repeat(" ", leftPadding) + prefix + strings.Repeat(" ", rightPadding)
-		prefixStr := "[" + centeredPrefix + "] "
+		leftAlignedPrefix := prefix + strings.Repeat(" ", totalPadding)
+		prefixStr := "[" + leftAlignedPrefix + "] "
 
 		// Add color if enabled
 		if o.ColorManager != nil && o.ColorManager.IsEnabled() {

@@ -40,13 +40,10 @@ func (dl *DevloopLogger) LogWithPrefix(prefix, format string, args ...interface{
 	message := fmt.Sprintf(format, args...)
 
 	if dl.config.PrefixLogs && dl.config.PrefixMaxLength > 0 {
-		// Format with centered prefix to match rule output format
+		// Format with left-aligned prefix to match rule output format
 		totalPadding := dl.config.PrefixMaxLength - len(prefix)
-		leftPadding := totalPadding / 2
-		rightPadding := totalPadding - leftPadding
-
-		centeredPrefix := strings.Repeat(" ", leftPadding) + prefix + strings.Repeat(" ", rightPadding)
-		prefixStr := "[" + centeredPrefix + "] "
+		leftAlignedPrefix := prefix + strings.Repeat(" ", totalPadding)
+		prefixStr := "[" + leftAlignedPrefix + "] "
 
 		// Add color if enabled
 		if dl.config.ColorManager != nil && dl.config.ColorManager.IsEnabled() {

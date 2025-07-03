@@ -294,7 +294,7 @@ func (gs *GatewayService) GetRuleStatus(ctx context.Context, req *pb.GetRuleStat
 	gs.mu.RLock()
 	_, exists := gs.instances[req.GetProjectId()]
 	gs.mu.RUnlock()
-	
+
 	if !exists {
 		return nil, fmt.Errorf("project %q not found", req.GetProjectId())
 	}
@@ -316,7 +316,7 @@ func (gs *GatewayService) TriggerRuleClient(ctx context.Context, req *pb.Trigger
 	gs.mu.RLock()
 	instance, exists := gs.instances[req.GetProjectId()]
 	gs.mu.RUnlock()
-	
+
 	if !exists {
 		return &pb.TriggerRuleClientResponse{Success: false, Message: fmt.Sprintf("project %q not found", req.GetProjectId())}, nil
 	}
@@ -338,7 +338,7 @@ func (gs *GatewayService) ReadFileContent(ctx context.Context, req *pb.ReadFileC
 	gs.mu.RLock()
 	_, exists := gs.instances[req.GetProjectId()]
 	gs.mu.RUnlock()
-	
+
 	if !exists {
 		return nil, fmt.Errorf("project %q not found", req.GetProjectId())
 	}
@@ -354,7 +354,7 @@ rules:
       - "echo 'mock build'"`, req.GetProjectId())
 		return &pb.ReadFileContentResponse{Content: []byte(mockConfig)}, nil
 	}
-	
+
 	// For other files, try to read from the gateway's orchestrator as fallback
 	content, err := gs.orchestrator.ReadFileContent(req.GetPath())
 	if err != nil {
