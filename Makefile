@@ -9,7 +9,7 @@ buf:
 	buf generate
 
 versionup:
-	git tag -a `cat VERSION` -m v`cat VERSION`
+	git tag -a `cat VERSION` -m `cat VERSION`
 	git push origin --tags
 	git push
 

@@ -9,17 +9,17 @@ import (
 )
 
 // NewOrchestratorForTesting creates an orchestrator based on the DEVLOOP_ORCHESTRATOR_VERSION environment variable.
-// If DEVLOOP_ORCHESTRATOR_VERSION=v2, it returns OrchestratorV2, otherwise it returns the original Orchestrator.
+// If DEVLOOP_ORCHESTRATOR_VERSION=v1, it returns the original Orchestrator, otherwise it returns OrchestratorV2.
 // This is used by tests to verify both implementations work correctly.
 func NewOrchestratorForTesting(configPath string, gatewayAddr string) (OrchestratorInterface, error) {
 	version := os.Getenv("DEVLOOP_ORCHESTRATOR_VERSION")
 
 	switch version {
-	case "v2":
-		return NewOrchestratorV2(configPath, gatewayAddr)
-	default:
-		// Default to v1 for backward compatibility
+	case "v1":
 		return NewOrchestrator(configPath, gatewayAddr)
+	default:
+		// Default to v2 (new default)
+		return NewOrchestratorV2(configPath, gatewayAddr)
 	}
 }
 

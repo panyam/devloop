@@ -65,7 +65,7 @@ func main() {
 }
 
 func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string) {
-	orchestrator, err := agent.NewOrchestrator(configPath, gatewayAddr)
+	orchestrator, err := agent.NewOrchestratorV2(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
 	}
