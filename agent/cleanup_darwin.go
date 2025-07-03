@@ -13,7 +13,7 @@ import (
 func (o *Orchestrator) cleanupOrphanedProcesses() {
 	// Look for processes that might be ours based on common patterns
 	patterns := []string{"auth-server", "user-server", "gateway", "main", "http-server"}
-	
+
 	for _, pattern := range patterns {
 		// Use pgrep to find processes
 		cmd := exec.Command("pgrep", "-f", pattern)
@@ -21,14 +21,14 @@ func (o *Orchestrator) cleanupOrphanedProcesses() {
 		if err != nil {
 			continue // No processes found
 		}
-		
+
 		pids := strings.Fields(string(output))
 		for _, pidStr := range pids {
 			pid, err := strconv.Atoi(strings.TrimSpace(pidStr))
 			if err != nil {
 				continue
 			}
-			
+
 			// Check if this process is a child of our commands
 			for _, cmds := range o.runningCommands {
 				for _, cmd := range cmds {
