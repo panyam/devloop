@@ -1,3 +1,40 @@
+// Package utils provides common utilities for devloop.
+//
+// This package contains shared functionality used across the devloop ecosystem:
+// - Logging infrastructure with colored prefix support
+// - Color management for terminal output
+// - Log management and streaming capabilities
+// - Prefix writers for enhanced output formatting
+//
+// # Logging
+//
+// The package provides structured logging with prefix support:
+//
+//	logger := utils.NewDevloopLogger(true, 10, colorManager)
+//	logger.LogWithPrefix("build", "Starting build process")
+//	// Output: [build     ] Starting build process
+//
+// # Color Management
+//
+// Color management provides consistent terminal coloring:
+//
+//	colorManager := utils.NewColorManager(true)
+//	coloredText := colorManager.FormatPrefix("[build]", rule)
+//
+// # Log Streaming
+//
+// Log streaming enables real-time log access:
+//
+//	logManager := utils.NewLogManager(logsDir)
+//	err := logManager.StreamLogs("ruleName", "filter", stream)
+//
+// # Prefix Writers
+//
+// Enhanced output writers with prefix and color support:
+//
+//	writer := utils.NewColoredPrefixWriter(writers, "[prefix] ", colorManager, rule)
+//	writer.Write([]byte("Hello World"))
+//	// Output: [prefix] Hello World (with colors)
 package utils
 
 import (

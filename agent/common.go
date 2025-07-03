@@ -1,3 +1,57 @@
+// Package agent provides the core orchestration engine for devloop.
+//
+// The agent package contains the orchestrator implementations that handle:
+// - File system watching and event processing
+// - Rule execution and process management
+// - Gateway communication for distributed setups
+// - Logging and output management
+//
+// # Key Components
+//
+// The main orchestrator interface provides methods for:
+//
+//	type Orchestrator interface {
+//		Start() error
+//		Stop() error
+//		GetConfig() *gateway.Config
+//		TriggerRule(ruleName string) error
+//		GetRuleStatus(ruleName string) (*gateway.RuleStatus, bool)
+//		GetWatchedPaths() []string
+//		ReadFileContent(path string) ([]byte, error)
+//		StreamLogs(ruleName string, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error
+//		SetGlobalDebounceDelay(duration time.Duration)
+//		SetVerbose(verbose bool)
+//	}
+//
+// # Usage
+//
+// Create and start an orchestrator:
+//
+//	orchestrator := agent.NewOrchestratorV2("config.yaml", "")
+//	if err := orchestrator.Start(); err != nil {
+//		log.Fatal(err)
+//	}
+//	defer orchestrator.Stop()
+//
+// # Configuration
+//
+// The orchestrator is configured via YAML files with rules that define:
+// - File patterns to watch
+// - Commands to execute when files change
+// - Debounce settings and execution options
+//
+// Example configuration:
+//
+//	settings:
+//	  project_id: "my-project"
+//	  prefix_logs: true
+//	rules:
+//	  - name: "build"
+//	    watch:
+//	      - action: include
+//	        patterns: ["**/*.go"]
+//	    commands:
+//	      - "go build ."
 package agent
 
 import (

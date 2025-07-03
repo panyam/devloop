@@ -52,7 +52,28 @@ type OrchestratorV2 struct {
 	debounceDuration time.Duration
 }
 
-// NewOrchestratorV2 creates a new orchestrator using RuleRunners
+// NewOrchestratorV2 creates a new orchestrator instance for managing file watching and rule execution.
+//
+// The orchestrator handles:
+// - Loading and validating configuration from configPath
+// - Setting up file system watching for specified patterns
+// - Managing rule execution and process lifecycle
+// - Optional gateway communication if gatewayAddr is provided
+//
+// Parameters:
+//   - configPath: Path to the .devloop.yaml configuration file
+//   - gatewayAddr: Optional gateway address for distributed mode (empty for standalone)
+//
+// Returns an orchestrator instance ready to be started, or an error if
+// configuration loading or initialization fails.
+//
+// Example:
+//
+//	// Standalone mode
+//	orchestrator, err := NewOrchestratorV2(".devloop.yaml", "")
+//	
+//	// Agent mode (connect to gateway)
+//	orchestrator, err := NewOrchestratorV2(".devloop.yaml", "localhost:50051")
 func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, error) {
 	absConfigPath, err := filepath.Abs(configPath)
 	if err != nil {

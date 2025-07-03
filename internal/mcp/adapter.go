@@ -1,3 +1,40 @@
+// Package mcp provides Model Context Protocol (MCP) integration for devloop.
+//
+// This package implements MCP server functionality that allows devloop to be
+// used as an MCP tool by AI assistants and other external clients. The MCP
+// integration provides structured access to devloop's capabilities through
+// the standardized MCP protocol.
+//
+// # MCP Server
+//
+// The MCP server exposes devloop functionality as MCP tools:
+// - Project configuration management
+// - Rule triggering and status monitoring  
+// - File content reading
+// - Real-time log streaming
+//
+// # Usage
+//
+// The MCP server is automatically started when devloop runs in standalone
+// or agent mode, providing stdio-based communication:
+//
+//	devloop -c .devloop.yaml  # MCP server available on stdio
+//
+// # Integration
+//
+// AI assistants can use devloop through MCP by:
+// - Connecting to the stdio-based MCP server
+// - Calling available MCP tools for project management
+// - Receiving real-time updates through the MCP protocol
+//
+// # Tools Available
+//
+// - get_config: Retrieve project configuration
+// - trigger_rule: Execute specific automation rules
+// - get_rule_status: Check rule execution status
+// - list_watched_paths: Get monitored file patterns
+// - read_file_content: Access file contents
+// - stream_logs: Receive real-time log updates
 package mcp
 
 import (

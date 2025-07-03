@@ -1,3 +1,50 @@
+// Package gateway provides the central hub for managing multiple devloop agents.
+//
+// The gateway package implements a distributed architecture where multiple
+// devloop agents can connect to a central gateway service. This enables:
+// - Centralized monitoring of multiple projects
+// - Unified API access to all connected agents
+// - Cross-project coordination and management
+//
+// # Gateway Service
+//
+// The gateway service provides both gRPC and HTTP endpoints for:
+// - Agent registration and communication
+// - Client API access for external tools
+// - Real-time log streaming
+// - Project status monitoring
+//
+// # Usage
+//
+// Start a gateway service:
+//
+//	gateway := gateway.NewGatewayService(orchestrator)
+//	if err := gateway.Start(grpcPort, httpPort); err != nil {
+//		log.Fatal(err)
+//	}
+//	defer gateway.Stop()
+//
+// Connect agents to the gateway:
+//
+//	devloop --mode agent --gateway-addr localhost:50051 -c project-a/.devloop.yaml
+//	devloop --mode agent --gateway-addr localhost:50051 -c project-b/.devloop.yaml
+//
+// # Configuration Types
+//
+// The package defines configuration structures for devloop projects:
+// - Config: Main configuration structure
+// - Rule: Individual automation rules
+// - WatchConfig: File watching patterns
+// - Settings: Global project settings
+//
+// # Example Gateway Setup
+//
+//	// Start the central gateway
+//	devloop --mode gateway --http-port 8080 --grpc-port 50051
+//	
+//	// Connect individual project agents
+//	cd project-a && devloop --mode agent --gateway-addr localhost:50051
+//	cd project-b && devloop --mode agent --gateway-addr localhost:50051
 package gateway
 
 import (

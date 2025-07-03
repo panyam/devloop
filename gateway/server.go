@@ -50,7 +50,22 @@ type GatewayService struct {
 	orchestrator Orchestrator
 }
 
-// NewGatewayService creates a new GatewayService instance.
+// NewGatewayService creates a new gateway service for managing multiple devloop agents.
+//
+// The gateway service acts as a central hub that:
+// - Accepts connections from multiple devloop agents
+// - Provides unified gRPC and HTTP APIs for external clients
+// - Manages project registration and status tracking
+// - Handles real-time communication with connected agents
+//
+// The orchestrator parameter is used for the gateway's own configuration
+// and logging, while connected agents provide their own orchestration.
+//
+// Example:
+//
+//	orchestrator := agent.NewOrchestratorV2("gateway.yaml", "")
+//	gateway := NewGatewayService(orchestrator)
+//	err := gateway.Start(50051, 8080)  // gRPC on 50051, HTTP on 8080
 func NewGatewayService(orchestrator Orchestrator) *GatewayService {
 	return &GatewayService{
 		instances:    make(map[string]*ProjectInstance),

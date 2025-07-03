@@ -1,3 +1,38 @@
+// Package testhelpers provides common testing utilities for devloop.
+//
+// This package contains shared testing functionality used across devloop's test suite:
+// - Test context management with automatic cleanup
+// - Network port allocation for testing
+// - Temporary directory management
+// - Test timeout enforcement
+//
+// # Test Context
+//
+// WithTestContext provides a standardized way to run tests with temporary directories:
+//
+//	func TestMyFunction(t *testing.T) {
+//		testhelpers.WithTestContext(t, 5*time.Second, func(t *testing.T, tmpDir string) {
+//			// Test code here runs in a temporary directory
+//			// Automatic cleanup happens when test completes
+//		})
+//	}
+//
+// # Port Allocation
+//
+// FindAvailablePort helps with network testing:
+//
+//	port, err := testhelpers.FindAvailablePort()
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// Use port for test server
+//
+// # Features
+//
+// - Automatic temporary directory creation and cleanup
+// - Test timeout enforcement to prevent hanging tests
+// - Dynamic port allocation for network tests
+// - Consistent test environment setup
 package testhelpers
 
 import (
