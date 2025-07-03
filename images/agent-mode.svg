@@ -1,0 +1,43 @@
+<svg width="500" height="300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Project A -->
+  <rect x="20" y="20" width="150" height="120" fill="#e3f2fd" stroke="#1976d2" stroke-width="2" rx="10"/>
+  <text x="95" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976d2">Project A</text>
+  
+  <rect x="40" y="50" width="110" height="20" fill="#ffffff" stroke="#1976d2" stroke-width="1" rx="3"/>
+  <text x="95" y="63" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#1976d2">.devloop.yaml</text>
+  
+  <rect x="40" y="80" width="110" height="40" fill="#fff3e0" stroke="#f57c00" stroke-width="1" rx="3"/>
+  <text x="95" y="98" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">devloop</text>
+  <text x="95" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">(agent)</text>
+  
+  <!-- Project B -->
+  <rect x="330" y="20" width="150" height="120" fill="#e8f5e8" stroke="#4caf50" stroke-width="2" rx="10"/>
+  <text x="405" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#4caf50">Project B</text>
+  
+  <rect x="350" y="50" width="110" height="20" fill="#ffffff" stroke="#4caf50" stroke-width="1" rx="3"/>
+  <text x="405" y="63" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#4caf50">.devloop.yaml</text>
+  
+  <rect x="350" y="80" width="110" height="40" fill="#fff3e0" stroke="#f57c00" stroke-width="1" rx="3"/>
+  <text x="405" y="98" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">devloop</text>
+  <text x="405" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">(agent)</text>
+  
+  <!-- Connection lines -->
+  <path d="M 170 100 Q 250 50 330 100" stroke="#6c757d" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 330 100 Q 250 150 170 100" stroke="#6c757d" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+  
+  <!-- Gateway -->
+  <rect x="200" y="200" width="100" height="60" fill="#fff8e1" stroke="#ff9800" stroke-width="2" rx="10"/>
+  <text x="250" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#ff9800">Gateway</text>
+  <text x="250" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#ff9800">:8080</text>
+  
+  <!-- Connections to Gateway -->
+  <path d="M 130 140 L 220 200" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 370 140 L 280 200" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+    </marker>
+  </defs>
+</svg>

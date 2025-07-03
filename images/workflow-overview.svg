@@ -1,0 +1,76 @@
+<svg width="700" height="500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="350" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#343a40">Devloop Workflow Overview</text>
+  
+  <!-- File System Changes -->
+  <rect x="50" y="50" width="120" height="60" fill="#ffe0e0" stroke="#dc3545" stroke-width="2" rx="10"/>
+  <text x="110" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#dc3545">File Changes</text>
+  <text x="110" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#dc3545">*.go, *.js, etc.</text>
+  
+  <!-- File Watcher -->
+  <rect x="220" y="50" width="120" height="60" fill="#e0f0ff" stroke="#0066cc" stroke-width="2" rx="10"/>
+  <text x="280" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0066cc">File Watcher</text>
+  <text x="280" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#0066cc">fsnotify</text>
+  
+  <!-- Rule Engine -->
+  <rect x="390" y="50" width="120" height="60" fill="#e8f5e8" stroke="#4caf50" stroke-width="2" rx="10"/>
+  <text x="450" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#4caf50">Rule Engine</text>
+  <text x="450" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#4caf50">Pattern Match</text>
+  
+  <!-- Command Execution -->
+  <rect x="560" y="50" width="120" height="60" fill="#fff3e0" stroke="#f57c00" stroke-width="2" rx="10"/>
+  <text x="620" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#f57c00">Execute</text>
+  <text x="620" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">Commands</text>
+  
+  <!-- Flow arrows -->
+  <path d="M 170 80 L 220 80" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 340 80 L 390 80" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M 510 80 L 560 80" stroke="#6c757d" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Three Modes Section -->
+  <text x="350" y="160" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#495057">Available Operating Modes</text>
+  
+  <!-- Standalone Mode -->
+  <rect x="50" y="180" width="180" height="100" fill="#f8f9fa" stroke="#6c757d" stroke-width="1" rx="10"/>
+  <text x="140" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#495057">Standalone Mode</text>
+  <text x="140" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Single project</text>
+  <text x="140" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Embedded gRPC</text>
+  <text x="140" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Simple setup</text>
+  <text x="140" y="265" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Default mode</text>
+  
+  <!-- Agent Mode -->
+  <rect x="260" y="180" width="180" height="100" fill="#f8f9fa" stroke="#6c757d" stroke-width="1" rx="10"/>
+  <text x="350" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#495057">Agent Mode</text>
+  <text x="350" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Multi-project</text>
+  <text x="350" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Connects to gateway</text>
+  <text x="350" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Centralized monitoring</text>
+  <text x="350" y="265" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Microservices</text>
+  
+  <!-- Gateway Mode -->
+  <rect x="470" y="180" width="180" height="100" fill="#f8f9fa" stroke="#6c757d" stroke-width="1" rx="10"/>
+  <text x="560" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#495057">Gateway Mode</text>
+  <text x="560" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Central hub</text>
+  <text x="560" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• HTTP/gRPC API</text>
+  <text x="560" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• Cross-project control</text>
+  <text x="560" y="265" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#495057">• MCP server</text>
+  
+  <!-- Configuration Section -->
+  <rect x="100" y="320" width="500" height="140" fill="#e8f5e8" stroke="#4caf50" stroke-width="2" rx="10"/>
+  <text x="350" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4caf50">.devloop.yaml Configuration</text>
+  
+  <!-- Config example -->
+  <rect x="120" y="350" width="460" height="95" fill="#ffffff" stroke="#dee2e6" stroke-width="1" rx="5"/>
+  <text x="130" y="370" font-family="Courier New, monospace" font-size="10" fill="#495057">rules:</text>
+  <text x="130" y="385" font-family="Courier New, monospace" font-size="10" fill="#495057">  - name: "backend"</text>
+  <text x="130" y="400" font-family="Courier New, monospace" font-size="10" fill="#495057">    watch:</text>
+  <text x="130" y="415" font-family="Courier New, monospace" font-size="10" fill="#495057">      - patterns: ["**/*.go"]</text>
+  <text x="130" y="430" font-family="Courier New, monospace" font-size="10" fill="#495057">    commands:</text>
+  <text x="130" y="445" font-family="Courier New, monospace" font-size="10" fill="#495057">      - "go build ./..."</text>
+  
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d"/>
+    </marker>
+  </defs>
+</svg>

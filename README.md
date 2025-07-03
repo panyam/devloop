@@ -4,6 +4,8 @@
 
 `devloop` is a generic, multi-variant tool designed to streamline development workflows, particularly within Multi-Component Projects (MCPs) (no not *that* MCP). It combines functionalities inspired by live-reloading tools like `air` (for Go) and build automation tools like `make`, focusing on simple, configuration-driven orchestration of tasks based on file system changes.
 
+![Workflow Overview](images/workflow-overview.svg)
+
 ## 🏗️ Architecture Overview
 
 Devloop operates in three distinct modes to support different development scenarios:
@@ -11,45 +13,14 @@ Devloop operates in three distinct modes to support different development scenar
 ### 1. Standalone Mode (Default)
 The simplest mode for individual projects. Devloop runs as a single daemon process with an embedded gRPC server.
 
-```
-┌─────────────────────┐
-│   Your Project      │
-│  ┌───────────────┐  │
-│  │  .devloop.yaml│  │
-│  └───────┬───────┘  │
-│          │          │
-│  ┌───────▼───────┐  │
-│  │  devloop      │  │
-│  │  (daemon)     │  │
-│  │ ┌───────────┐ │  │
-│  │ │gRPC Server│ │  │
-│  │ └───────────┘ │  │
-│  └───────────────┘  │
-└─────────────────────┘
-```
+![Standalone Mode Architecture](images/standalone-mode.svg)
 
 **Use Case:** Single project development, simple setup.
 
 ### 2. Agent Mode
 Devloop connects to a central gateway, ideal for multi-component projects where you want centralized monitoring.
 
-```
-Project A                    Project B
-┌──────────────┐            ┌──────────────┐
-│.devloop.yaml │            │.devloop.yaml │
-│              │            │              │
-│  devloop     │            │  devloop     │
-│  (agent)     │            │  (agent)     │
-└──────┬───────┘            └──────┬───────┘
-       │                           │
-       └─────────┐   ┌─────────────┘
-                 │   │
-              ┌──▼───▼──┐
-              │ Gateway │
-              │         │
-              │  :8080  │
-              └─────────┘
-```
+![Agent Mode Architecture](images/agent-mode.svg)
 
 **Use Case:** Microservices, monorepos, distributed development
 
@@ -581,6 +552,8 @@ for _, project := range resp.Projects {
 
 Devloop Gateway can act as a Model Context Protocol (MCP) server, enabling AI agents and LLMs (like Claude) to monitor and control your development workflows.
 
+![MCP Integration Architecture](images/mcp-integration.svg)
+
 ### What is MCP?
 
 Model Context Protocol (MCP) is a standard that allows AI assistants to interact with external tools and systems. By exposing devloop as an MCP server, you enable:
@@ -595,7 +568,7 @@ Model Context Protocol (MCP) is a standard that allows AI assistants to interact
 
 ```bash
 # Start gateway with MCP server enabled
-devloop --mode gateway --gateway-port 8080 --mcp-port 3000
+devloop --mode gateway --http-port 8080 --grpc-port 50051 --enable-mcp
 ```
 
 #### 2. Configure MCP Server Settings
@@ -629,8 +602,7 @@ Create `mcp-config.json`:
 
 ```bash
 # In each project directory
-devloop --mode agent --gateway-url localhost:8080 \
-        --project-id "my-backend" \
+devloop --mode agent --gateway-addr localhost:50051 \
         -c .devloop.yaml
 ```
 
@@ -643,10 +615,8 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   "mcpServers": {
     "devloop": {
       "command": "devloop",
-      "args": ["mcp-client", "--gateway-url", "localhost:3000"],
-      "env": {
-        "DEVLOOP_API_KEY": "your-optional-api-key"
-      }
+      "args": ["--enable-mcp", "--c", "/path/to/project/.devloop.yaml"],
+      "env": {}
     }
   }
 }
@@ -859,7 +829,7 @@ devloop logs --mode gateway --tail 100
 #### Common Problems
 
 1. **"MCP server not found"**
-   - Ensure gateway is running with `--mcp-port` flag
+   - Ensure gateway is running with `--enable-mcp` flag
    - Check firewall settings
 
 2. **"Tool execution failed"**
@@ -895,7 +865,7 @@ devloop -c .devloop.yaml
 To connect to a gateway:
 
 ```bash
-devloop --mode agent --gateway-url localhost:8080 -c .devloop.yaml
+devloop --mode agent --gateway-addr localhost:50051 -c .devloop.yaml
 ```
 
 ### Running in Gateway Mode
