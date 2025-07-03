@@ -828,30 +828,33 @@ Different devloop modes provide different endpoints and capabilities:
 
 #### Standalone Mode (`--mode standalone`)
 ```bash
-devloop --mode standalone --http-port 8080 --grpc-port 50051
+devloop --mode standalone --http-port 8080 --grpc-port 50051 --mcp-port 3000
 ```
 - ✅ HTTP API: `http://localhost:8080/projects`
 - ✅ gRPC API: `localhost:50051` 
 - ✅ MCP via stdio (if `--enable-mcp`)
+- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
 - ✅ File watching and rule execution
 
 #### Gateway Mode (`--mode gateway`)
 ```bash
-devloop --mode gateway --http-port 8080 --grpc-port 50051
+devloop --mode gateway --http-port 8080 --grpc-port 50051 --mcp-port 3000
 ```
 - ✅ HTTP API: `http://localhost:8080/projects`
 - ✅ gRPC API: `localhost:50051`
 - ✅ Agent management and coordination
 - ✅ MCP via stdio (if `--enable-mcp`)
+- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
 - ❌ No direct file watching (agents do the watching)
 
 #### Agent Mode (`--mode agent --gateway-addr localhost:50051`)
 ```bash
-devloop --mode agent --gateway-addr localhost:50051
+devloop --mode agent --gateway-addr localhost:50051 --mcp-port 3000
 ```
-- ❌ No HTTP endpoints (connects to gateway)
+- ❌ No HTTP API endpoints (connects to gateway)
 - ❌ No direct gRPC API (uses gateway's API)
 - ✅ MCP via stdio (if `--enable-mcp`)
+- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
 - ✅ File watching and rule execution
 - ✅ Reports to gateway
 
@@ -860,28 +863,35 @@ devloop --mode agent --gateway-addr localhost:50051
 # Test standalone/gateway HTTP API
 curl http://localhost:8080/projects
 
+# Test MCP HTTP endpoints (when --mcp-port specified)
+curl http://localhost:3000/sse
+curl http://localhost:3000/message
+
 # Test if any devloop process is running
 ps aux | grep devloop
-
-# MCP always uses stdio - no curl endpoints
 ```
 
 ### Troubleshooting MCP Integration
 
 #### Connection Issues
 
-**Note**: MCP runs on stdio (not HTTP) for AI assistant communication.
+**Note**: MCP now supports both stdio and HTTP (SSE) transports.
 
 ```bash
 # Check if devloop is running with MCP enabled
 ps aux | grep devloop
 
-# Test HTTP endpoints (only available in standalone/gateway mode)
-curl http://localhost:8080/projects  # If running --mode standalone
-curl http://localhost:8080/projects  # If running --mode gateway
+# Test MCP HTTP endpoints (when --mcp-port is specified)
+curl http://localhost:3000/sse        # MCP SSE endpoint
+curl http://localhost:3000/message    # MCP message endpoint
 
-# MCP communication happens via stdio - no HTTP endpoints
-# AI assistants connect directly to devloop's stdin/stdout
+# Test regular HTTP API endpoints (only available in standalone/gateway mode)
+curl http://localhost:8080/projects   # If running --mode standalone
+curl http://localhost:8080/projects   # If running --mode gateway
+
+# MCP communication:
+# - stdio: For process-launched clients
+# - HTTP/SSE: For network clients (VSCode, external tools)
 ```
 
 #### Common Problems
