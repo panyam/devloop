@@ -16,8 +16,7 @@ rules:
           - "auth-service/**/*.go"
           - "shared/**/*.go"  # Also watch shared libs
     commands:
-      - "cd auth-service && go build -o auth-server ."
-      - "cd auth-service && ./auth-server"
+      - "cd auth-service && go build -o auth-server . && ./auth-server"
     
   # User service
   - name: "user"
@@ -27,8 +26,7 @@ rules:
           - "user-service/**/*.go"
           - "shared/**/*.go"  # Also watch shared libs
     commands:
-      - "cd user-service && go build -o user-server ."
-      - "cd user-service && ./user-server"
+      - "cd user-service && go build -o user-server . && ./user-server"
     
   # API Gateway - depends on all services being up
   - name: "gateway"
@@ -38,6 +36,4 @@ rules:
           - "api-gateway/**/*.go"
           - "shared/**/*.go"  # Also watch shared libs
     commands:
-      - "sleep 2"  # Give other services time to start
-      - "cd api-gateway && go build -o gateway ."
-      - "cd api-gateway && ./gateway"
+      - "sleep 2 && cd api-gateway && go build -o gateway . && ./gateway"

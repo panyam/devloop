@@ -125,7 +125,8 @@ func (o *Orchestrator) executeCommands(rule gateway.Rule) {
 			cmd.Stderr = io.MultiWriter(writers...)
 		}
 
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // Set process group ID
+		// Set platform-specific process attributes
+		setSysProcAttr(cmd)
 
 		// Set working directory if specified
 		if rule.WorkDir != "" {
@@ -818,7 +819,24 @@ func (o *Orchestrator) Stop() error {
 		for _, cmd := range cmds {
 			if cmd != nil && cmd.Process != nil {
 				log.Printf("Terminating process group %d for rule %q during shutdown", cmd.Process.Pid, ruleName)
+				// First try SIGTERM to allow graceful shutdown
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+
+				// Give processes a moment to exit gracefully
+				done := make(chan bool)
+				go func() {
+					cmd.Wait()
+					done <- true
+				}()
+
+				select {
+				case <-done:
+					// Process exited gracefully
+				case <-time.After(2 * time.Second):
+					// Force kill if still running
+					log.Printf("Force killing process group %d for rule %q", cmd.Process.Pid, ruleName)
+					_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				}
 			}
 		}
 	}
