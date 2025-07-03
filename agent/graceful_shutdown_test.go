@@ -12,11 +12,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/panyam/devloop/testhelpers"
 	"github.com/stretchr/testify/assert"
 )
 
+// TestGracefulShutdown verifies that devloop can be gracefully shut down,
+// properly stopping all running processes and cleaning up resources without
+// leaving orphaned processes or hanging operations.
 func TestGracefulShutdown(t *testing.T) {
-	withTestContext(t, 20*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 20*time.Second, func(t *testing.T, tmpDir string) {
 		// Get the project root to build the binary correctly.
 		originalDir, err := os.Getwd()
 		assert.NoError(t, err)

@@ -293,7 +293,7 @@ func (cm *ColorManager) FormatPrefix(prefix string, rule interface{}) string {
 	}
 
 	var ruleColor *color.Color
-	
+
 	// Handle different rule types
 	if colorRule, ok := rule.(ColorRule); ok {
 		ruleColor = cm.GetColorForRule(colorRule)
@@ -305,7 +305,7 @@ func (cm *ColorManager) FormatPrefix(prefix string, rule interface{}) string {
 			ruleColor = cm.GetColorForRule(simpleRule)
 		}
 	}
-	
+
 	if ruleColor == nil {
 		return prefix
 	}

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	"github.com/panyam/devloop/testhelpers"
 )
 
 // mockStream is a mock implementation of the GatewayClientService_StreamLogsClientServer interface.
@@ -41,8 +42,10 @@ func newMockStream(ctx context.Context) *mockStream {
 	}
 }
 
+// TestLogManager_NewLogManager verifies that a new LogManager can be created
+// with a valid directory and initializes the logs directory structure correctly.
 func TestLogManager_NewLogManager(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 		assert.NotNil(t, lm)
@@ -50,8 +53,10 @@ func TestLogManager_NewLogManager(t *testing.T) {
 	})
 }
 
+// TestLogManager_GetWriterAndSignalFinished tests that the LogManager correctly
+// provides writers for rules and handles the finished signal to close log files properly.
 func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
@@ -85,8 +90,10 @@ func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
 	})
 }
 
+// TestLogManager_StreamLogs_Historical verifies that historical logs can be streamed
+// correctly from existing log files for a specific rule.
 func TestLogManager_StreamLogs_Historical(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
@@ -114,8 +121,10 @@ func TestLogManager_StreamLogs_Historical(t *testing.T) {
 	})
 }
 
+// TestLogManager_StreamLogs_Realtime tests that real-time log streaming works
+// correctly, delivering new log lines as they are written to active rules.
 func TestLogManager_StreamLogs_Realtime(t *testing.T) {
-	withTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
@@ -150,8 +159,10 @@ func TestLogManager_StreamLogs_Realtime(t *testing.T) {
 	})
 }
 
+// TestLogManager_StreamLogs_Blocking verifies that log streaming can be properly
+// cancelled/interrupted without hanging the system or causing resource leaks.
 func TestLogManager_StreamLogs_Blocking(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
@@ -178,8 +189,10 @@ func TestLogManager_StreamLogs_Blocking(t *testing.T) {
 	})
 }
 
+// TestLogManager_StreamLogs_Filtering tests that log streaming respects filter
+// parameters to only return log lines containing the specified filter text.
 func TestLogManager_StreamLogs_Filtering(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
@@ -201,8 +214,10 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 	})
 }
 
+// TestLogManager_Close verifies that the LogManager can be properly closed,
+// releasing all resources and stopping all background operations cleanly.
 func TestLogManager_Close(t *testing.T) {
-	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 

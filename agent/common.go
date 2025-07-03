@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/panyam/devloop/gateway"
+	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
 )
 
 // Orchestrator interface defines the common methods for orchestrator implementations
@@ -22,6 +23,7 @@ type Orchestrator interface {
 	GetRuleStatus(ruleName string) (*gateway.RuleStatus, bool)
 	GetWatchedPaths() []string
 	ReadFileContent(path string) ([]byte, error)
+	StreamLogs(ruleName string, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error
 	SetGlobalDebounceDelay(duration time.Duration)
 	SetVerbose(verbose bool)
 }

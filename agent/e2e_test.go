@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestEndToEnd tests the complete file watching and command execution workflow.
+// Verifies that devloop can watch files, detect changes, and execute configured
+// commands end-to-end in a real scenario with file system operations.
 func TestEndToEnd(t *testing.T) {
 	withTestContext(t, 10*time.Second, func(t *testing.T, tmpDir string) {
 		// Define paths within the temporary directory
@@ -76,6 +79,9 @@ rules:
 	})
 }
 
+// TestDebouncing verifies that file system events are properly debounced
+// to prevent excessive command executions when multiple file changes occur
+// in rapid succession.
 func TestDebouncing(t *testing.T) {
 	withTestContext(t, 0*time.Second, func(t *testing.T, tmpDir string) {
 		// Define paths within the temporary directory

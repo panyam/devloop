@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/panyam/devloop/gateway"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -59,7 +58,7 @@ exclude_regex = ["_test.go"]
 	// Verify the output
 	assert.Contains(t, output, "Warning: The 'exclude_regex' directive is not supported and will be ignored.")
 
-	var generatedRule gateway.Rule
+	var generatedRule Rule
 	err = yaml.Unmarshal([]byte(output), &generatedRule)
 	if err != nil {
 		// If there's an error, it might be because of the warning message.

@@ -544,7 +544,7 @@ for event in client.events():
 #### Go
 ```go
 // Using the generated gRPC client
-conn, _ := grpc.Dial("localhost:50051", grpc.WithInsecure())
+conn, _ := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 client := pb.NewGatewayClientServiceClient(conn)
 
 // List projects

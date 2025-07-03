@@ -253,6 +253,32 @@ func (gs *GatewayService) unregisterInternal(projectID string) {
 	}
 }
 
+// ListProjects implements pb.GatewayClientServiceServer.
+func (gs *GatewayService) ListProjects(ctx context.Context, req *pb.ListProjectsRequest) (*pb.ListProjectsResponse, error) {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
+	var projects []*pb.ListProjectsResponse_Project
+	for projectID, instance := range gs.instances {
+		// Check if the instance is still connected by verifying context isn't cancelled
+		status := "CONNECTED"
+		select {
+		case <-instance.ctx.Done():
+			status = "DISCONNECTED"
+		default:
+			// Context is still active, instance is connected
+		}
+
+		projects = append(projects, &pb.ListProjectsResponse_Project{
+			ProjectId:   projectID,
+			ProjectRoot: instance.ProjectRoot,
+			Status:      status,
+		})
+	}
+
+	return &pb.ListProjectsResponse{Projects: projects}, nil
+}
+
 // GetConfig implements pb.GatewayClientServiceServer.
 func (gs *GatewayService) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
 	config := gs.orchestrator.GetConfig()
