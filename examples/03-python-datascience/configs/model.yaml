@@ -1,0 +1,25 @@
+# Model Training Configuration
+# This file defines parameters for model training
+
+# Data settings
+data_path: "data/processed/enriched_customers.csv"  # Path to training data
+test_size: 0.2                                     # Fraction of data for testing
+random_state: 42                                   # Random seed for reproducibility
+
+# Model parameters (RandomForestClassifier)
+model_params:
+  n_estimators: 100           # Number of trees in the forest
+  max_depth: 10               # Maximum depth of trees
+  min_samples_split: 5        # Minimum samples required to split a node
+  min_samples_leaf: 2         # Minimum samples required at a leaf node
+  max_features: "sqrt"        # Number of features to consider for best split
+  random_state: 42            # Random seed for model
+  n_jobs: -1                  # Use all available processors
+
+# Output settings
+model_dir: "models"           # Directory to save trained models
+save_metrics: true            # Whether to save training metrics
+
+# Training settings
+verbose: true                 # Print training progress
+cross_validation: false       # Whether to perform cross-validation (for future use)

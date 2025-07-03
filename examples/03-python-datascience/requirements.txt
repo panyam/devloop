@@ -1,0 +1,33 @@
+# Python Data Science Example Requirements
+# Core data science libraries
+pandas>=1.5.0
+numpy>=1.21.0
+scikit-learn>=1.1.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Jupyter environment
+jupyter>=1.0.0
+jupyterlab>=3.4.0
+ipython>=8.0.0
+
+# Configuration and serialization
+pyyaml>=6.0
+joblib>=1.1.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+
+# Optional: Additional ML libraries
+# xgboost>=1.6.0
+# lightgbm>=3.3.0
+# catboost>=1.0.0
+
+# Optional: Advanced visualization
+# plotly>=5.0.0
+# bokeh>=2.4.0
+
+# Optional: Data processing
+# scipy>=1.8.0
+# statsmodels>=0.13.0

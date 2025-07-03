@@ -1,0 +1,67 @@
+# .devloop.yaml
+settings:
+  prefix_logs: true
+  prefix_max_length: 10
+
+rules:
+  - name: "Jupyter Lab"
+    prefix: "jupyter"
+    workdir: "."
+    watch:
+      - action: "include"
+        patterns:
+          - "notebooks/**/*.ipynb"
+          - "src/**/*.py"
+    commands:
+      - "echo 'Starting Jupyter Lab server...'"
+      - "jupyter lab --no-browser --port=8888 --ip=0.0.0.0 --allow-root"
+
+  - name: "Model Training"
+    prefix: "train"
+    workdir: "."
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.py"
+          - "configs/**/*.yaml"
+          - "data/**/*.csv"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+          - "**/.*"
+    commands:
+      - "echo 'Starting model training...'"
+      - "python src/train.py --config configs/model.yaml"
+
+  - name: "Tests"
+    prefix: "test"
+    workdir: "."
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.py"
+          - "tests/**/*.py"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+    commands:
+      - "echo 'Running tests...'"
+      - "pytest tests/ -v --color=yes --tb=short"
+
+  - name: "Data Pipeline"
+    prefix: "pipeline"
+    workdir: "."
+    watch:
+      - action: "include"
+        patterns:
+          - "src/data/**/*.py"
+          - "data/raw/**/*.csv"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+    commands:
+      - "echo 'Running data preprocessing pipeline...'"
+      - "python src/data/preprocess.py"
