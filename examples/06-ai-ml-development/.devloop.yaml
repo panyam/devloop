@@ -1,0 +1,194 @@
+rules:
+  - name: "Data Pipeline"
+    prefix: "data"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "data/raw/**/*"
+          - "src/data/**/*.py"
+          - "configs/data_pipeline.yaml"
+          - "schemas/**/*.json"
+      - action: "exclude"
+        patterns:
+          - "data/processed/**"
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+    commands:
+      - "echo 'Running data pipeline...'"
+      - "python src/data/pipeline.py"
+      - "python src/data/validation.py"
+      - "echo 'Data pipeline completed'"
+
+  - name: "Model Training"
+    prefix: "train"
+    watch:
+      - action: "include"
+        patterns:
+          - "src/models/**/*.py"
+          - "src/training/**/*.py" 
+          - "configs/model_configs/**/*.yaml"
+          - "data/processed/**/*"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+          - "models/checkpoints/**"
+    commands:
+      - "echo 'Starting model training...'"
+      - "python src/training/train.py"
+      - "python src/training/validation.py"
+      - "echo 'Model training completed'"
+
+  - name: "Hyperparameter Optimization"
+    prefix: "hyperopt"
+    watch:
+      - action: "include"
+        patterns:
+          - "src/training/hyperopt.py"
+          - "configs/hyperopt/**/*.yaml"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+    commands:
+      - "echo 'Running hyperparameter optimization...'"
+      - "python src/training/hyperopt.py"
+      - "echo 'Hyperparameter optimization completed'"
+
+  - name: "Model Serving"
+    prefix: "serve"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "src/serving/**/*.py"
+          - "models/artifacts/**/*"
+          - "configs/deployment_configs/**/*.yaml"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+    commands:
+      - "echo 'Starting model serving API...'"
+      - "cd src/serving && python api.py"
+
+  - name: "MLflow Tracking"
+    prefix: "mlflow"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "configs/mlflow.yaml"
+    commands:
+      - "echo 'Starting MLflow tracking server...'"
+      - "mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./models/artifacts"
+
+  - name: "Jupyter Lab"
+    prefix: "jupyter"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "notebooks/**/*.ipynb"
+      - action: "exclude"
+        patterns:
+          - "notebooks/.ipynb_checkpoints/**"
+    commands:
+      - "echo 'Starting Jupyter Lab...'"
+      - "jupyter lab --no-browser --port=8888 --ip=0.0.0.0 --allow-root --NotebookApp.token=''"
+
+  - name: "Model Monitoring"
+    prefix: "monitor"
+    run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "src/monitoring/**/*.py"
+          - "monitoring/configs/**/*.yaml"
+          - "data/monitoring/**/*"
+    commands:
+      - "echo 'Starting model monitoring...'"
+      - "python src/monitoring/drift_detector.py"
+      - "python src/monitoring/performance_monitor.py"
+
+  - name: "Testing"
+    prefix: "test"
+    watch:
+      - action: "include"
+        patterns:
+          - "tests/**/*.py"
+          - "src/**/*.py"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+          - "**/*.pyc"
+          - "tests/output/**"
+    commands:
+      - "echo 'Running tests...'"
+      - "pytest tests/ -v --tb=short"
+      - "echo 'Tests completed'"
+
+  - name: "Data Validation"
+    prefix: "validate"
+    watch:
+      - action: "include"
+        patterns:
+          - "data/processed/**/*.csv"
+          - "data/processed/**/*.parquet"
+          - "schemas/**/*.json"
+          - "src/data/validation.py"
+    commands:
+      - "echo 'Running data validation...'"
+      - "python src/data/validation.py --check-schema --profile"
+      - "echo 'Data validation completed'"
+
+  - name: "Feature Engineering"
+    prefix: "features"
+    watch:
+      - action: "include"
+        patterns:
+          - "src/data/features.py"
+          - "configs/feature_configs/**/*.yaml"
+          - "data/processed/**/*"
+      - action: "exclude"
+        patterns:
+          - "data/features/**"
+    commands:
+      - "echo 'Running feature engineering...'"
+      - "python src/data/features.py"
+      - "echo 'Feature engineering completed'"
+
+  - name: "Model Registry"
+    prefix: "registry"
+    watch:
+      - action: "include"
+        patterns:
+          - "src/training/registry.py"
+          - "models/artifacts/**/*"
+    commands:
+      - "echo 'Updating model registry...'"
+      - "python src/training/registry.py --register-best"
+      - "echo 'Model registry updated'"
+
+  - name: "Code Quality"
+    prefix: "quality"
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.py"
+          - "tests/**/*.py"
+          - "notebooks/**/*.py"
+      - action: "exclude"
+        patterns:
+          - "**/__pycache__/**"
+    commands:
+      - "echo 'Running code quality checks...'"
+      - "flake8 src tests --max-line-length=88"
+      - "black --check src tests"
+      - "mypy src --ignore-missing-imports"
+      - "echo 'Code quality checks completed'"
+
+settings:
+  prefix_logs: true
+  prefix_max_length: 10
+  debounce_delay: 3000ms
