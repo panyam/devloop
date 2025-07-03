@@ -328,7 +328,7 @@ rules:
 2. **Shell Execution**: Each command runs via `bash -c`
 3. **Process Groups**: Commands run in separate process groups for clean termination
 4. **Environment Inheritance**: Commands inherit parent environment plus `env` variables
-5. **Working Directory**: Commands execute in `workdir` (or current directory if not set)
+5. **Working Directory**: Commands execute in `workdir` (or directory containing the config file if not set)
 6. **Process Termination**: Previous instances receive SIGTERM when rule re-triggers
 7. **Error Handling**: Failed commands don't stop subsequent commands in the list
 
