@@ -18,7 +18,7 @@ This document summarizes the design, progress, and future plans for the `devloop
 `devloop` has evolved to a gRPC-based architecture to provide a robust and flexible API for monitoring and interaction. The API is defined in Protobuf (`protos/devloop/v1/devloop_gateway.proto`) and exposed via a gRPC-Gateway, providing both gRPC and RESTful HTTP/JSON endpoints.
 
 **MCP (Model Context Protocol) Integration:**
-As of 2025-07-03, devloop now supports MCP server mode for AI-powered development automation. The MCP server exposes devloop's capabilities through the Model Context Protocol, allowing AI assistants to discover projects, trigger builds, monitor status, and read project files. Tools are auto-generated from protobuf definitions using protoc-gen-go-mcp.
+As of 2025-07-04, devloop now supports MCP server mode for AI-powered development automation. The MCP server exposes devloop's capabilities through the Model Context Protocol, allowing AI assistants to discover projects, trigger builds, monitor status, and read project files. Tools are auto-generated from protobuf definitions using protoc-gen-go-mcp. Uses modern StreamableHTTP transport (MCP 2025-03-26 spec) for maximum compatibility.
 
 The tool can operate in four distinct modes:
 
@@ -41,7 +41,8 @@ The tool can operate in four distinct modes:
     *   This mode starts devloop as an MCP (Model Context Protocol) server for AI assistant integration.
     *   It exposes devloop operations through auto-generated MCP tools that AI assistants can discover and use.
     *   Available tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths.
-    *   Communication occurs via stdio following MCP 2025-06-18 specification.
+    *   Communication occurs via StreamableHTTP transport following MCP 2025-03-26 specification.
+    *   Stateless design ensures compatibility with Claude Code and other MCP clients.
 
 ## 3. Execution Flow (Standalone Mode)
 
@@ -110,7 +111,7 @@ settings:
 
 ## 7. Progress & Next Steps
 
-**Current Status (as of 2025-07-03):**
+**Current Status (as of 2025-07-04):**
 - ✅ All core functionalities fully implemented and tested
 - ✅ **Single Orchestrator Architecture (V2 only):** Removed OrchestratorV1 and simplified codebase
 - ✅ **Fixed Rule Matching Logic:** Resolved critical bug where exclude patterns were ignored
@@ -126,6 +127,9 @@ settings:
 - ✅ MCP (Model Context Protocol) server integration completed:
   - **MCP as Add-On Capability:** Can be enabled alongside any core mode (`--enable-mcp`)
   - Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
+  - **StreamableHTTP Transport:** Upgraded to MCP 2025-03-26 specification for modern compatibility
+  - **Stateless Design:** No sessionId requirement - compatible with Claude Code and other MCP clients
+  - **mcp-go Library v0.32.0:** Latest version with full StreamableHTTP support
   - Comprehensive protobuf documentation with field descriptions and usage examples
   - Six core tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
   - Complete integration guide and workflow documentation (MCP_INTEGRATION.md)
@@ -136,12 +140,18 @@ settings:
   - Before: Exclude patterns matched but still triggered rules
   - After: Exclude patterns properly skip rule execution
   - Impact: SDL project's `web/**` exclusions now work correctly
+- **MCP SessionId Compatibility (Critical):** Fixed MCP server sessionId requirement blocking Claude Code
+  - Before: MCP server required sessionId via SSE transport, causing 400 errors
+  - After: StreamableHTTP transport with stateless mode for universal compatibility
+  - Impact: Claude Code and other MCP clients can now connect seamlessly
 
 **Current Architecture Strengths:**
 - **Simplified Single Implementation:** Only OrchestratorV2, no dual architecture complexity
 - **Correct Pattern Matching:** First-match semantics with proper action-based filtering
 - **Orthogonal MCP Integration:** MCP server runs alongside core modes, not as separate mode
 - **Auto-generated MCP Tools:** Leverages protoc-gen-go-mcp for automatic tool generation from protobuf
+- **Modern MCP Transport:** StreamableHTTP (2025-03-26) for stateless, serverless-ready deployment
+- **Universal Client Compatibility:** Works with Claude Code, Python SDK, and other MCP implementations
 - **Comprehensive Documentation:** Enhanced protobuf comments provide clear tool descriptions and usage examples
 - **Clean Separation:** MCP functionality isolated in `internal/mcp/` package using adapter pattern
 - **Flexible Project Management:** Manual project ID configuration for consistent cross-session identification
@@ -149,6 +159,7 @@ settings:
 **Next Steps:**
 - ✅ V1 orchestrator removal completed
 - ✅ Rule matching logic fixed
+- ✅ MCP StreamableHTTP transport migration completed
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
 - Consider adding streaming log support to MCP tools

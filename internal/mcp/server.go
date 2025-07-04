@@ -11,9 +11,9 @@ import (
 
 // MCPService manages the MCP server for devloop
 type MCPService struct {
-	mcpServer    *server.MCPServer
-	sseServer    *server.SSEServer
-	orchestrator gateway.Orchestrator
+	mcpServer         *server.MCPServer
+	streamableServer  *server.StreamableHTTPServer
+	orchestrator      gateway.Orchestrator
 }
 
 // NewMCPService creates a new MCP service instance
@@ -36,11 +36,15 @@ func (m *MCPService) CreateHandler() (http.Handler, error) {
 	// Register auto-generated MCP tools from protobuf definitions
 	v1mcp.RegisterGatewayClientServiceHandler(m.mcpServer, gatewayAdapter)
 
-	// Create SSE server for HTTP transport
-	m.sseServer = server.NewSSEServer(m.mcpServer)
+	// Create StreamableHTTP server for HTTP transport (MCP 2025-03-26 spec)
+	// Use stateless mode to avoid sessionId requirement for better compatibility
+	m.streamableServer = server.NewStreamableHTTPServer(m.mcpServer,
+		server.WithStateLess(true),           // Stateless mode - no sessionId required
+		server.WithEndpointPath("/mcp"),      // Single endpoint for all MCP operations
+	)
 
 	utils.LogMCP("MCP handler created successfully")
-	return m.sseServer, nil
+	return m.streamableServer, nil
 }
 
 // Stop cleans up MCP resources (no longer manages HTTP server)

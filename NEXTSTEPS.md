@@ -2,7 +2,17 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-07-03)
+## Recently Completed (2025-07-04)
+
+- ✅ **MCP StreamableHTTP Transport Migration:**
+  - **Root Cause**: MCP server was using legacy SSE transport requiring sessionId, incompatible with Claude Code
+  - **Solution**: Migrated to StreamableHTTP transport (MCP 2025-03-26 spec) with stateless mode
+  - **Implementation**: Replaced SSEServer with StreamableHTTPServer in `internal/mcp/server.go`
+  - **Result**: Claude Code and other MCP clients now connect seamlessly without sessionId errors
+  - **Library Upgrade**: Updated to mcp-go v0.32.0 for full StreamableHTTP support
+  - **Configuration**: Updated MCP endpoint from `/mcp/message` to `/mcp/` for single-endpoint operation
+
+## Previously Completed (2025-07-03)
 
 - ✅ **Complete OrchestratorV1 Removal:**
   - Deleted legacy V1 orchestrator and factory pattern implementations
@@ -87,6 +97,8 @@ This document outlines the immediate next steps for the `devloop` project.
 - ✅ **MCP (Model Context Protocol) Integration:**
   - ✅ **Redesigned MCP as Add-On Capability:** Changed from exclusive mode to optional feature alongside core modes
   - ✅ Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
+  - ✅ **StreamableHTTP Transport:** Migrated to modern MCP 2025-03-26 specification for universal compatibility
+  - ✅ **Stateless Design:** Eliminated sessionId requirement for seamless Claude Code integration
   - ✅ Enhanced protobuf documentation with comprehensive field descriptions and usage examples
   - ✅ Implemented six core MCP tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
   - ✅ Created complete integration guide (MCP_INTEGRATION.md) with workflow patterns and usage examples

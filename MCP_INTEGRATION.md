@@ -11,7 +11,10 @@ The devloop MCP server is an **add-on capability** that can be enabled alongside
 - Monitor build status and logs
 - Understand project structure and dependencies
 
-**Key Design Principle:** MCP is not a separate mode but an additional interface that enhances existing devloop functionality.
+**Key Design Principles:** 
+- MCP is not a separate mode but an additional interface that enhances existing devloop functionality
+- Uses modern **StreamableHTTP transport** (MCP 2025-03-26 spec) for universal client compatibility
+- **Stateless design** eliminates sessionId requirements for seamless integration with Claude Code and other clients
 
 ## Quick Start
 
@@ -34,6 +37,18 @@ devloop --enable-mcp
 
 ### 2. Configure MCP Client
 
+#### Claude Code (HTTP Transport)
+```bash
+# Add devloop as HTTP MCP server for Claude Code
+claude mcp add --transport http devloop http://localhost:9090/mcp/
+
+# Test the connection
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}' \
+  http://localhost:9090/mcp/
+```
+
+#### Other MCP Clients (stdio)
 Add to your MCP client configuration:
 
 ```json
@@ -162,21 +177,35 @@ The MCP server provides detailed error messages for:
 - File access permissions
 - Build/test execution failures
 
+## Transport Architecture
+
+### StreamableHTTP Transport (Recommended)
+Devloop uses the modern MCP StreamableHTTP transport (2025-03-26 spec) for:
+- **Universal Compatibility**: Works with Claude Code, Python SDK, and other MCP clients
+- **Stateless Operation**: No sessionId requirement simplifies client integration
+- **HTTP/JSON**: Standard protocols for easy debugging and testing
+- **Single Endpoint**: All MCP operations through `/mcp/` path
+
+### Legacy SSE Transport (Deprecated)
+Previous versions used SSE transport requiring sessionId. This has been migrated to StreamableHTTP for better compatibility.
+
 ## Security Considerations
 
 - **File Access**: Limited to project directory only
 - **Path Traversal**: Blocked (no ../ allowed)
 - **Command Execution**: Only through predefined devloop rules
-- **Network Access**: Local stdio communication only
+- **Network Access**: HTTP on localhost only (default port 9090)
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Project not found"**: Ensure devloop is running in agent mode for the project
-2. **"Rule not found"**: Check rule names in project config with get_project_config
-3. **"Permission denied"**: Ensure MCP server has read access to project files
-4. **"Build failed"**: Check rule status and read relevant log files
+1. **"Missing sessionId" (Fixed)**: If using older devloop versions, upgrade to latest with StreamableHTTP transport
+2. **"Connection refused"**: Ensure devloop is running with `--enable-mcp` flag and correct port (default 9090)
+3. **"Project not found"**: Ensure devloop is running in agent mode for the project
+4. **"Rule not found"**: Check rule names in project config with get_project_config
+5. **"Permission denied"**: Ensure MCP server has read access to project files
+6. **"Build failed"**: Check rule status and read relevant log files
 
 ### Debug Mode
 
@@ -192,8 +221,18 @@ Test MCP integration:
 # Start devloop with MCP enabled
 devloop --enable-mcp --c .devloop.yaml
 
-# In another terminal, test with MCP client
-# (specific commands depend on your MCP client)
+# Test HTTP transport directly
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"id":1}' \
+  http://localhost:9090/mcp/
+
+# Test tools list
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":2}' \
+  http://localhost:9090/mcp/
+
+# Test with Claude Code
+claude mcp add --transport http devloop http://localhost:9090/mcp/
 ```
 
 ## Advanced Usage
