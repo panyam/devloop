@@ -1,0 +1,38 @@
+settings:
+  color_logs: true
+  prefix_logs: true
+
+rules:
+  - name: "gorule"
+    watch:
+      - action: "include"
+        patterns:
+          - "*.go"
+    commands:
+      - "echo 'Rule 1 triggered by .go files'"
+    
+  - name: "cssrule"
+    watch:
+      - action: "include"
+        patterns:
+          - "*.css"
+    commands:
+      - "echo 'Rule 2 triggered by .css files'"
+    
+  - name: "htmlrule"
+    watch:
+      - action: "include"
+        patterns:
+          - "*.html"
+    commands:
+      - "echo 'Rule 3 triggered by .html files'"
+    
+  - name: "jstsrule"
+    watch:
+      - action: "include"
+        patterns:
+          - "*.js"
+          - "*.ts"
+    commands:
+      - "echo 'Rule 4 triggered by .ts and .js files'"
+    

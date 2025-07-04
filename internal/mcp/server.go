@@ -32,6 +32,8 @@ func NewMCPService(orchestrator gateway.Orchestrator, port int) *MCPService {
 
 // Start initializes and starts the MCP server
 func (m *MCPService) Start() error {
+	utils.LogMCP("Starting MCP service - port: %d", m.port)
+	
 	// Create MCP server
 	m.mcpServer = server.NewMCPServer("devloop", "1.0.0")
 
@@ -52,6 +54,7 @@ func (m *MCPService) Start() error {
 
 	// Also start SSE HTTP server for network-based MCP clients (VSCode, etc.)
 	if m.port > 0 {
+		utils.LogMCP("Port is > 0, starting HTTP server...")
 		// Create SSE server for HTTP transport
 		m.sseServer = server.NewSSEServer(m.mcpServer)
 		
@@ -71,6 +74,8 @@ func (m *MCPService) Start() error {
 				log.Printf("[mcp] MCP HTTP server failed: %v", err)
 			}
 		}()
+	} else {
+		utils.LogMCP("Port is 0 or negative (%d), skipping HTTP server", m.port)
 	}
 
 	return nil
