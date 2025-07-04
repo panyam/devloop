@@ -53,6 +53,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -68,14 +69,44 @@ var version string
 
 var verbose bool
 
+// findAvailablePort finds an available port starting from the given port number
+func findAvailablePort(startPort int, portType string) (int, error) {
+	// Try the original port first
+	if isPortAvailable(startPort) {
+		return startPort, nil
+	}
+
+	utils.LogDevloop("Port %d is in use, searching for available %s port...", startPort, portType)
+
+	// Search for next available port (limit search to avoid system ports)
+	for port := startPort + 1; port < startPort+1000; port++ {
+		if isPortAvailable(port) {
+			utils.LogDevloop("Found available %s port: %d", portType, port)
+			return port, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no available %s port found in range %d-%d", portType, startPort+1, startPort+1000)
+}
+
+// isPortAvailable checks if a port is available for binding
+func isPortAvailable(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
+
 // validateFlags checks flag combinations and warns about ignored flags
-func validateFlags(mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP bool) {
+func validateFlags(mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP, autoPorts bool) {
 	log.Printf("[devloop] Starting in %s mode", mode)
 
 	switch mode {
 	case "agent":
 		// Agent mode warnings
-		if httpPort != 8080 || grpcPort != 50051 {
+		if httpPort != 9999 || grpcPort != 5555 {
 			log.Printf("[devloop] WARNING: --http-port and --grpc-port are ignored in agent mode (no local HTTP/gRPC servers)")
 		}
 		if gatewayAddr == "" {
@@ -115,14 +146,16 @@ func main() {
 	var gatewayAddr string
 	var mode string
 	var enableMCP bool
+	var autoPorts bool
 
 	// Define global flags
 	flag.StringVar(&configPath, "c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 	flag.BoolVar(&showVersion, "version", false, "Display version information")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
-	flag.IntVar(&httpPort, "http-port", 8080, "Port for the HTTP gateway server.")
-	flag.IntVar(&grpcPort, "grpc-port", 50051, "Port for the gRPC server.")
+	flag.IntVar(&httpPort, "http-port", 9999, "Port for the HTTP gateway server.")
+	flag.IntVar(&grpcPort, "grpc-port", 5555, "Port for the gRPC server.")
 	flag.BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration.")
+	flag.BoolVar(&autoPorts, "auto-ports", false, "Automatically find available ports if defaults are taken.")
 	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50051). If set, devloop will register with the gateway.")
 	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
 
@@ -151,13 +184,13 @@ func main() {
 	}
 
 	// Validate flag combinations and warn about ignored flags
-	validateFlags(mode, httpPort, grpcPort, gatewayAddr, enableMCP)
+	validateFlags(mode, httpPort, grpcPort, gatewayAddr, enableMCP, autoPorts)
 
 	// Run the orchestrator in the selected mode
-	runOrchestrator(configPath, mode, httpPort, grpcPort, gatewayAddr, enableMCP)
+	runOrchestrator(configPath, mode, httpPort, grpcPort, gatewayAddr, enableMCP, autoPorts)
 }
 
-func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP bool) {
+func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP, autoPorts bool) {
 	orchestrator, err := agent.NewOrchestratorV2(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
@@ -176,6 +209,21 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 
 	// Start HTTP/gRPC gateway service (standalone and gateway modes only)
 	if mode == "standalone" || mode == "gateway" {
+		// Auto-discover ports if requested
+		if autoPorts {
+			if newGrpcPort, err := findAvailablePort(grpcPort, "gRPC"); err != nil {
+				log.Fatalf("Error: %v\n", err)
+			} else {
+				grpcPort = newGrpcPort
+			}
+
+			if newHttpPort, err := findAvailablePort(httpPort, "HTTP"); err != nil {
+				log.Fatalf("Error: %v\n", err)
+			} else {
+				httpPort = newHttpPort
+			}
+		}
+
 		utils.LogDevloop("Starting HTTP/gRPC gateway service...")
 		gatewayService = gateway.NewGatewayService(orchestrator)
 		err = gatewayService.Start(grpcPort, httpPort)

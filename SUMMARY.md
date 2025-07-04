@@ -124,6 +124,7 @@ settings:
 - ✅ **Configurable Default Behavior:** Rule-level and global `default_action` settings
 - ✅ Complete gateway integration for OrchestratorV2
 - ✅ All tests passing with simplified test infrastructure
+- ✅ **Port Configuration & Auto-Discovery:** Updated defaults to avoid conflicts, added automatic port discovery
 - ✅ MCP (Model Context Protocol) server integration completed:
   - **MCP as Add-On Capability:** Can be enabled alongside any core mode (`--enable-mcp`)
   - Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
@@ -144,6 +145,10 @@ settings:
   - Before: MCP server required sessionId via SSE transport, causing 400 errors
   - After: StreamableHTTP transport with stateless mode for universal compatibility
   - Impact: Claude Code and other MCP clients can now connect seamlessly
+- **Port Configuration & Auto-Discovery (Critical):** Eliminated most common startup failure cause
+  - Before: Default ports 8080/50051 frequently conflicted with other services
+  - After: New defaults 9999/5555 with --auto-ports flag for automatic conflict resolution
+  - Impact: `devloop` now starts reliably without manual port configuration
 
 **Current Architecture Strengths:**
 - **Simplified Single Implementation:** Only OrchestratorV2, no dual architecture complexity
@@ -152,6 +157,8 @@ settings:
 - **Auto-generated MCP Tools:** Leverages protoc-gen-go-mcp for automatic tool generation from protobuf
 - **Modern MCP Transport:** StreamableHTTP (2025-03-26) for stateless, serverless-ready deployment
 - **Universal Client Compatibility:** Works with Claude Code, Python SDK, and other MCP implementations
+- **Port Conflict Resolution:** Automatic port discovery eliminates common startup failures
+- **User-Friendly Defaults:** Non-conflicting default ports (9999/5555) for seamless operation
 - **Comprehensive Documentation:** Enhanced protobuf comments provide clear tool descriptions and usage examples
 - **Clean Separation:** MCP functionality isolated in `internal/mcp/` package using adapter pattern
 - **Flexible Project Management:** Manual project ID configuration for consistent cross-session identification
@@ -160,6 +167,7 @@ settings:
 - ✅ V1 orchestrator removal completed
 - ✅ Rule matching logic fixed
 - ✅ MCP StreamableHTTP transport migration completed
+- ✅ Port configuration & auto-discovery implemented
 - Finalize the implementation and testing for the `agent` and `gateway` modes
 - Add comprehensive tests for the gRPC API endpoints
 - Consider adding streaming log support to MCP tools

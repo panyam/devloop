@@ -33,6 +33,11 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] Factory pattern for testing both orchestrator versions
   - [x] Environment variable based version selection (DEVLOOP_ORCHESTRATOR_VERSION)
   - [x] Separate make targets: `testv1` and `testv2`
+- [x] **Port Configuration & Auto-Discovery:**
+  - [x] Updated default ports to avoid common conflicts (HTTP: 8080→9999, gRPC: 50051→5555)
+  - [x] Implemented automatic port discovery with --auto-ports flag
+  - [x] Fast TCP bind/close port availability checking
+  - [x] Fallback port search with configurable range limits
 - [ ] **Agent & Gateway Modes:**
   - [ ] Finalize implementation for the `agent` mode, allowing a `devloop` instance to connect to a central gateway.
   - [ ] Finalize implementation for the `gateway` mode, allowing a `devloop` instance to act as a central hub for multiple agents.

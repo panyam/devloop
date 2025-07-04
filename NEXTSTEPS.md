@@ -4,6 +4,14 @@ This document outlines the immediate next steps for the `devloop` project.
 
 ## Recently Completed (2025-07-04)
 
+- ✅ **Default Port Configuration & Auto-Discovery:**
+  - **Problem**: Default ports 8080 (HTTP) and 50051 (gRPC) cause frequent conflicts with other services
+  - **Solution**: Updated defaults to 9999 (HTTP) and 5555 (gRPC) - less common ports
+  - **Auto-Discovery**: Added `--auto-ports` flag for automatic port conflict resolution
+  - **Implementation**: Port discovery logic in `runOrchestrator()` with fallback search
+  - **User Experience**: `devloop` now starts without port conflicts in most scenarios
+  - **Documentation**: Updated all MCP examples from incorrect :9090 to correct :9999
+
 - ✅ **MCP StreamableHTTP Transport Migration:**
   - **Root Cause**: MCP server was using legacy SSE transport requiring sessionId, incompatible with Claude Code
   - **Solution**: Migrated to StreamableHTTP transport (MCP 2025-03-26 spec) with stateless mode
