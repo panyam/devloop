@@ -33,7 +33,7 @@ func NewMCPService(orchestrator gateway.Orchestrator, port int) *MCPService {
 // Start initializes and starts the MCP server
 func (m *MCPService) Start() error {
 	utils.LogMCP("Starting MCP service - port: %d", m.port)
-	
+
 	// Create MCP server
 	m.mcpServer = server.NewMCPServer("devloop", "1.0.0")
 
@@ -43,21 +43,13 @@ func (m *MCPService) Start() error {
 	// Register auto-generated MCP tools from protobuf definitions
 	v1mcp.RegisterGatewayClientServiceHandler(m.mcpServer, gatewayAdapter)
 
-	// Start MCP server via both stdio AND HTTP
-	// stdio for process-launched clients, HTTP for network clients
-	go func() {
-		utils.LogMCP("MCP server starting on stdio")
-		if err := server.ServeStdio(m.mcpServer); err != nil {
-			log.Printf("[mcp] MCP stdio server failed: %v", err)
-		}
-	}()
-
-	// Also start SSE HTTP server for network-based MCP clients (VSCode, etc.)
+	// Start MCP server via HTTP/SSE transport only
+	// HTTP enables multiple clients and preserves devloop's terminal output
 	if m.port > 0 {
 		utils.LogMCP("Port is > 0, starting HTTP server...")
 		// Create SSE server for HTTP transport
 		m.sseServer = server.NewSSEServer(m.mcpServer)
-		
+
 		// Create HTTP server
 		m.httpServer = &http.Server{
 			Addr:    fmt.Sprintf(":%d", m.port),
@@ -69,13 +61,13 @@ func (m *MCPService) Start() error {
 			utils.LogMCP("MCP endpoints available at:")
 			utils.LogMCP("  SSE: http://localhost:%d/sse", m.port)
 			utils.LogMCP("  Message: http://localhost:%d/message", m.port)
-			
+
 			if err := m.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Printf("[mcp] MCP HTTP server failed: %v", err)
 			}
 		}()
 	} else {
-		utils.LogMCP("Port is 0 or negative (%d), skipping HTTP server", m.port)
+		utils.LogMCP("Port is 0 or negative (%d), MCP server disabled (HTTP-only mode requires valid port)", m.port)
 	}
 
 	return nil
@@ -85,7 +77,7 @@ func (m *MCPService) Start() error {
 func (m *MCPService) Stop() {
 	if m.mcpServer != nil {
 		utils.LogMCP("Shutting down MCP server...")
-		
+
 		// Shutdown HTTP server if running
 		if m.httpServer != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -94,8 +86,7 @@ func (m *MCPService) Stop() {
 				log.Printf("[mcp] Error shutting down HTTP server: %v", err)
 			}
 		}
-		
-		// The mcp-go stdio server doesn't have a graceful shutdown method
-		// so we'll rely on the process termination
+
+		// Only HTTP server to shutdown in HTTP-only mode
 	}
 }

@@ -71,7 +71,7 @@ type OrchestratorV2 struct {
 //
 //	// Standalone mode
 //	orchestrator, err := NewOrchestratorV2(".devloop.yaml", "")
-//	
+//
 //	// Agent mode (connect to gateway)
 //	orchestrator, err := NewOrchestratorV2(".devloop.yaml", "localhost:50051")
 func NewOrchestratorV2(configPath string, gatewayAddr string) (*OrchestratorV2, error) {

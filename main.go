@@ -41,7 +41,7 @@
 //
 // See the examples/ directory for comprehensive real-world examples including:
 // - Full-stack web applications
-// - Microservices architectures  
+// - Microservices architectures
 // - Data science workflows
 // - Docker compose setups
 // - Frontend framework development
@@ -71,7 +71,7 @@ var verbose bool
 // validateFlags checks flag combinations and warns about ignored flags
 func validateFlags(mode string, httpPort, grpcPort, mcpPort int, gatewayAddr string) {
 	log.Printf("[devloop] Starting in %s mode", mode)
-	
+
 	switch mode {
 	case "agent":
 		// Agent mode warnings
@@ -82,19 +82,19 @@ func validateFlags(mode string, httpPort, grpcPort, mcpPort int, gatewayAddr str
 			log.Printf("[devloop] WARNING: Agent mode typically requires --gateway-addr to connect to a gateway")
 		}
 		log.Printf("[devloop] Agent mode: File watching=YES, HTTP/gRPC servers=NO, MCP=%s", mcpStatus(mcpPort))
-		
+
 	case "standalone":
 		if gatewayAddr != "" {
 			log.Printf("[devloop] WARNING: --gateway-addr is ignored in standalone mode")
 		}
 		log.Printf("[devloop] Standalone mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(mcpPort))
-		
+
 	case "gateway":
 		if gatewayAddr != "" {
 			log.Printf("[devloop] WARNING: --gateway-addr is ignored in gateway mode (this IS the gateway)")
 		}
 		log.Printf("[devloop] Gateway mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(mcpPort))
-		
+
 	default:
 		log.Printf("[devloop] ERROR: Unknown mode '%s'. Valid modes: standalone, agent, gateway", mode)
 	}
@@ -102,9 +102,9 @@ func validateFlags(mode string, httpPort, grpcPort, mcpPort int, gatewayAddr str
 
 func mcpStatus(mcpPort int) string {
 	if mcpPort > 0 {
-		return fmt.Sprintf("stdio+HTTP:%d", mcpPort)
+		return fmt.Sprintf("HTTP:%d", mcpPort)
 	}
-	return "stdio-only"
+	return "disabled"
 }
 
 func main() {

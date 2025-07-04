@@ -9,21 +9,20 @@
 //
 // The MCP server exposes devloop functionality as MCP tools:
 // - Project configuration management
-// - Rule triggering and status monitoring  
+// - Rule triggering and status monitoring
 // - File content reading
 // - Real-time log streaming
 //
 // # Usage
 //
-// The MCP server is automatically started when devloop runs in standalone
-// or agent mode, providing stdio-based communication:
+// The MCP server runs over HTTP/SSE transport when enabled:
 //
-//	devloop -c .devloop.yaml  # MCP server available on stdio
+//	devloop --enable-mcp --mcp-port 3000  # MCP server on HTTP port 3000
 //
 // # Integration
 //
 // AI assistants can use devloop through MCP by:
-// - Connecting to the stdio-based MCP server
+// - Connecting to the HTTP-based MCP server via SSE transport
 // - Calling available MCP tools for project management
 // - Receiving real-time updates through the MCP protocol
 //

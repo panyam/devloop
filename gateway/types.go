@@ -41,7 +41,7 @@
 //
 //	// Start the central gateway
 //	devloop --mode gateway --http-port 8080 --grpc-port 50051
-//	
+//
 //	// Connect individual project agents
 //	cd project-a && devloop --mode agent --gateway-addr localhost:50051
 //	cd project-b && devloop --mode agent --gateway-addr localhost:50051
