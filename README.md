@@ -514,11 +514,11 @@ service GatewayClientService {
 #### JavaScript/TypeScript
 ```javascript
 // Fetch all projects
-const response = await fetch('http://localhost:8080/projects');
+const response = await fetch('http://localhost:8080/api/projects');
 const data = await response.json();
 
 // Stream logs using EventSource
-const events = new EventSource('http://localhost:8080/projects/backend/stream/logs/api');
+const events = new EventSource('http://localhost:8080/api/projects/backend/stream/logs/api');
 events.onmessage = (event) => {
   const log = JSON.parse(event.data);
   console.log(`[${log.ruleName}] ${log.line}`);
@@ -531,11 +531,11 @@ import requests
 import sseclient
 
 # Get rule status
-response = requests.get('http://localhost:8080/projects/backend/status/api')
+response = requests.get('http://localhost:8080/api/projects/backend/status/api')
 status = response.json()
 
 # Stream logs
-response = requests.get('http://localhost:8080/projects/backend/stream/logs/api', stream=True)
+response = requests.get('http://localhost:8080/api/projects/backend/stream/logs/api', stream=True)
 client = sseclient.SSEClient(response)
 for event in client.events():
     log = json.loads(event.data)
@@ -828,44 +828,41 @@ Different devloop modes provide different endpoints and capabilities:
 
 #### Standalone Mode (`--mode standalone`)
 ```bash
-devloop --mode standalone --http-port 8080 --grpc-port 50051 --mcp-port 3000
+devloop --mode standalone --http-port 8080 --grpc-port 50051 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:8080/projects`
+- ✅ HTTP API: `http://localhost:8080/api/projects`
 - ✅ gRPC API: `localhost:50051` 
-- ✅ MCP via stdio (if `--enable-mcp`)
-- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
+- ✅ MCP via HTTP/SSE: `http://localhost:8080/mcp/` (if `--enable-mcp`)
 - ✅ File watching and rule execution
 
 #### Gateway Mode (`--mode gateway`)
 ```bash
-devloop --mode gateway --http-port 8080 --grpc-port 50051 --mcp-port 3000
+devloop --mode gateway --http-port 8080 --grpc-port 50051 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:8080/projects`
+- ✅ HTTP API: `http://localhost:8080/api/projects`
 - ✅ gRPC API: `localhost:50051`
 - ✅ Agent management and coordination
-- ✅ MCP via stdio (if `--enable-mcp`)
-- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
+- ✅ MCP via HTTP/SSE: `http://localhost:8080/mcp/` (if `--enable-mcp`)
 - ❌ No direct file watching (agents do the watching)
 
 #### Agent Mode (`--mode agent --gateway-addr localhost:50051`)
 ```bash
-devloop --mode agent --gateway-addr localhost:50051 --mcp-port 3000
+devloop --mode agent --gateway-addr localhost:50051
 ```
 - ❌ No HTTP API endpoints (connects to gateway)
 - ❌ No direct gRPC API (uses gateway's API)
-- ✅ MCP via stdio (if `--enable-mcp`)
-- ✅ MCP via HTTP/SSE (if `--mcp-port` specified)
+- ❌ No MCP server (MCP only available in standalone/gateway modes)
 - ✅ File watching and rule execution
 - ✅ Reports to gateway
 
 **Quick Test Commands:**
 ```bash
 # Test standalone/gateway HTTP API
-curl http://localhost:8080/projects
+curl http://localhost:8080/api/projects
 
-# Test MCP HTTP endpoints (when --mcp-port specified)
-curl http://localhost:3000/sse
-curl http://localhost:3000/message
+# Test MCP HTTP endpoints (when --enable-mcp)
+curl http://localhost:8080/mcp/sse
+curl http://localhost:8080/mcp/message
 
 # Test if any devloop process is running
 ps aux | grep devloop

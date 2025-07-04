@@ -47,6 +47,7 @@ type GatewayService struct {
 	// gRPC server for devloop instances to connect to
 	grpcServer   *grpc.Server
 	httpServer   *http.Server
+	mainMux      *http.ServeMux // Main HTTP router for mounting handlers
 	orchestrator Orchestrator
 }
 
@@ -103,11 +104,20 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 		return fmt.Errorf("[gateway] Failed to register gateway: %v", err)
 	}
 
+	// Create main HTTP router with organized path prefixes
+	mainMux := http.NewServeMux()
+
+	// Mount gRPC gateway at /api prefix
+	mainMux.Handle("/api/", http.StripPrefix("/api", gwmux))
+
+	// Store mainMux for potential MCP mounting
+	gs.mainMux = mainMux
+
 	addr := fmt.Sprintf(":%d", httpPort)
 
 	gs.httpServer = &http.Server{
 		Addr:    addr,
-		Handler: gwmux,
+		Handler: mainMux,
 	}
 
 	// Start HTTP server in a goroutine
@@ -139,6 +149,18 @@ func (gs *GatewayService) Stop() {
 	}
 
 	utils.LogGateway("Gateway shut down gracefully.")
+}
+
+// MountMCPHandlers mounts MCP handlers at /mcp prefix
+func (gs *GatewayService) MountMCPHandlers(mcpHandler http.Handler) {
+	if gs.mainMux == nil {
+		utils.LogGateway("Cannot mount MCP handlers: HTTP server not started")
+		return
+	}
+
+	// Mount MCP handlers at /mcp prefix
+	gs.mainMux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
+	utils.LogGateway("MCP handlers mounted at /mcp prefix")
 }
 
 // Orchestrator is an interface that defines the methods that the gateway service needs to interact with the orchestrator.

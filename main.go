@@ -69,7 +69,7 @@ var version string
 var verbose bool
 
 // validateFlags checks flag combinations and warns about ignored flags
-func validateFlags(mode string, httpPort, grpcPort, mcpPort int, gatewayAddr string) {
+func validateFlags(mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP bool) {
 	log.Printf("[devloop] Starting in %s mode", mode)
 
 	switch mode {
@@ -81,28 +81,28 @@ func validateFlags(mode string, httpPort, grpcPort, mcpPort int, gatewayAddr str
 		if gatewayAddr == "" {
 			log.Printf("[devloop] WARNING: Agent mode typically requires --gateway-addr to connect to a gateway")
 		}
-		log.Printf("[devloop] Agent mode: File watching=YES, HTTP/gRPC servers=NO, MCP=%s", mcpStatus(mcpPort))
+		log.Printf("[devloop] Agent mode: File watching=YES, HTTP/gRPC servers=NO, MCP=%s", mcpStatus(enableMCP))
 
 	case "standalone":
 		if gatewayAddr != "" {
 			log.Printf("[devloop] WARNING: --gateway-addr is ignored in standalone mode")
 		}
-		log.Printf("[devloop] Standalone mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(mcpPort))
+		log.Printf("[devloop] Standalone mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(enableMCP))
 
 	case "gateway":
 		if gatewayAddr != "" {
 			log.Printf("[devloop] WARNING: --gateway-addr is ignored in gateway mode (this IS the gateway)")
 		}
-		log.Printf("[devloop] Gateway mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(mcpPort))
+		log.Printf("[devloop] Gateway mode: HTTP server=:%d, gRPC server=:%d, MCP=%s", httpPort, grpcPort, mcpStatus(enableMCP))
 
 	default:
 		log.Printf("[devloop] ERROR: Unknown mode '%s'. Valid modes: standalone, agent, gateway", mode)
 	}
 }
 
-func mcpStatus(mcpPort int) string {
-	if mcpPort > 0 {
-		return fmt.Sprintf("HTTP:%d", mcpPort)
+func mcpStatus(enableMCP bool) string {
+	if enableMCP {
+		return "enabled"
 	}
 	return "disabled"
 }
@@ -112,7 +112,6 @@ func main() {
 	var showVersion bool
 	var httpPort int
 	var grpcPort int
-	var mcpPort int
 	var gatewayAddr string
 	var mode string
 	var enableMCP bool
@@ -123,7 +122,6 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
 	flag.IntVar(&httpPort, "http-port", 8080, "Port for the HTTP gateway server.")
 	flag.IntVar(&grpcPort, "grpc-port", 50051, "Port for the gRPC server.")
-	flag.IntVar(&mcpPort, "mcp-port", 3000, "Port for the MCP server.")
 	flag.BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration.")
 	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50051). If set, devloop will register with the gateway.")
 	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
@@ -153,13 +151,13 @@ func main() {
 	}
 
 	// Validate flag combinations and warn about ignored flags
-	validateFlags(mode, httpPort, grpcPort, mcpPort, gatewayAddr)
+	validateFlags(mode, httpPort, grpcPort, gatewayAddr, enableMCP)
 
 	// Run the orchestrator in the selected mode
-	runOrchestrator(configPath, mode, httpPort, grpcPort, mcpPort, gatewayAddr, enableMCP)
+	runOrchestrator(configPath, mode, httpPort, grpcPort, gatewayAddr, enableMCP)
 }
 
-func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, gatewayAddr string, enableMCP bool) {
+func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAddr string, enableMCP bool) {
 	orchestrator, err := agent.NewOrchestratorV2(configPath, gatewayAddr)
 	if err != nil {
 		log.Fatalf("Error: Failed to initialize orchestrator: %v\n", err)
@@ -185,21 +183,23 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort, mcpPort int, g
 			log.Fatalf("Error: Failed to start gateway service: %v\n", err)
 		}
 		utils.LogDevloop("Gateway service started: HTTP=:%d, gRPC=:%d", httpPort, grpcPort)
+
+		// Mount MCP handlers on the gateway's HTTP server if enabled
+		if enableMCP {
+			utils.LogDevloop("Mounting MCP handlers on gateway HTTP server...")
+			mcpService = mcp.NewMCPService(orchestrator)
+			mcpHandler, err := mcpService.CreateHandler()
+			if err != nil {
+				log.Fatalf("Error: Failed to create MCP handler: %v\n", err)
+			}
+			gatewayService.MountMCPHandlers(mcpHandler)
+			utils.LogDevloop("MCP handlers mounted at http://localhost:%d/mcp/", httpPort)
+		}
 	} else {
 		utils.LogDevloop("Skipping HTTP/gRPC gateway service (not needed in %s mode)", mode)
-	}
-
-	// Start MCP server if enabled (can run alongside any core mode)
-	if enableMCP {
-		utils.LogDevloop("Starting MCP service with port %d...", mcpPort)
-		mcpService = mcp.NewMCPService(orchestrator, mcpPort)
-		err = mcpService.Start()
-		if err != nil {
-			log.Fatalf("Error: Failed to start MCP service: %v\n", err)
+		if enableMCP {
+			utils.LogDevloop("WARNING: MCP requires HTTP server (only available in standalone/gateway modes)")
 		}
-		utils.LogDevloop("MCP server enabled alongside %s mode", mode)
-	} else {
-		utils.LogDevloop("MCP server disabled (--enable-mcp=false)")
 	}
 
 	sigChan := make(chan os.Signal, 1)
