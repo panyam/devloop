@@ -42,7 +42,7 @@ import (
 	"log"
 
 	"github.com/panyam/devloop/gateway"
-	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // SelectiveGatewayAdapter exposes only essential devloop operations as MCP tools

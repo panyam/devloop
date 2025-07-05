@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/panyam/devloop/utils"
 )
 

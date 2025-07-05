@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // LogManager manages log files and provides streaming capabilities.

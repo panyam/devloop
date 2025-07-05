@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/panyam/devloop/gateway"
-	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // RuleRunner manages the execution lifecycle of a single rule

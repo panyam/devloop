@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	pb "github.com/panyam/devloop/gen/go/protos/devloop/v1"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // handleGetConfigRequest handles a GetConfig request from the gateway.

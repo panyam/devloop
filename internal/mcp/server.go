@@ -5,15 +5,15 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/panyam/devloop/gateway"
-	v1mcp "github.com/panyam/devloop/gen/go/protos/devloop/v1/v1mcp"
+	v1mcp "github.com/panyam/devloop/gen/go/devloop/v1/v1mcp"
 	"github.com/panyam/devloop/utils"
 )
 
 // MCPService manages the MCP server for devloop
 type MCPService struct {
-	mcpServer         *server.MCPServer
-	streamableServer  *server.StreamableHTTPServer
-	orchestrator      gateway.Orchestrator
+	mcpServer        *server.MCPServer
+	streamableServer *server.StreamableHTTPServer
+	orchestrator     gateway.Orchestrator
 }
 
 // NewMCPService creates a new MCP service instance
@@ -39,8 +39,8 @@ func (m *MCPService) CreateHandler() (http.Handler, error) {
 	// Create StreamableHTTP server for HTTP transport (MCP 2025-03-26 spec)
 	// Use stateless mode to avoid sessionId requirement for better compatibility
 	m.streamableServer = server.NewStreamableHTTPServer(m.mcpServer,
-		server.WithStateLess(true),           // Stateless mode - no sessionId required
-		server.WithEndpointPath("/mcp"),      // Single endpoint for all MCP operations
+		server.WithStateLess(true),      // Stateless mode - no sessionId required
+		server.WithEndpointPath("/mcp"), // Single endpoint for all MCP operations
 	)
 
 	utils.LogMCP("MCP handler created successfully")

@@ -2,11 +2,12 @@ syntax = "proto3";
 
 package devloop_gateway.v1;
 
-option go_package = "github.com/panyam/devloop/gen/go/protos/devloop/v1";
+option go_package = "github.com/panyam/devloop/gen/go/devloop/v1";
 
 import "google/api/annotations.proto";
 import "google/api/http.proto";
 import "google/protobuf/empty.proto";
+import "mcp/v1/annotations.proto";
 
 // ProjectInfo represents the information about a registered devloop project.
 // This contains the core identification and location data for a project.
@@ -235,6 +236,7 @@ service GatewayClientService {
   // 4. Use TriggerRuleClient(project_id, rule_name) to run builds/tests
   //
   // Returns: List of projects with their IDs, paths, and connection status
+  // mcp_tool_name:list_projects
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
     option (google.api.http) = {
       get: "/projects"
@@ -257,6 +259,7 @@ service GatewayClientService {
   //
   // Response Format: JSON string containing the complete .devloop.yaml content
   // with resolved settings and rule definitions.
+  // mcp_tool_name:get_config
   rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/config"
@@ -279,6 +282,7 @@ service GatewayClientService {
   // - Debug why a rule isn't executing
   //
   // Returns: Detailed status including timing and execution results
+  // mcp_tool_name:get_rule_status
   rpc GetRuleStatus(GetRuleStatusRequest) returns (GetRuleStatusResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/status/{rule_name}"
@@ -302,6 +306,7 @@ service GatewayClientService {
   //
   // Returns: Immediate response indicating if trigger was accepted
   // Use GetRuleStatus() to monitor actual execution progress
+  // mcp_tool_name:trigger_rule
   rpc TriggerRuleClient(TriggerRuleClientRequest) returns (TriggerRuleClientResponse) {
     option (google.api.http) = {
       post: "/projects/{project_id}/trigger/{rule_name}"
@@ -323,6 +328,7 @@ service GatewayClientService {
   // - Analyze project structure and dependencies
   //
   // Returns: Array of glob patterns currently being watched
+  // mcp_tool_name:list_watched_paths
   rpc ListWatchedPaths(ListWatchedPathsRequest) returns (ListWatchedPathsResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/watched-paths"
@@ -346,6 +352,7 @@ service GatewayClientService {
   //
   // Security: Only files within the project root are accessible
   // Returns: Raw file content as bytes
+  // mcp_tool_name:read_file_content
   rpc ReadFileContent(ReadFileContentRequest) returns (ReadFileContentResponse) {
     option (google.api.http) = {
       get: "/projects/{project_id}/file-content"

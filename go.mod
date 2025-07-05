@@ -23,6 +23,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/redpanda-data/protoc-gen-go-mcp v0.0.0-20250614184940-a304d5967ba0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
@@ -31,3 +32,6 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 )
+
+// This is needed till the custom tool names annotations PR (#16) is merged
+replace github.com/redpanda-data/protoc-gen-go-mcp v0.0.0-20250614184940-a304d5967ba0 => ./locallinks/protoc-gen-go-mcp/
