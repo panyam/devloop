@@ -1,8 +1,19 @@
+settings:
+  project_id: "devloop"
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 15
+
 rules:
-  - name: "Test Echo Rule"
+  # Go Backend Development & Testing
+  - name: "backend"
+    color: "blue"
     watch:
-      - action: include
+      - action: "include"
         patterns:
-          - "test_trigger.txt"
+          - "**/*.go"
+          - "go.mod"
+          - "go.sum"
     commands:
-      - "echo 'Test Echo Rule triggered by test_trigger.txt!'"
+      - "echo '🔧 Building Devloop Binary into GOBIN...'"
+      - "go install main.go"
