@@ -32,11 +32,11 @@ Multiple separate daemon processes (each watching their own project components) 
 
 ```bash
 # Start the central gateway
-devloop --mode gateway --http-port 8080 --grpc-port 50051
+devloop --mode gateway --http-port 9999 --grpc-port 55555
 
 # Connect individual project daemons to the gateway
-devloop --mode agent --gateway-addr localhost:50051 -c project-a/.devloop.yaml
-devloop --mode agent --gateway-addr localhost:50051 -c project-b/.devloop.yaml
+devloop --mode agent --gateway-addr localhost:55555 -c project-a/.devloop.yaml
+devloop --mode agent --gateway-addr localhost:55555 -c project-b/.devloop.yaml
 ```
 
 **Use Case:** Microservices, monorepos, multi-project development with centralized monitoring.
@@ -94,7 +94,6 @@ The `examples/` directory contains comprehensive real-world examples demonstrati
 | **[03-python-datascience](examples/03-python-datascience/)** | Data science workflow with notebooks, training, and testing | Python, Jupyter, pytest, ML | Data analysis and machine learning development |
 | **[04-docker-compose](examples/04-docker-compose/)** | Multi-container development with orchestrated services | Docker, PostgreSQL, Redis, React, Go, Python | Containerized application development |
 | **[05-frontend-framework](examples/05-frontend-framework/)** | Modern frontend development with multiple frameworks | React, Vue.js, TypeScript, Storybook, Vite | Component-driven frontend development |
-| **[06-ai-ml-development](examples/06-ai-ml-development/)** | Advanced ML pipeline with experiment tracking and serving | MLflow, PyTorch, TensorFlow, FastAPI, Jupyter | MLOps and production machine learning |
 
 ### Quick Start with Examples
 
@@ -122,7 +121,6 @@ make run
 
 - **Beginner**: Examples 1-3 demonstrate core devloop concepts
 - **Intermediate**: Examples 4-5 show advanced orchestration patterns  
-- **Advanced**: Example 6 illustrates enterprise-grade ML workflows
 
 Each example builds upon the concepts from previous ones, so we recommend exploring them in order if you're new to devloop.
 
@@ -356,7 +354,7 @@ Devloop provides both gRPC and REST APIs for monitoring and control. The REST AP
 
 ### REST API Endpoints
 
-Base URL: `http://localhost:8080` (default gateway port)
+Base URL: `http://localhost:9999` (default gateway port)
 
 #### List All Projects
 ```http
@@ -464,7 +462,7 @@ Server-sent events stream for real-time logs.
 ```
 data: {"projectId":"backend","ruleName":"api","line":"Starting server...","timestamp":"1704092400000"}
 
-data: {"projectId":"backend","ruleName":"api","line":"Server listening on :8080","timestamp":"1704092401000"}
+data: {"projectId":"backend","ruleName":"api","line":"Server listening on :9999","timestamp":"1704092401000"}
 ```
 
 #### Get Historical Logs
@@ -514,11 +512,11 @@ service GatewayClientService {
 #### JavaScript/TypeScript
 ```javascript
 // Fetch all projects
-const response = await fetch('http://localhost:8080/api/projects');
+const response = await fetch('http://localhost:9999/api/projects');
 const data = await response.json();
 
 // Stream logs using EventSource
-const events = new EventSource('http://localhost:8080/api/projects/backend/stream/logs/api');
+const events = new EventSource('http://localhost:9999/api/projects/backend/stream/logs/api');
 events.onmessage = (event) => {
   const log = JSON.parse(event.data);
   console.log(`[${log.ruleName}] ${log.line}`);
@@ -531,11 +529,11 @@ import requests
 import sseclient
 
 # Get rule status
-response = requests.get('http://localhost:8080/api/projects/backend/status/api')
+response = requests.get('http://localhost:9999/api/projects/backend/status/api')
 status = response.json()
 
 # Stream logs
-response = requests.get('http://localhost:8080/api/projects/backend/stream/logs/api', stream=True)
+response = requests.get('http://localhost:9999/api/projects/backend/stream/logs/api', stream=True)
 client = sseclient.SSEClient(response)
 for event in client.events():
     log = json.loads(event.data)
@@ -545,7 +543,7 @@ for event in client.events():
 #### Go
 ```go
 // Using the generated gRPC client
-conn, _ := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+conn, _ := grpc.NewClient("localhost:55555", grpc.WithTransportCredentials(insecure.NewCredentials()))
 client := pb.NewGatewayClientServiceClient(conn)
 
 // List projects
@@ -575,7 +573,7 @@ Model Context Protocol (MCP) is a standard that allows AI assistants to interact
 
 ```bash
 # Start gateway with MCP server enabled
-devloop --mode gateway --http-port 8080 --grpc-port 50051 --enable-mcp
+devloop --mode gateway --http-port 9999 --grpc-port 55555 --enable-mcp
 ```
 
 #### 2. Configure MCP Server Settings
@@ -609,7 +607,7 @@ Create `mcp-config.json`:
 
 ```bash
 # In each project directory
-devloop --mode agent --gateway-addr localhost:50051 \
+devloop --mode agent --gateway-addr localhost:55555 \
         -c .devloop.yaml
 ```
 
@@ -828,26 +826,26 @@ Different devloop modes provide different endpoints and capabilities:
 
 #### Standalone Mode (`--mode standalone`)
 ```bash
-devloop --mode standalone --http-port 8080 --grpc-port 50051 --enable-mcp
+devloop --mode standalone --http-port 9999 --grpc-port 55555 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:8080/api/projects`
-- ✅ gRPC API: `localhost:50051` 
-- ✅ MCP via HTTP/SSE: `http://localhost:8080/mcp/` (if `--enable-mcp`)
+- ✅ HTTP API: `http://localhost:9999/api/projects`
+- ✅ gRPC API: `localhost:55555` 
+- ✅ MCP via HTTP/SSE: `http://localhost:9999/mcp/` (if `--enable-mcp`)
 - ✅ File watching and rule execution
 
 #### Gateway Mode (`--mode gateway`)
 ```bash
-devloop --mode gateway --http-port 8080 --grpc-port 50051 --enable-mcp
+devloop --mode gateway --http-port 9999 --grpc-port 55555 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:8080/api/projects`
-- ✅ gRPC API: `localhost:50051`
+- ✅ HTTP API: `http://localhost:9999/api/projects`
+- ✅ gRPC API: `localhost:55555`
 - ✅ Agent management and coordination
-- ✅ MCP via HTTP/SSE: `http://localhost:8080/mcp/` (if `--enable-mcp`)
+- ✅ MCP via HTTP/SSE: `http://localhost:9999/mcp/` (if `--enable-mcp`)
 - ❌ No direct file watching (agents do the watching)
 
-#### Agent Mode (`--mode agent --gateway-addr localhost:50051`)
+#### Agent Mode (`--mode agent --gateway-addr localhost:55555`)
 ```bash
-devloop --mode agent --gateway-addr localhost:50051
+devloop --mode agent --gateway-addr localhost:55555
 ```
 - ❌ No HTTP API endpoints (connects to gateway)
 - ❌ No direct gRPC API (uses gateway's API)
@@ -858,11 +856,11 @@ devloop --mode agent --gateway-addr localhost:50051
 **Quick Test Commands:**
 ```bash
 # Test standalone/gateway HTTP API
-curl http://localhost:8080/api/projects
+curl http://localhost:9999/api/projects
 
 # Test MCP HTTP endpoints (when --enable-mcp)
-curl http://localhost:8080/mcp/sse
-curl http://localhost:8080/mcp/message
+curl http://localhost:9999/mcp/sse
+curl http://localhost:9999/mcp/message
 
 # Test if any devloop process is running
 ps aux | grep devloop
@@ -883,8 +881,8 @@ curl http://localhost:3000/sse        # MCP SSE endpoint
 curl http://localhost:3000/message    # MCP message endpoint
 
 # Test regular HTTP API endpoints (only available in standalone/gateway mode)
-curl http://localhost:8080/projects   # If running --mode standalone
-curl http://localhost:8080/projects   # If running --mode gateway
+curl http://localhost:9999/projects   # If running --mode standalone
+curl http://localhost:9999/projects   # If running --mode gateway
 
 # MCP communication:
 # - stdio: For process-launched clients
@@ -930,7 +928,7 @@ devloop -c .devloop.yaml
 To connect to a gateway:
 
 ```bash
-devloop --mode agent --gateway-addr localhost:50051 -c .devloop.yaml
+devloop --mode agent --gateway-addr localhost:55555 -c .devloop.yaml
 ```
 
 ### Running in Gateway Mode
@@ -938,10 +936,10 @@ devloop --mode agent --gateway-addr localhost:50051 -c .devloop.yaml
 To start a central gateway:
 
 ```bash
-devloop --mode gateway --gateway-port 8080
+devloop --mode gateway --gateway-port 9999
 ```
 
-The gateway will accept connections from agents and provide a unified interface at `http://localhost:8080`.
+The gateway will accept connections from agents and provide a unified interface at `http://localhost:9999`.
 
 ### Subcommands
 
@@ -1085,7 +1083,7 @@ rules:
            patterns: ["cmd/api/**/*.go", "internal/**/*.go"]
        commands:
          - "go build -o bin/api ./cmd/api"
-         - "bin/api --port 8080"
+         - "bin/api --port 9999"
    
      - name: "Worker"
        prefix: "worker"
@@ -1190,15 +1188,15 @@ To stop `devloop` gracefully, press `Ctrl+C` (SIGINT). `devloop` will attempt to
 - Ensure proper debouncing is working
 
 #### 5. Port Already in Use
-**Error:** `listen tcp :8080: bind: address already in use`
+**Error:** `listen tcp :9999: bind: address already in use`
 
 **Solutions:**
-- Kill existing processes: `lsof -ti:8080 | xargs kill -9`
+- Kill existing processes: `lsof -ti:9999 | xargs kill -9`
 - Use different ports for different rules
 - Implement port checking in your startup scripts:
   ```bash
   commands:
-    - "kill $(lsof -ti:8080) || true"
+    - "kill $(lsof -ti:9999) || true"
     - "npm start"
   ```
 
@@ -1231,7 +1229,7 @@ To stop `devloop` gracefully, press `Ctrl+C` (SIGINT). `devloop` will attempt to
 **Error:** `Failed to connect to gateway`
 
 **Solutions:**
-- Verify gateway is running: `curl http://gateway-host:8080/projects`
+- Verify gateway is running: `curl http://gateway-host:9999/projects`
 - Check network connectivity: `ping gateway-host`
 - Ensure correct gateway address format: `--gateway-addr host:port` (note: it's `gateway-addr`, not `gateway-url`)
 - Check firewall rules allow connection
@@ -1463,11 +1461,11 @@ rules:
 #### 2. Microservices with Gateway
 ```bash
 # Central gateway
-devloop --mode gateway --gateway-port 8080
+devloop --mode gateway --gateway-port 9999
 
 # Each service
-cd service-a && devloop --mode agent --gateway-url localhost:8080
-cd service-b && devloop --mode agent --gateway-url localhost:8080
+cd service-a && devloop --mode agent --gateway-url localhost:9999
+cd service-b && devloop --mode agent --gateway-url localhost:9999
 ```
 
 #### 3. Development vs Production

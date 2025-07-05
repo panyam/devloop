@@ -106,7 +106,7 @@ func validateFlags(mode string, httpPort, grpcPort int, gatewayAddr string, enab
 	switch mode {
 	case "agent":
 		// Agent mode warnings
-		if httpPort != 9999 || grpcPort != 5555 {
+		if httpPort != 9999 || grpcPort != 50501 {
 			log.Printf("[devloop] WARNING: --http-port and --grpc-port are ignored in agent mode (no local HTTP/gRPC servers)")
 		}
 		if gatewayAddr == "" {
@@ -153,10 +153,10 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Display version information")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
 	flag.IntVar(&httpPort, "http-port", 9999, "Port for the HTTP gateway server.")
-	flag.IntVar(&grpcPort, "grpc-port", 5555, "Port for the gRPC server.")
+	flag.IntVar(&grpcPort, "grpc-port", 50501, "Port for the gRPC server.")
 	flag.BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration.")
 	flag.BoolVar(&autoPorts, "auto-ports", false, "Automatically find available ports if defaults are taken.")
-	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50051). If set, devloop will register with the gateway.")
+	flag.StringVar(&gatewayAddr, "gateway-addr", "", "Address of the devloop gateway service (e.g., localhost:50501). If set, devloop will register with the gateway.")
 	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
 
 	// Define subcommands
