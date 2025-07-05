@@ -25,12 +25,12 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import descriptor_pb2 as google_dot_protobuf_dot_descriptor__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18mcp/v1/annotations.proto\x12\x06mcp.v1\x1a google/protobuf/descriptor.proto:D\n\rmcp_tool_name\x12\x1e.google.protobuf.MethodOptions\x18\xd1\x86\x03 \x01(\tR\x0bmcpToolNameB\x94\x01\n\ncom.mcp.v1B\x10\x41nnotationsProtoP\x01Z;github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp\xa2\x02\x03MXX\xaa\x02\x06Mcp.V1\xca\x02\x06Mcp\\V1\xe2\x02\x12Mcp\\V1\\GPBMetadata\xea\x02\x07Mcp::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18mcp/v1/annotations.proto\x12\x06mcp.v1\x1a google/protobuf/descriptor.proto:D\n\rmcp_tool_name\x12\x1e.google.protobuf.MethodOptions\x18\xd1\x86\x03 \x01(\tR\x0bmcpToolNameB\x97\x01\n\ncom.mcp.v1B\x10\x41nnotationsProtoP\x01Z>github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp/v1\xa2\x02\x03MXX\xaa\x02\x06Mcp.V1\xca\x02\x06Mcp\\V1\xe2\x02\x12Mcp\\V1\\GPBMetadata\xea\x02\x07Mcp::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'mcp.v1.annotations_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'\n\ncom.mcp.v1B\020AnnotationsProtoP\001Z;github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp\242\002\003MXX\252\002\006Mcp.V1\312\002\006Mcp\\V1\342\002\022Mcp\\V1\\GPBMetadata\352\002\007Mcp::V1'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\ncom.mcp.v1B\020AnnotationsProtoP\001Z>github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp/v1\242\002\003MXX\252\002\006Mcp.V1\312\002\006Mcp\\V1\342\002\022Mcp\\V1\\GPBMetadata\352\002\007Mcp::V1'
 # @@protoc_insertion_point(module_scope)
