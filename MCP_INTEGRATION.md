@@ -51,21 +51,6 @@ curl -X POST -H "Content-Type: application/json" \
   http://localhost:9999/mcp/
 ```
 
-#### Other MCP Clients (stdio)
-Add to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "devloop": {
-      "command": "devloop",
-      "args": ["--grpc-port", "5555", "--http-port", "9999", "--enable-mcp", "-c", "/path/to/project/.devloop.yaml"],
-      "env": {}
-    }
-  }
-}
-```
-
 ## Available MCP Tools
 
 The following tools are auto-generated from devloop's Agent Service gRPC API definitions. Each tool includes comprehensive parameter validation and detailed documentation.
