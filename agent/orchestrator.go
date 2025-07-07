@@ -359,8 +359,68 @@ func (o *Orchestrator) ReadFileContent(path string) ([]byte, error) {
 
 // StreamLogs streams the logs for a given rule to the provided Writer
 func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
-	// Delegate to LogManager for actual log streaming
-	return o.LogManager.StreamLogs(ruleName, filter, writer)
+	// Check if rule exists
+	o.runnersMutex.RLock()
+	_, ruleExists := o.ruleRunners[ruleName]
+	o.runnersMutex.RUnlock()
+
+	if !ruleExists {
+		return fmt.Errorf("rule %q not found", ruleName)
+	}
+
+	// Check if log file exists
+	logFilePath := filepath.Join("./logs", fmt.Sprintf("%s.log", ruleName))
+	_, err := os.Stat(logFilePath)
+	logFileExists := err == nil
+
+	// Case 1: Log file exists - delegate to LogManager
+	if logFileExists {
+		return o.LogManager.StreamLogs(ruleName, filter, writer)
+	}
+
+	// Case 2: Log file doesn't exist - rule hasn't started yet
+	// Send waiting message and wait for rule to start with timeout
+	initialMsg := &pb.StreamLogsResponse{
+		Lines: []*pb.LogLine{
+			{
+				RuleName:  ruleName,
+				Line:      fmt.Sprintf("Waiting for rule '%s' to start...", ruleName),
+				Timestamp: time.Now().UnixMilli(),
+			},
+		},
+	}
+	if !writer.Send(initialMsg) {
+		return fmt.Errorf("failed to send initial message")
+	}
+
+	// Wait for log file to appear with timeout
+	timeout := time.After(30 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			timeoutMsg := &pb.StreamLogsResponse{
+				Lines: []*pb.LogLine{
+					{
+						RuleName:  ruleName,
+						Line:      fmt.Sprintf("Timeout waiting for rule '%s' to start", ruleName),
+						Timestamp: time.Now().UnixMilli(),
+					},
+				},
+			}
+			writer.Send(timeoutMsg)
+			return fmt.Errorf("timeout waiting for rule %q to start", ruleName)
+
+		case <-ticker.C:
+			_, err := os.Stat(logFilePath)
+			if err == nil {
+				// Log file now exists - delegate to LogManager for streaming
+				return o.LogManager.StreamLogs(ruleName, filter, writer)
+			}
+		}
+	}
 }
 
 // TriggerRule manually triggers the execution of a specific rule

@@ -1,34 +1,26 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/panyam/gocurrent"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // LogManager manages log files and provides streaming capabilities.
 type LogManager struct {
 	logDir string
-	// Mutex to protect access to ruleStates and file handles
+	// Mutex to protect access to finishedRules map
 	mu sync.Mutex
-	// Map to track the state of each rule's logging
-	ruleStates map[string]*ruleLogState
-}
-
-// ruleLogState holds the state for a single rule's logging
-type ruleLogState struct {
-	// Channel to signal when a rule's execution starts
-	started chan struct{}
-	// Channel to signal when a rule's execution finishes
-	finished chan struct{}
-	// The file handle for the current log file
-	file *os.File
-	// Mutex to protect access to the file handle and its offset
-	fileMu sync.Mutex
+	// Map to track which rules have finished execution
+	finishedRules map[string]bool
 }
 
 // NewLogManager creates a new LogManager instance.
@@ -37,48 +29,18 @@ func NewLogManager(logDir string) (*LogManager, error) {
 		return nil, fmt.Errorf("failed to create log directory %q: %w", logDir, err)
 	}
 	return &LogManager{
-		logDir:     logDir,
-		ruleStates: make(map[string]*ruleLogState),
+		logDir:        logDir,
+		finishedRules: make(map[string]bool),
 	}, nil
 }
 
 // GetWriter returns an io.Writer for a specific rule's log file.
-// It also signals that the rule's execution has started.
 func (lm *LogManager) GetWriter(ruleName string) (io.Writer, error) {
-	lm.mu.Lock()
-	defer lm.mu.Unlock()
-
-	state, ok := lm.ruleStates[ruleName]
-	if !ok {
-		state = &ruleLogState{
-			started:  make(chan struct{}),
-			finished: make(chan struct{}),
-		}
-		lm.ruleStates[ruleName] = state
-	}
-
-	state.fileMu.Lock()
-	if state.file != nil {
-		state.file.Close()
-	}
-
 	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
 	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		state.fileMu.Unlock()
 		return nil, fmt.Errorf("failed to open log file %q for rule %q: %w", logFilePath, ruleName, err)
 	}
-	state.file = file
-	state.fileMu.Unlock()
-
-	// Signal that the rule has started by closing the channel
-	select {
-	case <-state.started:
-		// Already closed
-	default:
-		close(state.started)
-	}
-
 	return file, nil
 }
 
@@ -86,96 +48,165 @@ func (lm *LogManager) GetWriter(ruleName string) (io.Writer, error) {
 func (lm *LogManager) SignalFinished(ruleName string) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
+	lm.finishedRules[ruleName] = true
+}
 
-	if state, ok := lm.ruleStates[ruleName]; ok {
-		// Signal that the rule has finished by closing the channel
-		select {
-		case <-state.finished:
-			// Already closed
-		default:
-			close(state.finished)
+// StreamLogs streams logs for a given rule to the provided gocurrent Writer.
+func (lm *LogManager) StreamLogs(ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+	// Check if log file exists
+	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
+	_, err := os.Stat(logFilePath)
+	if err != nil {
+		return fmt.Errorf("log file not found for rule %q", ruleName)
+	}
+
+	// Check if rule has finished
+	lm.mu.Lock()
+	ruleFinished := lm.finishedRules[ruleName]
+	lm.mu.Unlock()
+
+	if ruleFinished {
+		// Rule has finished - stream all content and exit
+		return lm.streamFinishedLogs(logFilePath, ruleName, filter, writer)
+	} else {
+		// Rule is still running - stream in real-time
+		return lm.streamLiveLogs(logFilePath, ruleName, filter, writer)
+	}
+}
+
+// streamFinishedLogs streams all logs for a rule that has finished execution
+func (lm *LogManager) streamFinishedLogs(logFilePath, ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+	file, err := os.Open(logFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for streaming: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n") // Remove trailing newline
+			if filter == "" || contains(line, filter) {
+				response := &pb.StreamLogsResponse{
+					Lines: []*pb.LogLine{
+						{
+							RuleName:  ruleName,
+							Line:      line,
+							Timestamp: time.Now().UnixMilli(),
+						},
+					},
+				}
+				if !writer.Send(response) {
+					return fmt.Errorf("failed to send log line")
+				}
+			}
 		}
-		if state.file != nil {
-			state.file.Close()
-			state.file = nil
+		if err == io.EOF {
+			// Send final completion message
+			finalMsg := &pb.StreamLogsResponse{
+				Lines: []*pb.LogLine{
+					{
+						RuleName:  ruleName,
+						Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
+						Timestamp: time.Now().UnixMilli(),
+					},
+				},
+			}
+			writer.Send(finalMsg)
+			return nil
+		}
+		if err != nil {
+			return err
 		}
 	}
 }
 
-// StreamLogs streams logs for a given rule to the provided gRPC stream.
-func (lm *LogManager) StreamLogs(ruleName, filter string /*, stream pb.AgentService_StreamLogsClientServer*/) error {
-	/*
+// streamLiveLogs streams logs for a rule that is currently running
+func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+	file, err := os.Open(logFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for streaming: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+
+	for {
+		// Check if rule has finished (without blocking)
 		lm.mu.Lock()
-		state, ok := lm.ruleStates[ruleName]
-		if !ok {
-			lm.mu.Unlock()
-			return fmt.Errorf("no state found for rule: %s", ruleName)
-		}
+		ruleFinished := lm.finishedRules[ruleName]
 		lm.mu.Unlock()
 
-		// Wait for the rule to start. This is important for realtime streaming.
-		select {
-		case <-state.started:
-		case <-stream.Context().Done():
-			return stream.Context().Err()
-		}
-
-		logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
-		file, err := os.Open(logFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to open log file for streaming: %w", err)
-		}
-		defer file.Close()
-
-		reader := bufio.NewReader(file)
-
-		for {
-			select {
-			case <-stream.Context().Done():
-				return stream.Context().Err()
-			case <-state.finished:
-				// Rule is finished. Drain any remaining content from the reader and exit.
-				for {
-					line, err := reader.ReadString('\n')
-					if len(line) > 0 {
-						if filter == "" || contains(line, filter) {
-							if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
-								return sendErr
-							}
+		if ruleFinished {
+			// Rule finished while we were streaming - drain remaining content
+			for {
+				line, err := reader.ReadString('\n')
+				if len(line) > 0 {
+					line = strings.TrimSuffix(line, "\n")
+					if filter == "" || contains(line, filter) {
+						response := &pb.StreamLogsResponse{
+							Lines: []*pb.LogLine{
+								{
+									RuleName:  ruleName,
+									Line:      line,
+									Timestamp: time.Now().UnixMilli(),
+								},
+							},
+						}
+						if !writer.Send(response) {
+							return fmt.Errorf("failed to send log line")
 						}
 					}
-					if err == io.EOF {
-						return nil // Successfully drained and finished.
-					}
-					if err != nil {
-						return err // Return other errors.
-					}
 				}
-			default:
-				line, err := reader.ReadString('\n')
 				if err == io.EOF {
-					// If we're at the end of the file, check if the rule is finished.
-					select {
-					case <-state.finished:
-						return nil
-					default:
-						// Rule is not finished, so wait for more content.
-						time.Sleep(100 * time.Millisecond)
-						continue
+					// Send completion message and exit
+					finalMsg := &pb.StreamLogsResponse{
+						Lines: []*pb.LogLine{
+							{
+								RuleName:  ruleName,
+								Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
+								Timestamp: time.Now().UnixMilli(),
+							},
+						},
 					}
+					writer.Send(finalMsg)
+					return nil
 				}
 				if err != nil {
 					return err
 				}
-				if filter == "" || contains(line, filter) {
-					if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
-						return sendErr
-					}
+			}
+		}
+
+		// Try to read a line
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			if filter == "" || contains(line, filter) {
+				response := &pb.StreamLogsResponse{
+					Lines: []*pb.LogLine{
+						{
+							RuleName:  ruleName,
+							Line:      line,
+							Timestamp: time.Now().UnixMilli(),
+						},
+					},
+				}
+				if !writer.Send(response) {
+					return fmt.Errorf("failed to send log line")
 				}
 			}
 		}
-	*/
-	return nil
+		if err == io.EOF {
+			// At end of file but rule is still running - wait and try again
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
 
 // contains is a helper for basic string filtering.
@@ -183,21 +214,9 @@ func contains(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// Close closes all open file handles managed by the LogManager.
+// Close closes the LogManager and cleans up resources.
 func (lm *LogManager) Close() error {
-	lm.mu.Lock()
-	defer lm.mu.Unlock()
-
-	var firstErr error
-	for _, state := range lm.ruleStates {
-		if state.file != nil {
-			if err := state.file.Close(); err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				log.Printf("Error closing log file for rule: %v", err)
-			}
-		}
-	}
-	return firstErr
+	// With simplified design, we don't manage open file handles
+	// Individual file operations open/close their own handles
+	return nil
 }
