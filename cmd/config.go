@@ -36,8 +36,8 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	
-	configCmd.Flags().StringVarP(&configOutputFormat, "format", "f", "json", "Output format (json, yaml)")
+
+	configCmd.Flags().StringVarP(&configOutputFormat, "format", "f", "yaml", "Output format (json, yaml)")
 	configCmd.Flags().StringVarP(&configServerAddr, "server", "s", "localhost:5555", "Server address (host:port)")
 }
 
