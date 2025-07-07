@@ -4,13 +4,11 @@ import (
 	"context"
 	"log"
 
-	// "strings"
-
+	"github.com/panyam/gocurrent"
 	protos "github.com/panyam/devloop/gen/go/devloop/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	// tspb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type AgentService struct {
@@ -59,7 +57,33 @@ func (s *AgentService) ListWatchedPaths(ctx context.Context, req *protos.ListWat
 }
 
 func (s *AgentService) StreamLogs(req *protos.StreamLogsRequest, stream grpc.ServerStreamingServer[protos.StreamLogsResponse]) error {
-	return nil
+	log.Printf("[devloop] Received StreamLogs request for rule %q with filter %q", req.GetRuleName(), req.GetFilter())
+
+	// Create a gocurrent Writer that forwards messages to the gRPC stream
+	writer := gocurrent.NewWriter(func(response *protos.StreamLogsResponse) error {
+		return stream.Send(response)
+	})
+	defer writer.Stop()
+
+	// Call the orchestrator's StreamLogs method with our writer
+	err := s.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), writer)
+	if err != nil {
+		log.Printf("[devloop] Error streaming logs: %v", err)
+		return status.Errorf(codes.Internal, "failed to stream logs: %v", err)
+	}
+
+	// Wait for the writer to complete (or for context cancellation)
+	select {
+	case <-stream.Context().Done():
+		log.Printf("[devloop] StreamLogs cancelled by client")
+		return stream.Context().Err()
+	case err := <-writer.ClosedChan():
+		log.Printf("[devloop] StreamLogs writer closed")
+		if err != nil {
+			return status.Errorf(codes.Internal, "writer error: %v", err)
+		}
+		return nil
+	}
 }
 
 func (s *AgentService) TriggerRule(ctx context.Context, req *protos.TriggerRuleRequest) (resp *protos.TriggerRuleResponse, err error) {

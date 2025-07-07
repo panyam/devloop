@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/panyam/gocurrent"
 
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/panyam/devloop/utils"
@@ -356,9 +357,29 @@ func (o *Orchestrator) ReadFileContent(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// StreamLogs streams the logs for a given rule to the provided gRPC stream
-func (o *Orchestrator) StreamLogs(ruleName string, filter string /* , stream pb.GatewayClientService_StreamLogsClientServer*/) error {
-	return o.LogManager.StreamLogs(ruleName, filter)
+// StreamLogs streams the logs for a given rule to the provided Writer
+func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+	// For now, return a stub implementation that sends a test message
+	// TODO: Implement actual log streaming from LogManager
+	
+	// Create a test log response
+	response := &pb.StreamLogsResponse{
+		Lines: []*pb.LogLine{
+			{
+				ProjectId: o.projectID,
+				RuleName:  ruleName,
+				Line:      fmt.Sprintf("Starting log stream for rule '%s' with filter '%s'", ruleName, filter),
+				Timestamp: time.Now().UnixMilli(),
+			},
+		},
+	}
+	
+	// Send the test message to the writer
+	if !writer.Send(response) {
+		return fmt.Errorf("failed to send log message to writer")
+	}
+	
+	return nil
 }
 
 // TriggerRule manually triggers the execution of a specific rule
