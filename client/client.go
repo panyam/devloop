@@ -111,6 +111,19 @@ func (c *Client) ListWatchedPaths() ([]string, error) {
 	return resp.Paths, nil
 }
 
+// StreamLogs streams real-time logs for a specific rule
+func (c *Client) StreamLogs(ruleName, filter string) (pb.AgentService_StreamLogsClient, error) {
+	stream, err := c.client.StreamLogs(c.ctx, &pb.StreamLogsRequest{
+		RuleName: ruleName,
+		Filter:   filter,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to start log stream for rule %q: %w", ruleName, err)
+	}
+
+	return stream, nil
+}
+
 // Ping tests connectivity to the devloop server
 func (c *Client) Ping() error {
 	ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
