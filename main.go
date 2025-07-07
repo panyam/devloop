@@ -145,8 +145,8 @@ func main() {
 	flag.StringVar(&configPath, "c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 	flag.BoolVar(&showVersion, "version", false, "Display version information")
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
-	flag.IntVar(&grpcPort, "grpc-port", 9999, "Port for the gRPC server.  If the port is not specified (ie -1) then the gRPC server will not be started.  If port is 0 then an available port is found")
-	flag.IntVar(&httpPort, "http-port", 50051, "Port for the HTTP gateway server.  If the port is not specified (ie -1) or the grpc port is not specified then the http gateway will not be started.  If port is 0 then an available port is found.")
+	flag.IntVar(&grpcPort, "grpc-port", 50051, "Port for the gRPC server.  If the port is not specified (ie -1) then the gRPC server will not be started.  If port is 0 then an available port is found")
+	flag.IntVar(&httpPort, "http-port", 9999, "Port for the HTTP gateway server.  If the port is not specified (ie -1) or the grpc port is not specified then the http gateway will not be started.  If port is 0 then an available port is found.")
 	flag.StringVar(&gatewayAddress, "gateway", "", "Host and port of the gateway to connect to to expose the agent.")
 	flag.BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration.  The grpc sever MUST be started for MCP to be active")
 	flag.StringVar(&mode, "mode", "standalone", "Operating mode: standalone, agent, or gateway")
@@ -375,7 +375,12 @@ func startHttpServer(orchestrator *agent.Orchestrator, ctx context.Context, http
 			panic(err)
 		}
 	}()
-	srvErr <- server.ListenAndServe()
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Printf("http server failed to serve: %v", err)
+			srvErr <- err // Send error to the main app routine
+		}
+	}()
 	return nil
 }
 
