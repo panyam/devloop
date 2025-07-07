@@ -225,7 +225,7 @@ func runOrchestrator(configPath, mode string, httpPort, grpcPort int, gatewayAdd
 		}
 
 		utils.LogDevloop("Starting HTTP/gRPC gateway service...")
-		gatewayService = gateway.NewGatewayService(orchestrator)
+		gatewayService = gateway.NewGatewayService(orchestrator, mode)
 		err = gatewayService.Start(grpcPort, httpPort)
 		if err != nil {
 			log.Fatalf("Error: Failed to start gateway service: %v\n", err)

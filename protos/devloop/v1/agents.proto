@@ -1,0 +1,291 @@
+syntax = "proto3";
+package devloop.v1;
+
+option go_package = "github.com/panyam/devloop/gen/go/devloop/v1";
+
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/protobuf/empty.proto";
+import "mcp/v1/annotations.proto";
+import "devloop/v1/models.proto";
+
+// AgentService defines the gRPC service for clients to interact with
+// devloop projects for automated development workflows and monitoring.
+//
+// Common Workflow Patterns:
+// 1. Discovery: ListProjects() -> GetConfig(project_id) -> understand available rules
+// 2. Build/Test: TriggerRuleClient(project_id, rule_name) -> GetRuleStatus() -> monitor progress
+// 3. Debugging: GetRuleStatus() -> ReadFileContent() -> analyze issues
+// 4. Monitoring: ListWatchedPaths() -> understand what files trigger rebuilds
+service AgentService {
+  // Retrieve the complete devloop configuration for a project to understand
+  // available rules, commands, file watch patterns, and project settings.
+  //
+  // Essential information provided:
+  // - Available build/test rules (rules[].name)
+  // - Commands executed by each rule (rules[].commands)
+  // - File patterns that trigger each rule (rules[].watch patterns)
+  // - Project settings like colors, logging, debouncing
+  //
+  // Usage Examples:
+  // - Discover available rules: Parse rules[].name from response
+  // - Find test commands: Look for rules with "test" in name or commands
+  // - Understand file triggers: Examine rules[].watch.patterns
+  //
+  // Response Format: JSON string containing the complete .devloop.yaml content
+  // with resolved settings and rule definitions.
+  // mcp_tool_name:get_config
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/config"
+    };
+  }
+
+  // Get the current execution status and history of a specific rule.
+  // Use this to monitor build/test progress and check for failures.
+  //
+  // Status Information Provided:
+  // - Whether the rule is currently running
+  // - When the current/last execution started
+  // - Result of the last execution (SUCCESS, FAILED, RUNNING, IDLE)
+  // - Execution history timestamps
+  //
+  // Common Use Cases:
+  // - Check if a build is still running after triggering
+  // - Verify if tests passed or failed
+  // - Monitor long-running development servers
+  // - Debug why a rule isn't executing
+  //
+  // Returns: Detailed status including timing and execution results
+  // mcp_tool_name:get_rule_status
+  rpc GetRuleStatus(GetRuleStatusRequest) returns (GetRuleStatusResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/status/{rule_name}"
+    };
+  }
+
+  // Manually execute a specific rule to run builds, tests, or other commands.
+  // This bypasses file watching and immediately starts the rule's command sequence.
+  //
+  // Trigger Behavior:
+  // - Terminates any currently running instance of the rule
+  // - Executes all commands in the rule definition sequentially
+  // - Updates rule status to RUNNING, then SUCCESS/FAILED based on results
+  // - Generates log output that can be retrieved via streaming endpoints
+  //
+  // Common Use Cases:
+  // - Run builds on demand ("trigger the backend build")
+  // - Execute test suites ("run the test rule")
+  // - Restart development servers ("trigger the dev-server rule")
+  // - Force regeneration ("trigger the protobuf rule")
+  //
+  // Returns: Immediate response indicating if trigger was accepted
+  // Use GetRuleStatus() to monitor actual execution progress
+  // mcp_tool_name:trigger_rule
+  rpc TriggerRuleClient(TriggerRuleClientRequest) returns (TriggerRuleClientResponse) {
+    option (google.api.http) = {
+      post: "/projects/{project_id}/trigger/{rule_name}"
+    };
+  }
+
+  // List all file glob patterns being monitored by a project for automatic rule triggering.
+  // Use this to understand what files cause rebuilds and which rules will execute.
+  //
+  // Pattern Information:
+  // - All include/exclude patterns from all rules combined
+  // - Glob syntax: **/*.go, src/**/*.js, **/test_*.py, etc.
+  // - Patterns are resolved relative to the project root
+  //
+  // Common Use Cases:
+  // - Understand what file changes trigger builds
+  // - Debug why edits aren't triggering rules
+  // - Plan file organization to optimize build triggers
+  // - Analyze project structure and dependencies
+  //
+  // Returns: Array of glob patterns currently being watched
+  // mcp_tool_name:list_watched_paths
+  rpc ListWatchedPaths(ListWatchedPathsRequest) returns (ListWatchedPathsResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/watched-paths"
+    };
+  }
+
+  // Read and return the content of a specific file within a devloop project.
+  // Provides secure access to project files for analysis and debugging.
+  //
+  // File Access:
+  // - Paths are relative to the project root directory
+  // - Access is restricted to files within the project
+  // - Supports text and binary files
+  // - No path traversal (../) allowed for security
+  //
+  // Common Use Cases:
+  // - Read configuration files (.devloop.yaml, package.json, go.mod)
+  // - Analyze source code for debugging build failures
+  // - Examine log files generated by rules
+  // - Inspect test output and error messages
+  //
+  // Security: Only files within the project root are accessible
+  // Returns: Raw file content as bytes
+  // mcp_tool_name:read_file_content
+  rpc ReadFileContent(ReadFileContentRequest) returns (ReadFileContentResponse) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/file-content"
+    };
+  }
+
+  // Stream real-time logs for a specific rule in a project.
+  rpc StreamLogsClient(StreamLogsClientRequest) returns (stream LogLine) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/stream/logs/{rule_name}"
+    };
+  }
+
+  // Retrieve historical logs for a specific rule, with optional time filtering.
+  rpc GetHistoricalLogsClient(GetHistoricalLogsClientRequest) returns (stream LogLine) {
+    option (google.api.http) = {
+      get: "/projects/{project_id}/historical-logs/{rule_name}"
+    };
+  }
+}
+
+// UpdateRuleStatusRequest is sent by devloop to update a rule's status.
+message UpdateRuleStatusRequest {
+  RuleStatus rule_status = 1;
+}
+
+// TriggerRuleRequest is sent by the gateway to devloop to trigger a rule.
+message TriggerRuleRequest {
+  string project_id = 1;
+  string rule_name = 2;
+}
+
+// GetHistoricalLogsRequest is sent by the gateway to devloop to request historical logs.
+message GetHistoricalLogsRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+  int64 start_time = 4; // Unix timestamp in milliseconds, for logs after this time
+  int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
+}
+
+// GetConfigRequest retrieves the complete configuration for a specific project.
+message GetConfigRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  // Examples: "my-backend", "frontend-app", "user-service"
+  string project_id = 1;
+}
+
+// GetRuleStatusRequest retrieves the execution status of a specific rule.
+message GetRuleStatusRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  string project_id = 1;
+  
+  // Required: The name of the rule to check status for.
+  // Must match a rule name from GetConfig() response (rules[].name).
+  // Examples: "backend", "frontend", "tests", "build"
+  string rule_name = 2;
+}
+
+// ListWatchedPathsRequest retrieves all file patterns being monitored by a project.
+message ListWatchedPathsRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  string project_id = 1;
+}
+
+// ReadFileContentRequest retrieves the content of a specific file within a project.
+message ReadFileContentRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  string project_id = 1;
+  
+  // Required: Relative path to the file within the project root.
+  // Must be within the project directory (no ../ path traversal).
+  // Examples: "src/main.go", "package.json", ".devloop.yaml", "logs/build.log"
+  string path = 2;
+}
+
+// GetConfigResponse contains the complete project configuration.
+message GetConfigResponse {
+  // Complete project configuration as JSON string.
+  // Contains: settings (project_id, logging, colors), rules (name, commands, watch patterns)
+  // Parse this JSON to understand available rule names and their configurations.
+  bytes config_json = 1;
+}
+
+// GetRuleStatusResponse contains the current status and history of a rule.
+message GetRuleStatusResponse {
+  // Detailed status information including execution state, timing, and results.
+  // Check rule_status.is_running to see if currently executing.
+  // Check rule_status.last_build_status for SUCCESS/FAILED/IDLE state.
+  RuleStatus rule_status = 1;
+}
+
+// TriggerRuleResponse indicates whether a rule trigger was accepted.
+message TriggerRuleResponse {
+  // Whether the trigger request was accepted and rule execution started.
+  // true = rule is now running, false = trigger rejected (invalid rule/project)
+  bool success = 1;
+  
+  // Human-readable message explaining the result.
+  // On success: "Rule 'backend' triggered successfully"
+  // On failure: "Rule 'invalid' not found in project"
+  string message = 2;
+}
+
+// ListWatchedPathsResponse contains all file patterns being monitored.
+message ListWatchedPathsResponse {
+  // Array of glob patterns that trigger rule execution when matched files change.
+  // Examples: "**/*.go", "src/**/*.js", "package.json", "**/test_*.py"
+  repeated string paths = 1;
+}
+
+// ReadFileContentResponse contains the raw content of a requested file.
+message ReadFileContentResponse {
+  // Raw file content as bytes. For text files, convert to string.
+  // For binary files, handle appropriately based on file type.
+  // Empty if file doesn't exist or is not accessible.
+  bytes content = 1;
+}
+
+// Messages for AgentService
+
+// TriggerRuleClientRequest starts execution of a specific rule.
+message TriggerRuleClientRequest {
+  // Required: The unique identifier of the project.
+  // Must be a valid project_id from ListProjects() response.
+  string project_id = 1;
+  
+  // Required: The name of the rule to execute.
+  // Must match a rule name from GetConfig() response (rules[].name).
+  // Examples: "backend", "frontend", "tests", "build"
+  string rule_name = 2;
+}
+
+// TriggerRuleClientResponse indicates whether the rule trigger was accepted.
+message TriggerRuleClientResponse {
+  // Whether the trigger request was accepted and rule execution started.
+  // true = rule is now running, false = trigger rejected
+  bool success = 1;
+  
+  // Human-readable message explaining the result.
+  // Use GetRuleStatus() to monitor actual execution progress.
+  string message = 2;
+}
+
+message StreamLogsClientRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+}
+
+message GetHistoricalLogsClientRequest {
+  string project_id = 1;
+  string rule_name = 2;
+  string filter = 3;
+  int64 start_time = 4; // Unix timestamp in milliseconds, for logs after this time
+  int64 end_time = 5;   // Unix timestamp in milliseconds, for logs before this time
+}

@@ -107,7 +107,7 @@ func (lm *LogManager) SignalFinished(ruleName string) {
 }
 
 // StreamLogs streams logs for a given rule to the provided gRPC stream.
-func (lm *LogManager) StreamLogs(ruleName, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error {
+func (lm *LogManager) StreamLogs(ruleName, filter string, stream pb.AgentService_StreamLogsClientServer) error {
 	lm.mu.Lock()
 	state, ok := lm.ruleStates[ruleName]
 	if !ok {

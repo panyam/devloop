@@ -2,9 +2,10 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -23,14 +24,10 @@ import (
 type ProjectInstance struct {
 	ProjectID   string `json:"project_id"`
 	ProjectRoot string `json:"project_root"`
-	// The bidirectional gRPC stream to this devloop instance
-	stream pb.DevloopGatewayService_CommunicateServer
 	// Channel to push real-time logs from devloop to gateway
 	logStream chan *pb.LogLine
 	// Channel to push rule status updates from devloop to gateway
 	statusStream chan *pb.RuleStatus
-	// Channel to send responses back to specific gateway-initiated requests
-	responseChan chan *pb.DevloopMessage
 	// Context for the stream
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -38,8 +35,7 @@ type ProjectInstance struct {
 
 // GatewayService manages registered devloop instances and proxies requests.
 type GatewayService struct {
-	pb.UnimplementedDevloopGatewayServiceServer // Embed for forward compatibility
-	pb.UnimplementedGatewayClientServiceServer  // Embed for forward compatibility
+	pb.UnimplementedAgentServiceServer // Embed for forward compatibility
 
 	mu        sync.RWMutex
 	instances map[string]*ProjectInstance // projectID -> ProjectInstance
@@ -49,6 +45,7 @@ type GatewayService struct {
 	httpServer   *http.Server
 	mainMux      *http.ServeMux // Main HTTP router for mounting handlers
 	orchestrator Orchestrator
+	mode         string // "standalone" or "gateway"
 }
 
 // NewGatewayService creates a new gateway service for managing multiple devloop agents.
@@ -67,10 +64,11 @@ type GatewayService struct {
 //	orchestrator := agent.NewOrchestratorV2("gateway.yaml", "")
 //	gateway := NewGatewayService(orchestrator)
 //	err := gateway.Start(50051, 8080)  // gRPC on 50051, HTTP on 8080
-func NewGatewayService(orchestrator Orchestrator) *GatewayService {
+func NewGatewayService(orchestrator Orchestrator, mode string) *GatewayService {
 	return &GatewayService{
 		instances:    make(map[string]*ProjectInstance),
 		orchestrator: orchestrator,
+		mode:         mode,
 	}
 }
 
@@ -81,8 +79,15 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	gs.grpcServer = grpc.NewServer()
-	pb.RegisterDevloopGatewayServiceServer(gs.grpcServer, gs)
-	pb.RegisterGatewayClientServiceServer(gs.grpcServer, gs)
+
+	// Always register AgentService for external API access
+	pb.RegisterAgentServiceServer(gs.grpcServer, gs)
+
+	// Only register DevloopGatewayService in gateway mode (for agent communication)
+	if gs.mode == "gateway" {
+		pb.RegisterDevloopGatewayServiceServer(gs.grpcServer, gs)
+		utils.LogGateway("Registered DevloopGatewayService for agent communication")
+	}
 
 	go func() {
 		utils.LogGateway("gRPC server listening on port %d", grpcPort)
@@ -98,8 +103,8 @@ func (gs *GatewayService) Start(grpcPort int, httpPort int) error {
 
 	grpcAddr := fmt.Sprintf("localhost:%d", grpcPort)
 
-	// Register GatewayClientService handler
-	err = pb.RegisterGatewayClientServiceHandlerFromEndpoint(ctx, gwmux, grpcAddr, []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())})
+	// Register AgentService handler
+	err = pb.RegisterAgentServiceHandlerFromEndpoint(ctx, gwmux, grpcAddr, []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())})
 	if err != nil {
 		return fmt.Errorf("[gateway] Failed to register gateway: %v", err)
 	}
@@ -151,6 +156,13 @@ func (gs *GatewayService) Stop() {
 	utils.LogGateway("Gateway shut down gracefully.")
 }
 
+// generateCorrelationID creates a unique correlation ID for request/response matching
+func generateCorrelationID() string {
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
 // MountMCPHandlers mounts MCP handlers at /mcp prefix
 func (gs *GatewayService) MountMCPHandlers(mcpHandler http.Handler) {
 	if gs.mainMux == nil {
@@ -170,127 +182,10 @@ type Orchestrator interface {
 	TriggerRule(ruleName string) error
 	GetWatchedPaths() []string
 	ReadFileContent(path string) ([]byte, error)
-	StreamLogs(ruleName string, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error
+	StreamLogs(ruleName string, filter string, stream pb.AgentService_StreamLogsClientServer) error
 }
 
-// Communicate implements pb.DevloopGatewayServiceServer.
-func (gs *GatewayService) Communicate(stream pb.DevloopGatewayService_CommunicateServer) error {
-	ctx := stream.Context()
-	var projectID string
-	var instance *ProjectInstance
-
-	// First message is expected to be RegisterRequest
-	initialMsg, err := stream.Recv()
-	if err != nil {
-		return fmt.Errorf("failed to receive initial message: %v", err)
-	}
-
-	registerReq := initialMsg.GetRegisterRequest()
-	if registerReq == nil {
-		return fmt.Errorf("first message must be RegisterRequest")
-	}
-
-	projectID = registerReq.GetProjectInfo().GetProjectId()
-	if projectID == "" {
-		return fmt.Errorf("project ID cannot be empty in RegisterRequest")
-	}
-
-	gs.mu.Lock()
-	if existingInstance, ok := gs.instances[projectID]; ok {
-		// If already registered, close old stream and replace
-		log.Printf("[gateway] Project %q re-registering. Closing old stream.", projectID)
-		if existingInstance.cancel != nil {
-			existingInstance.cancel()
-		}
-		// Ensure old channels are closed and cleaned up if necessary
-		close(existingInstance.logStream)
-		close(existingInstance.statusStream)
-		close(existingInstance.responseChan)
-		delete(gs.instances, projectID)
-	}
-
-	instanceCtx, instanceCancel := context.WithCancel(context.Background())
-	instance = &ProjectInstance{
-		ProjectID:    projectID,
-		ProjectRoot:  registerReq.GetProjectInfo().GetProjectRoot(),
-		stream:       stream,
-		logStream:    make(chan *pb.LogLine, 100),
-		statusStream: make(chan *pb.RuleStatus, 10),
-		responseChan: make(chan *pb.DevloopMessage, 1), // For single response to a request
-		ctx:          instanceCtx,
-		cancel:       instanceCancel,
-	}
-	gs.instances[projectID] = instance
-	gs.mu.Unlock()
-
-	log.Printf("[gateway] Registered devloop instance for project %q (root: %q)", projectID, instance.ProjectRoot)
-
-	// Goroutine to handle sending messages from gateway to devloop
-	go func() {
-		for {
-			select {
-			case msg := <-instance.responseChan:
-				if err := stream.Send(msg); err != nil {
-					log.Printf("[gateway] Error sending response to devloop %q: %v", projectID, err)
-					return
-				}
-			case <-instanceCtx.Done():
-				log.Printf("[gateway] Send loop for project %q terminated.", projectID)
-				return
-			}
-		}
-	}()
-
-	// Main loop to receive messages from devloop
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("[gateway] Stream context for project %q cancelled: %v", projectID, ctx.Err())
-			gs.unregisterInternal(projectID)
-			return ctx.Err()
-		default:
-			msg, err := stream.Recv()
-			if err == io.EOF {
-				log.Printf("[gateway] Devloop instance %q disconnected (EOF).", projectID)
-				gs.unregisterInternal(projectID)
-				return nil
-			}
-			if err != nil {
-				log.Printf("[gateway] Error receiving message from devloop %q: %v", projectID, err)
-				gs.unregisterInternal(projectID)
-				return err
-			}
-
-			switch content := msg.GetContent().(type) {
-			case *pb.DevloopMessage_UnregisterRequest:
-				log.Printf("[gateway] Received unregister request from devloop %q.", projectID)
-				gs.unregisterInternal(projectID)
-				return nil // Devloop explicitly unregistered
-			default:
-				log.Printf("[gateway] Received unknown message type from %q: %T", projectID, content)
-			}
-		}
-	}
-}
-
-// unregisterInternal handles the internal unregistration logic.
-func (gs *GatewayService) unregisterInternal(projectID string) {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-
-	if instance, ok := gs.instances[projectID]; ok {
-		if instance.cancel != nil {
-			instance.cancel() // Cancel the context for this instance
-		}
-		close(instance.logStream)
-		close(instance.statusStream)
-		close(instance.responseChan)
-		delete(gs.instances, projectID)
-		log.Printf("[gateway] Internally unregistered devloop instance for project %q", projectID)
-	}
-}
-
-// ListProjects implements pb.GatewayClientServiceServer.
+// ListProjects implements pb.AgentServiceServer.
 func (gs *GatewayService) ListProjects(ctx context.Context, req *pb.ListProjectsRequest) (*pb.ListProjectsResponse, error) {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
@@ -316,17 +211,51 @@ func (gs *GatewayService) ListProjects(ctx context.Context, req *pb.ListProjects
 	return &pb.ListProjectsResponse{Projects: projects}, nil
 }
 
-// GetConfig implements pb.GatewayClientServiceServer.
+// GetConfig implements pb.AgentServiceServer.
 func (gs *GatewayService) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
-	config := gs.orchestrator.GetConfig()
-	configBytes, err := json.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	// In standalone mode, always use local orchestrator
+	if gs.mode == "standalone" {
+		config := gs.orchestrator.GetConfig()
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal config: %w", err)
+		}
+		return &pb.GetConfigResponse{ConfigJson: configBytes}, nil
 	}
-	return &pb.GetConfigResponse{ConfigJson: configBytes}, nil
+
+	// In gateway mode, route request to agent
+	projectID := req.GetProjectId()
+	gs.mu.RLock()
+	_, agentExists := gs.instances[projectID]
+	gs.mu.RUnlock()
+
+	if !agentExists {
+		return nil, fmt.Errorf("project %q not found", projectID)
+	}
+
+	// Create request message
+	requestMsg := &pb.DevloopMessage{
+		Content: &pb.DevloopMessage_GetConfigRequest{
+			GetConfigRequest: req,
+		},
+	}
+
+	// Send request to agent and wait for response
+	responseMsg, err := gs.sendRequestToAgent(ctx, projectID, requestMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get response from agent: %w", err)
+	}
+
+	// Extract response
+	response := responseMsg.GetGetConfigResponse()
+	if response == nil {
+		return nil, fmt.Errorf("invalid response type from agent")
+	}
+
+	return response, nil
 }
 
-// GetRuleStatus implements pb.GatewayClientServiceServer.
+// GetRuleStatus implements pb.AgentServiceServer.
 func (gs *GatewayService) GetRuleStatus(ctx context.Context, req *pb.GetRuleStatusRequest) (*pb.GetRuleStatusResponse, error) {
 	gs.mu.RLock()
 	_, exists := gs.instances[req.GetProjectId()]
@@ -348,7 +277,7 @@ func (gs *GatewayService) GetRuleStatus(ctx context.Context, req *pb.GetRuleStat
 	}}, nil
 }
 
-// TriggerRuleClient implements pb.GatewayClientServiceServer.
+// TriggerRuleClient implements pb.AgentServiceServer.
 func (gs *GatewayService) TriggerRuleClient(ctx context.Context, req *pb.TriggerRuleClientRequest) (*pb.TriggerRuleClientResponse, error) {
 	gs.mu.RLock()
 	instance, exists := gs.instances[req.GetProjectId()]
@@ -364,13 +293,47 @@ func (gs *GatewayService) TriggerRuleClient(ctx context.Context, req *pb.Trigger
 	return &pb.TriggerRuleClientResponse{Success: true}, nil
 }
 
-// ListWatchedPaths implements pb.GatewayClientServiceServer.
+// ListWatchedPaths implements pb.AgentServiceServer.
 func (gs *GatewayService) ListWatchedPaths(ctx context.Context, req *pb.ListWatchedPathsRequest) (*pb.ListWatchedPathsResponse, error) {
-	paths := gs.orchestrator.GetWatchedPaths()
-	return &pb.ListWatchedPathsResponse{Paths: paths}, nil
+	// In standalone mode, always use local orchestrator
+	if gs.mode == "standalone" {
+		paths := gs.orchestrator.GetWatchedPaths()
+		return &pb.ListWatchedPathsResponse{Paths: paths}, nil
+	}
+
+	// In gateway mode, route request to agent
+	projectID := req.GetProjectId()
+	gs.mu.RLock()
+	_, agentExists := gs.instances[projectID]
+	gs.mu.RUnlock()
+
+	if !agentExists {
+		return nil, fmt.Errorf("project %q not found", projectID)
+	}
+
+	// Create request message
+	requestMsg := &pb.DevloopMessage{
+		Content: &pb.DevloopMessage_ListWatchedPathsRequest{
+			ListWatchedPathsRequest: req,
+		},
+	}
+
+	// Send request to agent and wait for response
+	responseMsg, err := gs.sendRequestToAgent(ctx, projectID, requestMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get response from agent: %w", err)
+	}
+
+	// Extract response
+	response := responseMsg.GetListWatchedPathsResponse()
+	if response == nil {
+		return nil, fmt.Errorf("invalid response type from agent")
+	}
+
+	return response, nil
 }
 
-// ReadFileContent implements pb.GatewayClientServiceServer.
+// ReadFileContent implements pb.AgentServiceServer.
 func (gs *GatewayService) ReadFileContent(ctx context.Context, req *pb.ReadFileContentRequest) (*pb.ReadFileContentResponse, error) {
 	gs.mu.RLock()
 	_, exists := gs.instances[req.GetProjectId()]
@@ -400,13 +363,13 @@ rules:
 	return &pb.ReadFileContentResponse{Content: content}, nil
 }
 
-// StreamLogsClient implements pb.GatewayClientServiceServer.
-func (gs *GatewayService) StreamLogsClient(req *pb.StreamLogsClientRequest, stream pb.GatewayClientService_StreamLogsClientServer) error {
+// StreamLogsClient implements pb.AgentServiceServer.
+func (gs *GatewayService) StreamLogsClient(req *pb.StreamLogsClientRequest, stream pb.AgentService_StreamLogsClientServer) error {
 	return gs.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), stream)
 }
 
-// GetHistoricalLogsClient implements pb.GatewayClientServiceServer.
-func (gs *GatewayService) GetHistoricalLogsClient(req *pb.GetHistoricalLogsClientRequest, stream pb.GatewayClientService_GetHistoricalLogsClientServer) error {
+// GetHistoricalLogsClient implements pb.AgentServiceServer.
+func (gs *GatewayService) GetHistoricalLogsClient(req *pb.GetHistoricalLogsClientRequest, stream pb.AgentService_GetHistoricalLogsClientServer) error {
 	// This method is not yet implemented in the orchestrator.
 	return fmt.Errorf("not implemented")
 }
