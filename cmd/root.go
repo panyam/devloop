@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -57,9 +56,4 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&gatewayAddr, "gateway", "", "Host and port of the gateway to connect to")
 	rootCmd.PersistentFlags().BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration")
 	rootCmd.PersistentFlags().BoolVar(&autoPorts, "auto-ports", false, "Automatically find available ports if specified ports are in use")
-}
-
-// getGlobalLogger returns a logger with consistent configuration
-func getGlobalLogger() *log.Logger {
-	return log.New(os.Stdout, "[devloop] ", log.LstdFlags)
 }
