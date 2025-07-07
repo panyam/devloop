@@ -111,6 +111,7 @@ service AgentService {
   }
 
   // Stream real-time logs for a specific rule in a project.
+  // mcp_tool_name:stream_logs
   rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse) {
     option (google.api.http) = {
       get: "/stream/logs/{rule_name}"

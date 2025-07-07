@@ -75,7 +75,7 @@
     },
     "/stream/logs/{ruleName}": {
       "get": {
-        "summary": "Stream real-time logs for a specific rule in a project.",
+        "summary": "Stream real-time logs for a specific rule in a project.\nmcp_tool_name:stream_logs",
         "operationId": "AgentService_StreamLogs",
         "responses": {
           "200": {
