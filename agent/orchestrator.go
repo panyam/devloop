@@ -359,27 +359,8 @@ func (o *Orchestrator) ReadFileContent(path string) ([]byte, error) {
 
 // StreamLogs streams the logs for a given rule to the provided Writer
 func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
-	// For now, return a stub implementation that sends a test message
-	// TODO: Implement actual log streaming from LogManager
-	
-	// Create a test log response
-	response := &pb.StreamLogsResponse{
-		Lines: []*pb.LogLine{
-			{
-				ProjectId: o.projectID,
-				RuleName:  ruleName,
-				Line:      fmt.Sprintf("Starting log stream for rule '%s' with filter '%s'", ruleName, filter),
-				Timestamp: time.Now().UnixMilli(),
-			},
-		},
-	}
-	
-	// Send the test message to the writer
-	if !writer.Send(response) {
-		return fmt.Errorf("failed to send log message to writer")
-	}
-	
-	return nil
+	// Delegate to LogManager for actual log streaming
+	return o.LogManager.StreamLogs(ruleName, filter, writer)
 }
 
 // TriggerRule manually triggers the execution of a specific rule
