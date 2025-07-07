@@ -317,7 +317,7 @@ func (o *Orchestrator) GetRuleStatus(ruleName string) (rule *pb.Rule, status *pb
 	o.runnersMutex.RLock()
 	defer o.runnersMutex.RUnlock()
 
-	if runner, ok := o.ruleRunners[ruleName]; ok {
+	if runner, found := o.ruleRunners[ruleName]; found {
 		rule = runner.rule
 		status = runner.GetStatus()
 		ok = true

@@ -34,12 +34,26 @@ func (s *AgentService) GetRule(ctx context.Context, req *protos.GetRuleRequest) 
 	o := s.orchestrator
 	utils.LogDevloop("Received GetRuleStatus request for rule %q", req.GetRuleName())
 
-	rule, _, ok := o.GetRuleStatus(req.GetRuleName())
+	rule, ruleStatus, ok := o.GetRuleStatus(req.GetRuleName())
 	if !ok {
-		err = status.Errorf(codes.NotFound, "Rule not found")
+		err = status.Errorf(codes.NotFound, "Rule not found: %s", req.GetRuleName())
 	} else {
+		// Create a copy of the rule and populate the Status field
+		ruleWithStatus := &protos.Rule{
+			ProjectId:       rule.ProjectId,
+			Name:            rule.Name,
+			Commands:        rule.Commands,
+			Watch:           rule.Watch,
+			DefaultAction:   rule.DefaultAction,
+			Prefix:          rule.Prefix,
+			WorkDir:         rule.WorkDir,
+			SkipRunOnInit:   rule.SkipRunOnInit,
+			Color:           rule.Color,
+			Env:             rule.Env,
+			Status:          ruleStatus,
+		}
 		resp = &protos.GetRuleResponse{
-			Rule: rule,
+			Rule: ruleWithStatus,
 		}
 	}
 	return
