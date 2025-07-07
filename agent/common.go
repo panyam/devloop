@@ -13,12 +13,12 @@
 //	type Orchestrator interface {
 //		Start() error
 //		Stop() error
-//		GetConfig() *gateway.Config
+//		GetConfig() *pb.Config
 //		TriggerRule(ruleName string) error
-//		GetRuleStatus(ruleName string) (*gateway.RuleStatus, bool)
+//		GetRuleStatus(ruleName string) (*pb.RuleStatus, bool)
 //		GetWatchedPaths() []string
 //		ReadFileContent(path string) ([]byte, error)
-//		StreamLogs(ruleName string, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error
+//		StreamLogs(ruleName string, filter string, stream pb.AgentService_StreamLogsClientServer) error
 //		SetGlobalDebounceDelay(duration time.Duration)
 //		SetVerbose(verbose bool)
 //	}
@@ -27,7 +27,7 @@
 //
 // Create and start an orchestrator:
 //
-//	orchestrator := agent.NewOrchestratorV2("config.yaml", "")
+//	orchestrator := agent.NewOrchestrator("config.yaml", "")
 //	if err := orchestrator.Start(); err != nil {
 //		log.Fatal(err)
 //	}
@@ -60,27 +60,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/panyam/devloop/gateway"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
-
-// Orchestrator interface defines the common methods for orchestrator implementations
-type Orchestrator interface {
-	Start() error
-	Stop() error
-	GetConfig() *gateway.Config
-	TriggerRule(ruleName string) error
-	GetRuleStatus(ruleName string) (*gateway.RuleStatus, bool)
-	GetWatchedPaths() []string
-	ReadFileContent(path string) ([]byte, error)
-	StreamLogs(ruleName string, filter string, stream pb.GatewayClientService_StreamLogsClientServer) error
-	SetGlobalDebounceDelay(duration time.Duration)
-	SetVerbose(verbose bool)
-}
 
 // createCrossPlatformCommand creates a command that works on both Unix and Windows
 func createCrossPlatformCommand(cmdStr string) *exec.Cmd {
@@ -100,7 +84,7 @@ func createCrossPlatformCommand(cmdStr string) *exec.Cmd {
 
 // LoadConfig reads and unmarshals the .devloop.yaml configuration file,
 // resolving all relative watch paths to be absolute from the config file's location.
-func LoadConfig(configPath string) (*gateway.Config, error) {
+func LoadConfig(configPath string) (*pb.Config, error) {
 	absConfigPath, err := filepath.Abs(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
@@ -114,7 +98,7 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 		return nil, fmt.Errorf("failed to read config file %q: %w", absConfigPath, err)
 	}
 
-	var config gateway.Config
+	var config pb.Config
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config file %q: %w", absConfigPath, err)
@@ -127,15 +111,15 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 
 	// Resolve all patterns in all rules to be absolute paths.
 	for i := range config.Rules {
-		rule := &config.Rules[i]
+		rule := config.Rules[i]
 
 		// Default to global setting if not specified on rule
 		if rule.DefaultAction == "" {
 			rule.DefaultAction = config.Settings.DefaultWatchAction
 		}
 
-		for j := range rule.Watch {
-			matcher := rule.Watch[j]
+		for j := range rule.Matchers {
+			matcher := rule.Matchers[j]
 			for k, pattern := range matcher.Patterns {
 				if !filepath.IsAbs(pattern) {
 					// Make relative patterns absolute relative to the config file's directory.
@@ -150,6 +134,6 @@ func LoadConfig(configPath string) (*gateway.Config, error) {
 }
 
 // NewOrchestratorForTesting creates a new V2 orchestrator for testing
-func NewOrchestratorForTesting(configPath, gatewayAddr string) (Orchestrator, error) {
-	return NewOrchestratorV2(configPath, gatewayAddr)
+func NewOrchestratorForTesting(configPath string) (*Orchestrator, error) {
+	return NewOrchestrator(configPath)
 }

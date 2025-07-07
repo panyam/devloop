@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -9,9 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
-
-	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
 
 // LogManager manages log files and provides streaming capabilities.
@@ -107,76 +103,79 @@ func (lm *LogManager) SignalFinished(ruleName string) {
 }
 
 // StreamLogs streams logs for a given rule to the provided gRPC stream.
-func (lm *LogManager) StreamLogs(ruleName, filter string, stream pb.AgentService_StreamLogsClientServer) error {
-	lm.mu.Lock()
-	state, ok := lm.ruleStates[ruleName]
-	if !ok {
+func (lm *LogManager) StreamLogs(ruleName, filter string /*, stream pb.AgentService_StreamLogsClientServer*/) error {
+	/*
+		lm.mu.Lock()
+		state, ok := lm.ruleStates[ruleName]
+		if !ok {
+			lm.mu.Unlock()
+			return fmt.Errorf("no state found for rule: %s", ruleName)
+		}
 		lm.mu.Unlock()
-		return fmt.Errorf("no state found for rule: %s", ruleName)
-	}
-	lm.mu.Unlock()
 
-	// Wait for the rule to start. This is important for realtime streaming.
-	select {
-	case <-state.started:
-	case <-stream.Context().Done():
-		return stream.Context().Err()
-	}
-
-	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
-	file, err := os.Open(logFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to open log file for streaming: %w", err)
-	}
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-
-	for {
+		// Wait for the rule to start. This is important for realtime streaming.
 		select {
+		case <-state.started:
 		case <-stream.Context().Done():
 			return stream.Context().Err()
-		case <-state.finished:
-			// Rule is finished. Drain any remaining content from the reader and exit.
-			for {
-				line, err := reader.ReadString('\n')
-				if len(line) > 0 {
-					if filter == "" || contains(line, filter) {
-						if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
-							return sendErr
+		}
+
+		logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
+		file, err := os.Open(logFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to open log file for streaming: %w", err)
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+
+		for {
+			select {
+			case <-stream.Context().Done():
+				return stream.Context().Err()
+			case <-state.finished:
+				// Rule is finished. Drain any remaining content from the reader and exit.
+				for {
+					line, err := reader.ReadString('\n')
+					if len(line) > 0 {
+						if filter == "" || contains(line, filter) {
+							if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
+								return sendErr
+							}
 						}
 					}
+					if err == io.EOF {
+						return nil // Successfully drained and finished.
+					}
+					if err != nil {
+						return err // Return other errors.
+					}
 				}
+			default:
+				line, err := reader.ReadString('\n')
 				if err == io.EOF {
-					return nil // Successfully drained and finished.
+					// If we're at the end of the file, check if the rule is finished.
+					select {
+					case <-state.finished:
+						return nil
+					default:
+						// Rule is not finished, so wait for more content.
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
 				}
 				if err != nil {
-					return err // Return other errors.
+					return err
 				}
-			}
-		default:
-			line, err := reader.ReadString('\n')
-			if err == io.EOF {
-				// If we're at the end of the file, check if the rule is finished.
-				select {
-				case <-state.finished:
-					return nil
-				default:
-					// Rule is not finished, so wait for more content.
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-			}
-			if err != nil {
-				return err
-			}
-			if filter == "" || contains(line, filter) {
-				if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
-					return sendErr
+				if filter == "" || contains(line, filter) {
+					if sendErr := stream.Send(&pb.LogLine{Line: line}); sendErr != nil {
+						return sendErr
+					}
 				}
 			}
 		}
-	}
+	*/
+	return nil
 }
 
 // contains is a helper for basic string filtering.

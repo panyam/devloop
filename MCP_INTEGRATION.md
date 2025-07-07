@@ -4,42 +4,39 @@ This guide explains how to integrate devloop with MCP (Model Context Protocol) c
 
 ## Overview
 
-The devloop MCP server is an **add-on capability** that can be enabled alongside any devloop operating mode (standalone, agent, or gateway). It exposes development tools through the Model Context Protocol, allowing AI assistants to:
-- Discover and monitor development projects
-- Trigger builds and tests  
-- Read configuration and source files
-- Monitor build status and logs
-- Understand project structure and dependencies
+The devloop MCP server is a **simplified HTTP handler** that runs alongside the gRPC API when enabled. It exposes development tools through the Model Context Protocol, allowing AI assistants to:
+- Get project configuration and rule information
+- Trigger rule execution manually
+- List watched file paths
+- Monitor rule status
+- Stream logs (planned feature)
 
 **Key Design Principles:** 
-- MCP is not a separate mode but an additional interface that enhances existing devloop functionality
+- MCP runs as an HTTP handler on the `/mcp` endpoint, not a separate mode
+- Uses the same **Agent Service** that provides the gRPC API for consistency
 - Uses modern **StreamableHTTP transport** (MCP 2025-03-26 spec) for universal client compatibility
 - **Stateless design** eliminates sessionId requirements for seamless integration with Claude Code and other clients
 
 ## Quick Start
 
-### 1. Enable MCP alongside any devloop mode
+### 1. Enable MCP with devloop
 
 ```bash
-# Enable MCP with standalone mode (default)
-devloop --enable-mcp --c /path/to/project/.devloop.yaml
+# Enable MCP with standalone mode (requires both gRPC and HTTP ports)
+devloop --grpc-port 5555 --http-port 9999 --enable-mcp -c /path/to/project/.devloop.yaml
 
 # Enable MCP with automatic port discovery (avoids conflicts)
-devloop --enable-mcp --auto-ports
+devloop --grpc-port 0 --http-port 0 --enable-mcp
 
 # Enable MCP with custom ports
-devloop --enable-mcp --http-port 8080 --grpc-port 5000
-
-# Enable MCP with gateway mode
-devloop --mode gateway --enable-mcp --grpc-port 5555 --http-port 9999
-
-# Enable MCP with agent mode
-devloop --mode agent --enable-mcp --gateway-addr localhost:5555
+devloop --grpc-port 5000 --http-port 8080 --enable-mcp
 
 # Or use default config location
 cd /path/to/project
-devloop --enable-mcp
+devloop --grpc-port 5555 --http-port 9999 --enable-mcp
 ```
+
+**Note:** Gateway mode is temporarily removed and will be reimplemented using the grpcrouter library.
 
 ### 2. Configure MCP Client
 
@@ -62,7 +59,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "devloop": {
       "command": "devloop",
-      "args": ["--enable-mcp", "--c", "/path/to/project/.devloop.yaml"],
+      "args": ["--grpc-port", "5555", "--http-port", "9999", "--enable-mcp", "-c", "/path/to/project/.devloop.yaml"],
       "env": {}
     }
   }
@@ -71,81 +68,78 @@ Add to your MCP client configuration:
 
 ## Available MCP Tools
 
-The following tools are auto-generated from devloop's gRPC API definitions. Each tool includes comprehensive parameter validation and detailed documentation.
+The following tools are auto-generated from devloop's Agent Service gRPC API definitions. Each tool includes comprehensive parameter validation and detailed documentation.
 
 ### Core Discovery Tools
 
-#### `devloop_gateway_v1_GatewayClientService_ListProjects`
-- **Purpose**: Discover all available devloop projects for development automation and monitoring
-- **Parameters**: None required
-- **Returns**: Array of projects with IDs, paths, and connection status
-- **Usage**: Start here to see what projects are available
-
-#### `devloop_gateway_v1_GatewayClientService_GetConfig`
+#### `GetConfig`
 - **Purpose**: Retrieve complete project configuration including available build rules, commands, and file watch patterns
-- **Parameters**: 
-  - `project_id` (required): The unique identifier of the project (from ListProjects output)
-- **Returns**: Complete project configuration as JSON string
+- **Parameters**: None required (operates on the current project)
+- **Returns**: Complete project configuration as JSON
 - **Usage**: Understand available rules, commands, and file patterns
 
-### Build & Test Automation
+#### `ListWatchedPaths`
+- **Purpose**: List all file glob patterns being monitored by the current devloop project
+- **Parameters**: None required
+- **Returns**: Array of glob patterns currently being watched
+- **Usage**: Understand what file changes trigger builds
 
-#### `devloop_gateway_v1_GatewayClientService_TriggerRuleClient`
+### Rule Management & Automation
+
+#### `TriggerRule`
 - **Purpose**: Manually execute a specific build/test rule to run commands immediately
 - **Parameters**: 
-  - `project_id` (required): The unique identifier of the project
-  - `rule_name` (required): The name of the rule to execute (from project config)
+  - `ruleName` (required): The name of the rule to execute (from project config)
 - **Returns**: Success status and execution message
 - **Usage**: "Run the backend tests", "Trigger the build rule"
 
-#### `devloop_gateway_v1_GatewayClientService_GetRuleStatus`
-- **Purpose**: Check the current execution status of a specific build/test rule to monitor progress and results
+#### `GetRule`
+- **Purpose**: Get detailed information about a specific rule including its configuration
 - **Parameters**: 
-  - `project_id` (required): The unique identifier of the project
-  - `rule_name` (required): The name of the rule to check (from project config)
-- **Returns**: Detailed status including execution state, timing, and results
-- **Usage**: Check if builds are running, verify test results
+  - `ruleName` (required): The name of the rule to retrieve
+- **Returns**: Rule configuration including watch patterns, commands, and settings
+- **Usage**: Understand what a specific rule does and how it's configured
 
-### File & Configuration Access
+### Logging & Monitoring
 
-#### `devloop_gateway_v1_GatewayClientService_ReadFileContent`
-- **Purpose**: Read and return the content of a specific file within a devloop project
+#### `StreamLogs`
+- **Purpose**: Stream logs for a specific rule (planned feature)
 - **Parameters**: 
-  - `project_id` (required): The unique identifier of the project
-  - `path` (required): Relative path to the file within the project (no ../ allowed)
-- **Returns**: Raw file content as bytes
-- **Usage**: Read configs, source code, logs
-- **Security**: Restricted to project directory, no path traversal allowed
-
-#### `devloop_gateway_v1_GatewayClientService_ListWatchedPaths`
-- **Purpose**: List all file glob patterns being monitored by a specific devloop project
-- **Parameters**: 
-  - `project_id` (required): The unique identifier of the project
-- **Returns**: Array of glob patterns currently being watched
-- **Usage**: Understand what file changes trigger builds
+  - `ruleName` (required): The name of the rule to stream logs for
+- **Returns**: Stream of log entries
+- **Usage**: Monitor build/test progress in real-time
+- **Status**: Currently a placeholder, implementation planned for future release
 
 ## Common Workflow Patterns
 
 ### 1. Project Discovery & Setup
 ```
-1. devloop_gateway_v1_GatewayClientService_ListProjects() → see available projects
-2. devloop_gateway_v1_GatewayClientService_GetConfig(project_id) → understand rules and commands
-3. devloop_gateway_v1_GatewayClientService_ListWatchedPaths(project_id) → see what files are monitored
+1. GetConfig() → understand available rules, commands, and project structure
+2. ListWatchedPaths() → see what file patterns trigger builds
+3. GetRule(ruleName) → get detailed information about specific rules
 ```
 
 ### 2. Build & Test Automation
 ```
-1. devloop_gateway_v1_GatewayClientService_TriggerRuleClient(project_id, "backend") → start backend build
-2. devloop_gateway_v1_GatewayClientService_GetRuleStatus(project_id, "backend") → monitor progress
-3. devloop_gateway_v1_GatewayClientService_ReadFileContent(project_id, "build.log") → analyze results if needed
+1. TriggerRule("backend-build") → start backend build
+2. GetRule("backend-build") → check rule configuration
+3. StreamLogs("backend-build") → monitor progress (when implemented)
 ```
 
-### 3. Development Debugging
+### 3. Development Workflow
 ```
-1. devloop_gateway_v1_GatewayClientService_GetRuleStatus(project_id, rule_name) → check if build failed
-2. devloop_gateway_v1_GatewayClientService_ReadFileContent(project_id, ".devloop.yaml") → review configuration
-3. devloop_gateway_v1_GatewayClientService_ReadFileContent(project_id, "package.json") → check dependencies
-4. devloop_gateway_v1_GatewayClientService_TriggerRuleClient(project_id, rule_name) → retry after fixes
+1. GetConfig() → see all available automation rules
+2. TriggerRule("test-suite") → run tests manually
+3. TriggerRule("lint-check") → run code quality checks
+4. ListWatchedPaths() → understand what files are being monitored
+```
+
+### 4. Configuration Management
+```
+1. GetConfig() → review current project configuration
+2. GetRule("failing-rule") → understand what the rule does
+3. TriggerRule("failing-rule") → retry the rule manually
+4. ListWatchedPaths() → check what files trigger the rule
 ```
 
 ## AI Assistant Integration
@@ -170,29 +164,36 @@ The following tools are auto-generated from devloop's gRPC API definitions. Each
 ### Context Management
 
 The MCP server maintains project context through:
-- **Project IDs**: Unique identifiers for each project
-- **Rule Names**: Specific build/test targets within projects
-- **File Paths**: Relative paths within project boundaries
-- **Status Tracking**: Real-time build/test execution status
+- **Single Project Focus**: Operates on the current project only (no multi-project management)
+- **Rule Names**: Specific build/test targets within the project
+- **Configuration State**: Current project configuration and watch patterns
+- **Execution Status**: Rule execution status and results
 
 ### Error Handling
 
 The MCP server provides detailed error messages for:
-- Invalid project IDs or rule names
+- Invalid rule names
 - Missing required parameters
-- File access permissions
-- Build/test execution failures
+- gRPC service unavailability
+- Rule execution failures
 
 ## Transport Architecture
 
-### StreamableHTTP Transport (Recommended)
+### StreamableHTTP Transport
 Devloop uses the modern MCP StreamableHTTP transport (2025-03-26 spec) for:
 - **Universal Compatibility**: Works with Claude Code, Python SDK, and other MCP clients
 - **Stateless Operation**: No sessionId requirement simplifies client integration
 - **HTTP/JSON**: Standard protocols for easy debugging and testing
 - **Single Endpoint**: All MCP operations through `/mcp/` path
+- **Agent Service Integration**: Uses the same service that provides gRPC API
 
-### Legacy SSE Transport (Deprecated)
+### Implementation Details
+The MCP server is implemented as a simple HTTP handler that:
+- Runs alongside the gRPC server when `--enable-mcp` is specified
+- Uses the Agent Service instance for all operations
+- Requires both `--grpc-port` and `--http-port` to be specified
+- Auto-generates tools from protobuf definitions
+- Provides consistent API between gRPC and MCP interfaces
 Previous versions used SSE transport requiring sessionId. This has been migrated to StreamableHTTP for better compatibility.
 
 ## Security Considerations

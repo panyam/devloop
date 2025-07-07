@@ -19,7 +19,7 @@ Like Air but for multiple components. Devloop runs as a local file watcher that 
 **Use Case:** Single project development, local development only, no external API needed.
 
 ### 2. Agent Mode
-Like Standalone mode but with an embedded gRPC server. Devloop watches multiple components in a single project while also providing API access for external clients to connect directly to this agent.
+Like Standalone mode but with an embedded gRPC server. Devloop watches multiple components in a single project while also providing API access for external clients to connect directly to this agent. Includes MCP integration via HTTP handler when enabled.
 
 ![Agent Mode Architecture](images/agent-mode.svg)
 
@@ -38,6 +38,8 @@ devloop --mode gateway --http-port 9999 --grpc-port 55555
 devloop --mode agent --gateway-addr localhost:55555 -c project-a/.devloop.yaml
 devloop --mode agent --gateway-addr localhost:55555 -c project-b/.devloop.yaml
 ```
+
+**Note:** Gateway mode is temporarily removed and will be reimplemented using the grpcrouter library for simplified proxy and reverse tunnel functionality.
 
 **Use Case:** Microservices, monorepos, multi-project development with centralized monitoring.
 
@@ -555,7 +557,7 @@ for _, project := range resp.Projects {
 
 ## 🤖 MCP Server Integration
 
-Devloop Gateway can act as a Model Context Protocol (MCP) server, enabling AI agents and LLMs (like Claude) to monitor and control your development workflows.
+Devloop can act as a Model Context Protocol (MCP) server, enabling AI agents and LLMs (like Claude) to monitor and control your development workflows. The MCP server runs as an HTTP handler alongside the gRPC API when enabled.
 
 ![MCP Integration Architecture](images/mcp-integration.svg)
 
@@ -569,12 +571,14 @@ Model Context Protocol (MCP) is a standard that allows AI assistants to interact
 
 ### Setting Up Devloop MCP Server
 
-#### 1. Start Gateway in MCP Mode
+#### 1. Start Devloop with MCP Enabled
 
 ```bash
-# Start gateway with MCP server enabled
-devloop --mode gateway --http-port 9999 --grpc-port 55555 --enable-mcp
+# Start standalone mode with MCP server enabled
+devloop --grpc-port 5555 --http-port 9999 --enable-mcp -c .devloop.yaml
 ```
+
+The MCP server runs as an HTTP handler on the `/mcp` endpoint, using the same Agent Service that provides the gRPC API.
 
 #### 2. Configure MCP Server Settings
 
@@ -603,12 +607,13 @@ Create `mcp-config.json`:
 }
 ```
 
-#### 3. Connect Your Devloop Agents
+#### 3. Access MCP Endpoint
+
+The MCP server is available at the `/mcp` HTTP endpoint:
 
 ```bash
-# In each project directory
-devloop --mode agent --gateway-addr localhost:55555 \
-        -c .devloop.yaml
+# MCP endpoint (when --enable-mcp is used)
+http://localhost:9999/mcp/
 ```
 
 ### Using with Claude Desktop
@@ -620,32 +625,47 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   "mcpServers": {
     "devloop": {
       "command": "devloop",
-      "args": ["--enable-mcp", "--c", "/path/to/project/.devloop.yaml"],
+      "args": ["--grpc-port", "5555", "--http-port", "9999", "--enable-mcp", "-c", "/path/to/project/.devloop.yaml"],
       "env": {}
     }
   }
 }
 ```
 
+Alternatively, you can use the HTTP transport by configuring an HTTP MCP client to connect to `http://localhost:9999/mcp/`.
+
 ### Available MCP Tools
 
-When connected, the following tools are available to AI agents:
+When connected, the following tools are available to AI agents (auto-generated from the Agent Service protobuf definitions):
 
 #### Project Management
 ```typescript
-// List all projects
-await use_mcp_tool("devloop", "list_projects", {
-  filter: "backend",
-  include_status: true
+// Get project configuration
+await use_mcp_tool("devloop", "GetConfig", {});
+
+// Get specific rule information
+await use_mcp_tool("devloop", "GetRule", {
+  ruleName: "backend-build"
 });
 
-// Get project information
-await use_mcp_tool("devloop", "project_info", {
-  project_id: "my-backend"
-});
+// List watched file paths
+await use_mcp_tool("devloop", "ListWatchedPaths", {});
 ```
 
-#### Build & Test Control
+#### Rule Control
+```typescript
+// Trigger a rule manually
+await use_mcp_tool("devloop", "TriggerRule", {
+  ruleName: "backend-build"
+});
+
+// Stream logs (placeholder for future implementation)
+// await use_mcp_tool("devloop", "StreamLogs", {
+//   ruleName: "backend-build"
+// });
+```
+
+#### Legacy Example (for reference)
 ```typescript
 // Trigger a build
 await use_mcp_tool("devloop", "trigger_build", {
@@ -830,7 +850,7 @@ devloop --mode standalone --http-port 9999 --grpc-port 55555 --enable-mcp
 ```
 - ✅ HTTP API: `http://localhost:9999/api/projects`
 - ✅ gRPC API: `localhost:55555` 
-- ✅ MCP via HTTP/SSE: `http://localhost:9999/mcp/` (if `--enable-mcp`)
+- ✅ MCP via HTTP: `http://localhost:9999/mcp/` (if `--enable-mcp`)
 - ✅ File watching and rule execution
 
 #### Gateway Mode (`--mode gateway`)
@@ -840,8 +860,9 @@ devloop --mode gateway --http-port 9999 --grpc-port 55555 --enable-mcp
 - ✅ HTTP API: `http://localhost:9999/api/projects`
 - ✅ gRPC API: `localhost:55555`
 - ✅ Agent management and coordination
-- ✅ MCP via HTTP/SSE: `http://localhost:9999/mcp/` (if `--enable-mcp`)
+- ✅ MCP via HTTP: `http://localhost:9999/mcp/` (if `--enable-mcp`)
 - ❌ No direct file watching (agents do the watching)
+- ⚠️ **Note:** Gateway mode temporarily removed, being reimplemented with grpcrouter
 
 #### Agent Mode (`--mode agent --gateway-addr localhost:55555`)
 ```bash
@@ -859,8 +880,7 @@ devloop --mode agent --gateway-addr localhost:55555
 curl http://localhost:9999/api/projects
 
 # Test MCP HTTP endpoints (when --enable-mcp)
-curl http://localhost:9999/mcp/sse
-curl http://localhost:9999/mcp/message
+curl http://localhost:9999/mcp/
 
 # Test if any devloop process is running
 ps aux | grep devloop
@@ -870,34 +890,32 @@ ps aux | grep devloop
 
 #### Connection Issues
 
-**Note**: MCP now supports both stdio and HTTP (SSE) transports.
+**Note**: MCP uses StreamableHTTP transport for universal compatibility.
 
 ```bash
 # Check if devloop is running with MCP enabled
 ps aux | grep devloop
 
-# Test MCP HTTP endpoints (when --mcp-port is specified)
-curl http://localhost:3000/sse        # MCP SSE endpoint
-curl http://localhost:3000/message    # MCP message endpoint
+# Test MCP HTTP endpoint (when --enable-mcp is specified)
+curl http://localhost:9999/mcp/
 
-# Test regular HTTP API endpoints (only available in standalone/gateway mode)
-curl http://localhost:9999/projects   # If running --mode standalone
-curl http://localhost:9999/projects   # If running --mode gateway
+# Test regular HTTP API endpoints
+curl http://localhost:9999/api/
 
 # MCP communication:
-# - stdio: For process-launched clients
-# - HTTP/SSE: For network clients (VSCode, external tools)
+# - stdio: For process-launched clients (Claude Desktop)
+# - HTTP: For network clients (web tools, external integrations)
 ```
 
 #### Common Problems
 
 1. **"MCP server not found"**
-   - Ensure gateway is running with `--enable-mcp` flag
+   - Ensure devloop is running with `--enable-mcp` flag and `--http-port` specified
    - Check firewall settings
 
 2. **"Tool execution failed"**
-   - Verify project is connected as agent
-   - Check tool permissions in mcp-config.json
+   - Verify the rule name exists in your .devloop.yaml
+   - Check the gRPC server is running (requires `--grpc-port`)
 
 3. **"Timeout waiting for response"**
    - Increase timeout in tool parameters
@@ -906,7 +924,7 @@ curl http://localhost:9999/projects   # If running --mode gateway
 ### Best Practices
 
 1. **Use Descriptive Project IDs**: Makes it easier for AI to identify projects
-2. **Add MCP Descriptions**: Document your rules for better AI understanding
+2. **Use Descriptive Rule Names**: Makes it easier for AI to identify and trigger rules
 3. **Set Reasonable Timeouts**: Prevent long-running operations from blocking
 4. **Monitor Rate Limits**: Prevent AI from overwhelming your system
 5. **Log AI Actions**: Audit trail for debugging and security

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -62,7 +63,7 @@ func ConvertAirToml(inputPath string) error {
 	}
 
 	// Convert the AirConfig to a devloop Rule
-	devloopRule := Rule{
+	devloopRule := pb.Rule{
 		Name: "Imported from .air.toml",
 	}
 
@@ -86,7 +87,7 @@ func ConvertAirToml(inputPath string) error {
 		includePatterns = append(includePatterns, fmt.Sprintf("%s/**/*", dir))
 	}
 	if len(includePatterns) > 0 {
-		devloopRule.Watch = append(devloopRule.Watch, &Matcher{
+		devloopRule.Matchers = append(devloopRule.Matchers, &pb.RuleMatcher{
 			Action:   "include",
 			Patterns: includePatterns,
 		})
@@ -98,7 +99,7 @@ func ConvertAirToml(inputPath string) error {
 	}
 	excludePatterns = append(excludePatterns, airConfig.Build.ExcludeFile...)
 	if len(excludePatterns) > 0 {
-		devloopRule.Watch = append(devloopRule.Watch, &Matcher{
+		devloopRule.Matchers = append(devloopRule.Matchers, &pb.RuleMatcher{
 			Action:   "exclude",
 			Patterns: excludePatterns,
 		})

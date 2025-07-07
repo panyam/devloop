@@ -2,7 +2,29 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-07-04)
+## Recently Completed (2025-07-07)
+
+- ✅ **Architecture Simplification:**
+  - **Problem**: Dual orchestrator implementations (V1/V2) created complexity
+  - **Solution**: Simplified to single orchestrator implementation with Agent Service wrapper
+  - **Implementation**: Removed factory pattern, consolidated to single agent/orchestrator.go
+  - **Result**: Cleaner codebase, easier maintenance, and simplified testing
+  - **Impact**: All tests passing with single implementation
+
+- ✅ **Agent Service Integration:**
+  - **Problem**: Complex gateway integration and API management
+  - **Solution**: Created dedicated Agent Service (agent/service.go) providing gRPC API access
+  - **Implementation**: Clean separation between file watching (Orchestrator) and API access (Agent Service)
+  - **Result**: Better modularity and preparation for grpcrouter-based gateway
+  - **API**: Provides GetConfig, GetRule, ListWatchedPaths, TriggerRule, StreamLogs endpoints
+
+- ✅ **MCP Integration Simplification:**
+  - **Root Cause**: Complex MCP mode with separate service management was hard to maintain
+  - **Solution**: Simplified MCP to HTTP handler using existing Agent Service
+  - **Implementation**: MCP runs on `/mcp` endpoint in startHttpServer method
+  - **Result**: MCP enabled with `--enable-mcp` flag, uses same AgentServiceServer
+  - **Benefits**: Easier maintenance, better integration with core functionality
+  - **Compatibility**: Still uses StreamableHTTP transport (MCP 2025-03-26 spec) for universal compatibility
 
 - ✅ **Default Port Configuration & Auto-Discovery:**
   - **Problem**: Default ports 8080 (HTTP) and 50051 (gRPC) cause frequent conflicts with other services
@@ -10,23 +32,14 @@ This document outlines the immediate next steps for the `devloop` project.
   - **Auto-Discovery**: Added `--auto-ports` flag for automatic port conflict resolution
   - **Implementation**: Port discovery logic in `runOrchestrator()` with fallback search
   - **User Experience**: `devloop` now starts without port conflicts in most scenarios
-  - **Documentation**: Updated all MCP examples from incorrect :9090 to correct :9999
-
-- ✅ **MCP StreamableHTTP Transport Migration:**
-  - **Root Cause**: MCP server was using legacy SSE transport requiring sessionId, incompatible with Claude Code
-  - **Solution**: Migrated to StreamableHTTP transport (MCP 2025-03-26 spec) with stateless mode
-  - **Implementation**: Replaced SSEServer with StreamableHTTPServer in `internal/mcp/server.go`
-  - **Result**: Claude Code and other MCP clients now connect seamlessly without sessionId errors
-  - **Library Upgrade**: Updated to mcp-go v0.32.0 for full StreamableHTTP support
-  - **Configuration**: Updated MCP endpoint from `/mcp/message` to `/mcp/` for single-endpoint operation
 
 ## Previously Completed (2025-07-03)
 
-- ✅ **Complete OrchestratorV1 Removal:**
-  - Deleted legacy V1 orchestrator and factory pattern implementations
-  - Simplified codebase to single OrchestratorV2 implementation
-  - Updated all tests to use V2 directly without version switching
-  - Backed up legacy cleanup files while preserving modern process management
+- ✅ **Complete Orchestrator Simplification:**
+  - Deleted legacy dual orchestrator implementations and factory pattern
+  - Simplified codebase to single orchestrator implementation
+  - Updated all tests to use simplified architecture without version switching
+  - Preserved modern process management and rule execution features
 
 - ✅ **Critical Rule Matching Bug Fix:**
   - **Root Cause**: Orchestrator was ignoring `Action` field in matcher patterns
@@ -102,21 +115,22 @@ This document outlines the immediate next steps for the `devloop` project.
   - Add migration guide for users
   - Performance benchmarking between v1 and v2
 
-- ✅ **MCP (Model Context Protocol) Integration:**
-  - ✅ **Redesigned MCP as Add-On Capability:** Changed from exclusive mode to optional feature alongside core modes
+- ✅ **MCP (Model Context Protocol) Integration Simplification:**
+  - ✅ **Simplified MCP as HTTP Handler:** Changed from separate mode to simple HTTP endpoint integration
   - ✅ Auto-generated MCP tools from protobuf definitions using protoc-gen-go-mcp
-  - ✅ **StreamableHTTP Transport:** Migrated to modern MCP 2025-03-26 specification for universal compatibility
-  - ✅ **Stateless Design:** Eliminated sessionId requirement for seamless Claude Code integration
+  - ✅ **StreamableHTTP Transport:** Uses modern MCP 2025-03-26 specification for universal compatibility
+  - ✅ **Stateless Design:** No sessionId requirement for seamless Claude Code integration
+  - ✅ **Agent Service Integration:** MCP uses same Agent Service as gRPC API for consistency
   - ✅ Enhanced protobuf documentation with comprehensive field descriptions and usage examples
-  - ✅ Implemented six core MCP tools: ListProjects, GetConfig, GetRuleStatus, TriggerRuleClient, ReadFileContent, ListWatchedPaths
-  - ✅ Created complete integration guide (MCP_INTEGRATION.md) with workflow patterns and usage examples
-  - ✅ Added manual project ID configuration for consistent AI tool identification
-  - ✅ Clean separation of MCP functionality in `internal/mcp/` package using adapter pattern
+  - ✅ Core MCP tools: GetConfig, GetRule, ListWatchedPaths, TriggerRule, StreamLogs
+  - ✅ Updated integration approach using existing Agent Service architecture
+  - ✅ Manual project ID configuration for consistent AI tool identification
 
-- **Finalize Agent/Gateway Implementation:**
-  - Implement the client logic in `agent` mode for registering with and sending data to the gateway
-  - Implement the aggregation and proxying logic in the `gateway` mode to handle multiple agents
-  - Add comprehensive tests for distributed mode operations
+- **Implement grpcrouter-based Gateway Mode:**
+  - Research and integrate grpcrouter library for automatic gateway/proxy/reverse tunnel functionality
+  - Implement simplified gateway mode using grpcrouter instead of custom implementation
+  - Add client logic for agents to connect to grpcrouter-based gateway
+  - Add comprehensive tests for distributed mode operations with new architecture
 
 - **Add gRPC API Tests:** Create a new suite of tests specifically for the gRPC and HTTP endpoints to ensure the API is robust and reliable
 
@@ -126,7 +140,7 @@ This document outlines the immediate next steps for the `devloop` project.
   - Add streaming log support to MCP tools for real-time build/test monitoring
   - Consider implementing MCP resources for project files and configurations
   - Explore MCP prompts for common development workflows
-  - Add support for multiple project instances in single MCP server
+  - Enhance MCP integration with additional Agent Service features
 
 - **Performance Optimization:**
   - Profile the file watching and command execution pipeline
@@ -141,11 +155,11 @@ This document outlines the immediate next steps for the `devloop` project.
 ## Ongoing
 
 - **Documentation:** Update all project documentation (README, etc.) to reflect:
-  - The simplified single-orchestrator architecture
-  - The three core operating modes (standalone, agent, gateway) + MCP as add-on
+  - The simplified single-orchestrator architecture with Agent Service integration
+  - The three core operating modes (standalone, agent, gateway) with MCP as HTTP handler
   - The glob pattern behavior with doublestar and proper action-based filtering
-  - The new `agent/` directory structure
-  - MCP integration capabilities and AI assistant workflows
+  - The new `agent/` directory structure and Agent Service architecture
+  - Simplified MCP integration as HTTP handler using Agent Service
   
 - **User Experience:** 
   - Refine the CLI flags and output for the new modes to ensure they are clear and intuitive

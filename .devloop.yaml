@@ -16,4 +16,5 @@ rules:
           - "go.sum"
     commands:
       - "echo '🔧 Building Devloop Binary into GOBIN...'"
-      - "go install main.go"
+      - "make install"
+      - devloop --version

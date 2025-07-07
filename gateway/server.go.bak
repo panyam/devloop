@@ -2,8 +2,6 @@ package gateway
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -154,35 +152,6 @@ func (gs *GatewayService) Stop() {
 	}
 
 	utils.LogGateway("Gateway shut down gracefully.")
-}
-
-// generateCorrelationID creates a unique correlation ID for request/response matching
-func generateCorrelationID() string {
-	bytes := make([]byte, 8)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
-}
-
-// MountMCPHandlers mounts MCP handlers at /mcp prefix
-func (gs *GatewayService) MountMCPHandlers(mcpHandler http.Handler) {
-	if gs.mainMux == nil {
-		utils.LogGateway("Cannot mount MCP handlers: HTTP server not started")
-		return
-	}
-
-	// Mount MCP handlers at /mcp prefix
-	gs.mainMux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
-	utils.LogGateway("MCP handlers mounted at /mcp prefix")
-}
-
-// Orchestrator is an interface that defines the methods that the gateway service needs to interact with the orchestrator.
-type Orchestrator interface {
-	GetConfig() *Config
-	GetRuleStatus(ruleName string) (*RuleStatus, bool)
-	TriggerRule(ruleName string) error
-	GetWatchedPaths() []string
-	ReadFileContent(path string) ([]byte, error)
-	StreamLogs(ruleName string, filter string, stream pb.AgentService_StreamLogsClientServer) error
 }
 
 // ListProjects implements pb.AgentServiceServer.

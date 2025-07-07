@@ -47,7 +47,7 @@ rules:
 		require.NoError(t, err)
 
 		// Start orchestrator in agent mode (embedded gRPC server)
-		orchestrator, err := NewOrchestratorForTesting(configPath, "")
+		orchestrator, err := NewOrchestratorForTesting(configPath)
 		require.NoError(t, err)
 
 		// Start orchestrator in background
@@ -68,7 +68,7 @@ rules:
 		// Test GetConfig
 		config := orchestrator.GetConfig()
 		assert.NotNil(t, config)
-		assert.Equal(t, "test-agent", config.Settings.ProjectID)
+		assert.Equal(t, "test-agent", config.Settings.ProjectId)
 		assert.Len(t, config.Rules, 1)
 		assert.Equal(t, "test-rule", config.Rules[0].Name)
 

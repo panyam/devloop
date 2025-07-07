@@ -3,7 +3,7 @@ deps: install-tools
 	@echo "✓ All dependencies installed successfully!"
 
 install:
-	go install main.go
+	go build -o ${GOBIN}/devloop main.go
 
 buf:
 	buf generate

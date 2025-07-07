@@ -22,27 +22,28 @@ This document outlines the high-level roadmap for the `devloop` project.
 
 - [x] **Architecture Refactoring:**
   - [x] Separated concerns: Orchestrator (file watching) and RuleRunner (command execution)
-  - [x] Implemented OrchestratorV2 with cleaner architecture using RuleRunners
-  - [x] Created comprehensive testing infrastructure supporting both v1 and v2
+  - [x] Simplified to single orchestrator implementation with Agent Service integration
+  - [x] Created comprehensive testing infrastructure
   - [x] Rule-specific configuration (debounce delay, verbose logging)
 - [x] **Process Management Improvements:**
   - [x] Fixed zombie process issues with proper signal handling
   - [x] Implemented sequential command execution with failure propagation
   - [x] Platform-specific process management (Linux, Darwin, Windows)
 - [x] **Testing Infrastructure:**
-  - [x] Factory pattern for testing both orchestrator versions
-  - [x] Environment variable based version selection (DEVLOOP_ORCHESTRATOR_VERSION)
-  - [x] Separate make targets: `testv1` and `testv2`
+  - [x] Simplified testing infrastructure for single orchestrator implementation
+  - [x] Comprehensive test coverage for all core functionality
+  - [x] Cross-platform testing support
 - [x] **Port Configuration & Auto-Discovery:**
   - [x] Updated default ports to avoid common conflicts (HTTP: 8080→9999, gRPC: 50051→5555)
   - [x] Implemented automatic port discovery with --auto-ports flag
   - [x] Fast TCP bind/close port availability checking
   - [x] Fallback port search with configurable range limits
-- [ ] **Agent & Gateway Modes:**
-  - [ ] Finalize implementation for the `agent` mode, allowing a `devloop` instance to connect to a central gateway.
-  - [ ] Finalize implementation for the `gateway` mode, allowing a `devloop` instance to act as a central hub for multiple agents.
-  - [ ] Add comprehensive tests for agent-gateway communication and interaction.
-  - [x] Port missing gateway methods from v1 to v2 (completed)
+- [ ] **Gateway Mode (grpcrouter-based):**
+  - [ ] Research and integrate grpcrouter library for automatic gateway/proxy functionality
+  - [ ] Implement simplified gateway mode using grpcrouter instead of custom implementation
+  - [ ] Add agent connection logic for grpcrouter-based gateway
+  - [ ] Add comprehensive tests for distributed mode operations with new architecture
+  - [x] Agent Service integration completed (provides foundation for gateway)
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.
@@ -50,9 +51,14 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [ ] Subcommands for common tasks (e.g., `devloop init`, `devloop status`).
   - [ ] More flexible flag options for the different modes.
 - [ ] **Web-based UI:**
-  - [ ] A simple web interface, built on the gRPC-Gateway, to visualize rule status, logs, and trigger commands manually.
+  - [ ] A simple web interface, built on the Agent Service HTTP API, to visualize rule status, logs, and trigger commands manually.
 
 ## Phase 3: Ecosystem & Integration (Future)
+
+- [ ] **Enhanced MCP Integration:**
+  - [ ] Add streaming log support to MCP tools for real-time monitoring
+  - [ ] Implement additional MCP resources for project files and configurations
+  - [ ] Explore MCP prompts for common development workflows
 
 - [ ] **IDE Integration:**
   - [ ] Plugins for popular IDEs (e.g., VS Code, GoLand) to provide a seamless development experience.
