@@ -63,7 +63,7 @@ func ConvertAirToml(inputPath string) error {
 	}
 
 	// Convert the AirConfig to a devloop Rule
-	devloopRule := pb.Rule{
+	devloopRule := &pb.Rule{
 		Name: "Imported from .air.toml",
 	}
 
