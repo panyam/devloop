@@ -112,6 +112,14 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "timeout",
+            "description": "Timeout (in seconds) if no new log lines found to be streamed\nnegative value  =\u003e Wait indefinitely/forever\n0 =\u003e use a default value (say 3s)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
           }
         ],
         "tags": [
