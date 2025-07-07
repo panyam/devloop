@@ -1,12 +1,12 @@
 
-deps: install-tools
-	@echo "✓ All dependencies installed successfully!"
-
 install:
 	go build -o ${GOBIN}/devloop main.go
 
 buf:
 	buf generate
+
+deps: install-tools
+	@echo "✓ All dependencies installed successfully!"
 
 versionup:
 	git tag -a `cat VERSION` -m `cat VERSION`

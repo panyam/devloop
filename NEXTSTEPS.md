@@ -4,6 +4,19 @@ This document outlines the immediate next steps for the `devloop` project.
 
 ## Recently Completed (2025-07-07)
 
+- ✅ **CLI Restructuring with Cobra Framework:**
+  - **Problem**: Monolithic main.go with basic flag parsing and poor user experience
+  - **Solution**: Complete refactoring to modern Cobra-based CLI with subcommands
+  - **Implementation**: 
+    - Created `cmd/` package with root, server, config, status, trigger, paths, convert commands
+    - Extracted server logic to `server/` package with proper signal handling
+    - Added `client/` package for gRPC client utilities
+    - Default behavior: `devloop` starts server, subcommands act as client
+  - **Result**: Professional CLI experience with help, subcommands, and client functionality
+  - **Impact**: Users can now interact with running devloop servers via CLI commands
+
+## Previously Completed (2025-07-07)
+
 - ✅ **Architecture Simplification:**
   - **Problem**: Dual orchestrator implementations (V1/V2) created complexity
   - **Solution**: Simplified to single orchestrator implementation with Agent Service wrapper

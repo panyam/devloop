@@ -47,9 +47,14 @@ This document outlines the high-level roadmap for the `devloop` project.
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.
-- [ ] **Improved CLI:**
-  - [ ] Subcommands for common tasks (e.g., `devloop init`, `devloop status`).
-  - [ ] More flexible flag options for the different modes.
+- [x] **Improved CLI (Completed 2025-07-07):**
+  - [x] **Cobra Framework Integration:** Complete CLI restructuring with modern subcommand architecture
+  - [x] **Client Commands:** `devloop config`, `devloop status`, `devloop trigger`, `devloop paths`
+  - [x] **Server Command:** `devloop server` with all original functionality
+  - [x] **Default Behavior:** `devloop` starts server, subcommands act as gRPC client
+  - [x] **Signal Handling:** Fixed Ctrl-C interrupt handling for proper server shutdown
+  - [x] **Code Organization:** Modular structure with `cmd/`, `server/`, `client/` packages
+  - [x] **Professional UX:** Help system, usage examples, and consistent flag handling
 - [ ] **Web-based UI:**
   - [ ] A simple web interface, built on the Agent Service HTTP API, to visualize rule status, logs, and trigger commands manually.
 

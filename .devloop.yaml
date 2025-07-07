@@ -17,4 +17,4 @@ rules:
     commands:
       - "echo '🔧 Building Devloop Binary into GOBIN...'"
       - "make install"
-      - devloop --version
+      - "devloop version"
