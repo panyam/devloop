@@ -56,6 +56,7 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,10 +99,37 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 		return nil, fmt.Errorf("failed to read config file %q: %w", absConfigPath, err)
 	}
 
+	// First parse into a generic map to handle problematic fields
+	var rawConfig map[string]interface{}
+	err = yaml.Unmarshal(data, &rawConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config file %q into raw map: %w", absConfigPath, err)
+	}
+
+	// Then parse into protobuf struct
 	var config pb.Config
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config file %q: %w", absConfigPath, err)
+	}
+
+	// Workaround: Manually fix the skipRunOnInit field from raw YAML
+	// This is needed because protobuf-generated struct tags don't work correctly with gopkg.in/yaml.v3
+	if rules, ok := rawConfig["rules"].([]interface{}); ok {
+		for i, rawRule := range rules {
+			if ruleMap, ok := rawRule.(map[string]interface{}); ok {
+				// Check for both possible field names (camelCase and snake_case)
+				if skipInit, exists := ruleMap["skipRunOnInit"]; exists {
+					if skipBool, ok := skipInit.(bool); ok && i < len(config.Rules) {
+						config.Rules[i].SkipRunOnInit = skipBool
+					}
+				} else if skipInit, exists := ruleMap["skip_run_on_init"]; exists {
+					if skipBool, ok := skipInit.(bool); ok && i < len(config.Rules) {
+						config.Rules[i].SkipRunOnInit = skipBool
+					}
+				}
+			}
+		}
 	}
 
 	// Default to exclude if not specified globally

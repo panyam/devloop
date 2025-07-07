@@ -1,0 +1,99 @@
+syntax = "proto3";
+package devloop.v1;
+
+option go_package = "github.com/panyam/devloop/gen/go/devloop/v1";
+
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/protobuf/empty.proto";
+import "mcp/v1/annotations.proto";
+import "devloop/v1/models.proto";
+
+// The Gateway which acts as a proxy/gateway for a bunch of Develoop instances
+service GatewayService {
+  // Communicate handles all bidirectional communication between devloop and the gateway.
+  rpc Communicate(stream DevloopMessage) returns (stream DevloopMessage) {
+    option (google.api.http) = {
+      get: "/gateway"
+    };
+  }
+
+  // Discover all available devloop projects for automation and monitoring.
+  // 
+  // Use this as the starting point for any development workflow automation.
+  // Projects must be running in agent mode and connected to appear in results.
+  //
+  // Typical workflow:
+  // 1. Call ListProjects() to see what's available
+  // 2. Choose a project_id from the results
+  // 3. Call GetConfig(project_id) to see available rules
+  // 4. Use TriggerRuleClient(project_id, rule_name) to run builds/tests
+  //
+  // Returns: List of projects with their IDs, paths, and connection status
+  // mcp_tool_name:list_projects
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (google.api.http) = {
+      get: "/projects"
+    };
+  }
+}
+
+// DevloopMessage is a wrapper for all messages exchanged between devloop and the gateway.
+message DevloopMessage {
+  string correlation_id = 1; // Used to correlate requests and responses
+  oneof content {
+    // Messages sent from devloop to gateway
+    RegisterRequest register_request = 2;
+    UnregisterRequest unregister_request = 3;
+    LogLine log_line = 4;
+    UpdateRuleStatusRequest update_rule_status_request = 5;
+    GetConfigResponse get_config_response = 6;
+    GetRuleStatusResponse get_rule_status_response = 7;
+    TriggerRuleResponse trigger_rule_response = 8;
+    ListWatchedPathsResponse list_watched_paths_response = 9;
+    ReadFileContentResponse read_file_content_response = 10;
+
+    // Messages sent from gateway to devloop
+    TriggerRuleRequest trigger_rule_request = 11;
+    GetConfigRequest get_config_request = 12;
+    GetRuleStatusRequest get_rule_status_request = 13;
+    ListWatchedPathsRequest list_watched_paths_request = 14;
+    ReadFileContentRequest read_file_content_request = 15;
+    GetHistoricalLogsRequest get_historical_logs_request = 16;
+  }
+}
+
+// RegisterRequest is sent by devloop to register with the gateway.
+message RegisterRequest {
+  ProjectInfo project_info = 1;
+}
+
+// UnregisterRequest is sent by devloop to unregister from the gateway.
+message UnregisterRequest {
+  string project_id = 1;
+}
+
+
+// ListProjectsRequest retrieves all available projects. No parameters needed.
+message ListProjectsRequest {
+}
+
+// ListProjectsResponse contains all discovered devloop projects.
+message ListProjectsResponse {
+  // Individual project information
+  message Project {
+    // Unique identifier for the project (from devloop.yaml or auto-generated)
+    string project_id = 1;
+    
+    // Absolute path to the project's root directory
+    string project_root = 2;
+    
+    // Current connection status:
+    // "CONNECTED" = project is online and responsive
+    // "DISCONNECTED" = project is offline or unreachable
+    string status = 3;
+  }
+  
+  // Array of all available projects. Use project_id for subsequent calls.
+  repeated Project projects = 1;
+}

@@ -326,9 +326,9 @@
           "type": "string",
           "description": "The workdir for this rule.  If not specified then will default to the directory where the devloop config is in."
         },
-        "runOnInit": {
+        "skipRunOnInit": {
           "type": "boolean",
-          "title": "Whether to run on init or not"
+          "title": "Whether to skip running on init (default false = will run on init)"
         },
         "verbose": {
           "type": "boolean",

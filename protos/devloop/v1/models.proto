@@ -1,0 +1,152 @@
+syntax = "proto3";
+package devloop.v1;
+
+option go_package = "github.com/panyam/devloop/gen/go/devloop/v1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/http.proto";
+import "google/protobuf/empty.proto";
+import "mcp/v1/annotations.proto";
+
+
+// ProjectInfo represents the information about a registered devloop project.
+// This contains the core identification and location data for a project.
+message ProjectInfo {
+  // Unique identifier for the project. This can be:
+  // - Manually set in devloop.yaml settings.project_id (recommended for AI tools)
+  // - Auto-generated from the project directory path (fallback)
+  // Examples: "my-backend", "frontend-app", "user-service"
+  string project_id = 1;
+  
+  // Absolute path to the project's root directory containing .devloop.yaml
+  // This is where all relative paths in commands and file operations are resolved from.
+  // Example: "/Users/dev/projects/my-app"
+  string project_root = 2;
+}
+
+message Config {
+  string project_id = 1;
+	Settings settings = 2;
+	repeated Rule rules = 3;
+}
+
+// Settings defines global settings for devloop.
+message Settings {
+  string project_id = 1;
+
+  // Whether to prefix logs with rule name or not
+  bool prefix_logs = 2;
+
+  // Length of the prefix to format in if prefixing logs.
+	uint32 prefix_max_length = 3;
+
+  // Default debounce delay for all rules if they do not have their own DB delay specified
+	optional uint64 default_debounce_delay = 4;
+
+  // Whether to log verbosely or not
+  bool verbose = 5;
+
+  bool color_logs = 6;
+
+  string color_scheme = 7;
+
+  map<string, string> custom_colors = 8;
+
+  string default_watch_action = 9;
+}
+
+// LogLine represents a single log entry from a rule execution.
+// Used for streaming real-time logs and retrieving historical log data.
+message LogLine {
+  // The project that generated this log line
+  string project_id = 1;
+  
+  // The specific rule that produced this output (e.g., "backend", "frontend", "tests")
+  string rule_name = 2;
+  
+  // The actual log content/output line from the command
+  // This includes all stdout/stderr from the rule's commands
+  string line = 3;
+  
+  // When this log line was generated (Unix timestamp in milliseconds)
+  // Use this for time-based filtering and chronological ordering
+  int64 timestamp = 4;
+}
+
+message Rule {
+  // The project this rule belongs to
+  string project_id = 1;
+  
+  // The rule name (e.g., "backend", "frontend", "tests")
+  // Must match a rule name from the project's .devloop.yaml configuration
+  string name = 2;
+
+  // The commands that will be executed for this rule
+  repeated string commands = 3;
+
+  // The rule matchers and the actions to take for them
+  repeated RuleMatcher watch = 4;
+
+  // What to do when a file does not match any pattern by default
+  string default_action = 5;
+
+  // Prefix for this rule
+  string prefix = 6;
+
+  // The workdir for this rule.  If not specified then will default to the directory where the devloop config is in.
+  string work_dir = 7;
+
+  // Whether to skip running on init (default false = will run on init)
+  // Set to true to prevent rule from executing when devloop starts up
+  // Example: skip_run_on_init: true
+  bool skip_run_on_init = 8;
+
+  // Whether the rule will have verbose logs or not
+  optional bool verbose = 9;
+
+  // Delay for debouncing if rules matched multiple times in rapid successession
+  optional uint64 debounce_delay = 10;
+
+  // Color to use to show the logs for this rule
+  string color = 11;
+
+  map<string, string> env = 12;
+
+  // Status of this rule
+  RuleStatus status = 13;
+}
+
+message RuleMatcher {
+  // Patterns to match this rule for
+  repeated string patterns = 1;
+
+  // Action to take when rule matches - currently "include" | "exclude"
+  string action = 2;
+}
+
+// RuleStatus represents the current execution status and history of a rule.
+// Use this to monitor build/test progress and check for failures.
+message RuleStatus {
+	string project_id = 1;
+	string rule_name = 2;
+
+  // Whether the rule is currently executing commands
+  // true = commands are running, false = rule is idle
+  bool is_running = 3;
+  
+  // When the current execution started (Unix timestamp in milliseconds)
+  // Only meaningful when is_running = true
+  google.protobuf.Timestamp start_time = 4;
+  
+  // When the last execution completed (Unix timestamp in milliseconds)
+  // Use this to check how recently a rule was executed
+  google.protobuf.Timestamp last_build_time = 5;
+  
+  // Result of the last execution. Possible values:
+  // - "SUCCESS": All commands completed successfully (exit code 0)
+  // - "FAILED": One or more commands failed (non-zero exit code)
+  // - "RUNNING": Rule is currently executing
+  // - "IDLE": Rule has not been executed yet
+  string last_build_status = 6;
+}

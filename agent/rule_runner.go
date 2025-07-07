@@ -66,19 +66,20 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 
 // Start begins monitoring for this rule
 func (r *RuleRunner) Start() error {
-	// If run_on_init is true (default), execute immediately
-	shouldRunOnInit := true // Default to true
-	if r.rule.RunOnInit != nil {
-		shouldRunOnInit = *r.rule.RunOnInit
+	// Skip execution if skip_run_on_init is true
+	if r.rule.SkipRunOnInit {
+		if r.isVerbose() {
+			log.Printf("[%s] Skipping initialization execution (skip_run_on_init: true)", r.rule.Name)
+		}
+		return nil
 	}
 
-	if shouldRunOnInit {
-		if r.isVerbose() {
-			log.Printf("[%s] Executing rule %q on initialization (run_on_init: true)", r.rule.Name, r.rule.Name)
-		}
-		if err := r.Execute(); err != nil {
-			return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
-		}
+	// Execute on init (default behavior)
+	if r.isVerbose() {
+		log.Printf("[%s] Executing rule %q on initialization", r.rule.Name, r.rule.Name)
+	}
+	if err := r.Execute(); err != nil {
+		return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
 	}
 	return nil
 }
