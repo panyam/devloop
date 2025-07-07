@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/panyam/devloop/client"
 	"github.com/spf13/cobra"
 )
 
@@ -36,13 +35,13 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(triggerCmd)
-	
+
 	triggerCmd.Flags().StringVarP(&triggerServerAddr, "server", "s", "localhost:5555", "Server address (host:port)")
 	triggerCmd.Flags().BoolVarP(&triggerWait, "wait", "w", false, "Wait for rule execution to complete (not yet implemented)")
 }
 
 func runTrigger(ruleName string) {
-	client, err := client.NewClient(client.Config{
+	client, err := NewClient(Config{
 		Address: triggerServerAddr,
 	})
 	if err != nil {

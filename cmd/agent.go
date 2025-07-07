@@ -1,4 +1,4 @@
-package server
+package cmd
 
 import (
 	"context"
@@ -22,18 +22,18 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-type ServerConfig struct {
-	ConfigPath    string
-	Verbose       bool
-	HTTPPort      int
-	GRPCPort      int
-	GatewayAddr   string
-	EnableMCP     bool
-	AutoPorts     bool
+type AgentConfig struct {
+	ConfigPath  string
+	Verbose     bool
+	HTTPPort    int
+	GRPCPort    int
+	GatewayAddr string
+	EnableMCP   bool
+	AutoPorts   bool
 }
 
-type Server struct {
-	config       *ServerConfig
+type Agent struct {
+	config       *AgentConfig
 	orchestrator *agent.Orchestrator
 	grpcServer   *grpc.Server
 	httpServer   *http.Server
@@ -41,8 +41,8 @@ type Server struct {
 	cancel       context.CancelFunc
 }
 
-// NewServer creates a new server instance with the given configuration
-func NewServer(config *ServerConfig) (*Server, error) {
+// NewAgent creates a new server instance with the given configuration
+func NewAgent(config *AgentConfig) (*Agent, error) {
 	orchestrator, err := agent.NewOrchestrator(config.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize orchestrator: %w", err)
@@ -58,7 +58,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Server{
+	return &Agent{
 		config:       config,
 		orchestrator: orchestrator,
 		ctx:          ctx,
@@ -67,7 +67,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 }
 
 // Start starts the server with the configured options
-func (s *Server) Start() error {
+func (s *Agent) Start() error {
 	// Validate and adjust ports if needed
 	if err := s.validateAndAdjustPorts(); err != nil {
 		return fmt.Errorf("port validation failed: %w", err)
@@ -105,7 +105,7 @@ func (s *Server) Start() error {
 	}
 
 	utils.LogDevloop("Starting orchestrator...")
-	
+
 	// Start orchestrator in goroutine
 	go func() {
 		if err := s.orchestrator.Start(); err != nil {
@@ -126,7 +126,7 @@ func (s *Server) Start() error {
 }
 
 // validateAndAdjustPorts validates port configuration and finds available ports if needed
-func (s *Server) validateAndAdjustPorts() error {
+func (s *Agent) validateAndAdjustPorts() error {
 	utils.LogDevloop("Starting with ports: HTTP=%d, gRPC=%d", s.config.HTTPPort, s.config.GRPCPort)
 
 	// Auto-discover gRPC port if requested
@@ -151,7 +151,7 @@ func (s *Server) validateAndAdjustPorts() error {
 }
 
 // findAvailablePort finds an available port starting from the given port number
-func (s *Server) findAvailablePort(startPort int, portType string) (int, error) {
+func (s *Agent) findAvailablePort(startPort int, portType string) (int, error) {
 	// Try the original port first
 	if s.isPortAvailable(startPort) {
 		return startPort, nil
@@ -176,7 +176,7 @@ func (s *Server) findAvailablePort(startPort int, portType string) (int, error) 
 }
 
 // isPortAvailable checks if a port is available for binding
-func (s *Server) isPortAvailable(port int) bool {
+func (s *Agent) isPortAvailable(port int) bool {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false
@@ -186,12 +186,12 @@ func (s *Server) isPortAvailable(port int) bool {
 }
 
 // startGRPCServer starts the gRPC server
-func (s *Server) startGRPCServer(errChan chan<- error) error {
+func (s *Agent) startGRPCServer(errChan chan<- error) error {
 	utils.LogDevloop("Starting gRPC server on port %d", s.config.GRPCPort)
 
 	s.grpcServer = grpc.NewServer()
 	address := fmt.Sprintf(":%d", s.config.GRPCPort)
-	
+
 	// Register services
 	agentSvc := agent.NewAgentService(s.orchestrator)
 	pb.RegisterAgentServiceServer(s.grpcServer, agentSvc)
@@ -213,7 +213,7 @@ func (s *Server) startGRPCServer(errChan chan<- error) error {
 }
 
 // startHTTPServer starts the HTTP gateway server
-func (s *Server) startHTTPServer(errChan chan<- error) error {
+func (s *Agent) startHTTPServer(errChan chan<- error) error {
 	utils.LogDevloop("Starting HTTP gateway server on port %d", s.config.HTTPPort)
 
 	gwmux := runtime.NewServeMux()
@@ -221,9 +221,9 @@ func (s *Server) startHTTPServer(errChan chan<- error) error {
 	grpcAddress := fmt.Sprintf(":%d", s.config.GRPCPort)
 
 	err := pb.RegisterAgentServiceHandlerFromEndpoint(
-		s.ctx, 
-		gwmux, 
-		grpcAddress, 
+		s.ctx,
+		gwmux,
+		grpcAddress,
 		[]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
 	)
 	if err != nil {
@@ -268,7 +268,7 @@ func (s *Server) startHTTPServer(errChan chan<- error) error {
 }
 
 // shutdown gracefully shuts down the server
-func (s *Server) shutdown() error {
+func (s *Agent) shutdown() error {
 	utils.LogDevloop("Shutting down server...")
 
 	// Stop orchestrator
@@ -296,13 +296,13 @@ func (s *Server) shutdown() error {
 }
 
 // withLogger adds request logging middleware
-func (s *Server) withLogger(handler http.Handler) http.Handler {
+func (s *Agent) withLogger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		// pass the handler to httpsnoop to get http status and latency
 		m := httpsnoop.CaptureMetrics(handler, writer, request)
 		// printing extracted data (only log non-200 responses to reduce noise)
 		if m.Code != 200 {
-			log.Printf("http[%d] %s %s, Query: %s, Duration: %s\n", 
+			log.Printf("http[%d] %s %s, Query: %s, Duration: %s\n",
 				m.Code, request.Method, request.URL.Path, request.URL.RawQuery, m.Duration)
 		}
 	})

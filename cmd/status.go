@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/panyam/devloop/client"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +42,7 @@ func init() {
 }
 
 func runGetStatus(args []string) {
-	client, err := client.NewClient(client.Config{
+	client, err := NewClient(Config{
 		Address: statusServerAddr,
 	})
 	if err != nil {

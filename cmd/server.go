@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/panyam/devloop/server"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +35,7 @@ func init() {
 }
 
 func runServer() {
-	config := &server.ServerConfig{
+	config := &AgentConfig{
 		ConfigPath:  configPath,
 		Verbose:     verbose,
 		HTTPPort:    httpPort,
@@ -46,7 +45,7 @@ func runServer() {
 		AutoPorts:   autoPorts,
 	}
 
-	srv, err := server.NewServer(config)
+	srv, err := NewAgent(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to create server: %v\n", err)
 		os.Exit(1)

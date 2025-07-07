@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/panyam/devloop/client"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +47,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(logsCmd)
-	
+
 	logsCmd.Flags().StringVarP(&logsServerAddr, "server", "s", "localhost:5555", "Server address (host:port)")
 	logsCmd.Flags().StringVarP(&logsFilter, "filter", "f", "", "Filter logs containing this text")
 	logsCmd.Flags().BoolVar(&logsFollow, "follow", true, "Follow log output (default true)")
@@ -56,7 +55,7 @@ func init() {
 }
 
 func runStreamLogs(ruleName string) {
-	client, err := client.NewClient(client.Config{
+	client, err := NewClient(Config{
 		Address: logsServerAddr,
 	})
 	if err != nil {
@@ -83,7 +82,7 @@ func runStreamLogs(ruleName string) {
 	go func() {
 		defer close(logChan)
 		defer close(errChan)
-		
+
 		for {
 			resp, err := stream.Recv()
 			if err == io.EOF {
@@ -93,7 +92,7 @@ func runStreamLogs(ruleName string) {
 				errChan <- err
 				return
 			}
-			
+
 			// Send each log line
 			for _, line := range resp.Lines {
 				logChan <- line
@@ -132,17 +131,17 @@ func runStreamLogs(ruleName string) {
 
 func printLogLine(logLine *pb.LogLine) {
 	var output string
-	
+
 	if logsTimeStamps && logLine.Timestamp > 0 {
 		timestamp := time.Unix(0, logLine.Timestamp*int64(time.Millisecond))
 		output += fmt.Sprintf("[%s] ", timestamp.Format("15:04:05.000"))
 	}
-	
+
 	if logLine.RuleName != "" {
 		output += fmt.Sprintf("[%s] ", logLine.RuleName)
 	}
-	
+
 	output += logLine.Line
-	
+
 	fmt.Println(output)
 }

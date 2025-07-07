@@ -5,7 +5,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/panyam/devloop/client"
 	"github.com/spf13/cobra"
 )
 
@@ -35,13 +34,13 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(pathsCmd)
-	
+
 	pathsCmd.Flags().StringVarP(&pathsServerAddr, "server", "s", "localhost:5555", "Server address (host:port)")
 	pathsCmd.Flags().BoolVar(&pathsSort, "sort", false, "Sort patterns alphabetically")
 }
 
 func runListPaths() {
-	client, err := client.NewClient(client.Config{
+	client, err := NewClient(Config{
 		Address: pathsServerAddr,
 	})
 	if err != nil {
@@ -69,6 +68,6 @@ func runListPaths() {
 	for i, path := range paths {
 		fmt.Printf("%3d. %s\n", i+1, path)
 	}
-	
+
 	fmt.Printf("\nThese patterns will trigger rule execution when matching files change.\n")
 }

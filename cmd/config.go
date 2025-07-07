@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/panyam/devloop/client"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +41,7 @@ func init() {
 }
 
 func runGetConfig() {
-	client, err := client.NewClient(client.Config{
+	client, err := NewClient(Config{
 		Address: configServerAddr,
 	})
 	if err != nil {
