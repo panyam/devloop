@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/panyam/gocurrent"
 	protos "github.com/panyam/devloop/gen/go/devloop/v1"
+	"github.com/panyam/gocurrent"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -57,33 +57,47 @@ func (s *AgentService) ListWatchedPaths(ctx context.Context, req *protos.ListWat
 }
 
 func (s *AgentService) StreamLogs(req *protos.StreamLogsRequest, stream grpc.ServerStreamingServer[protos.StreamLogsResponse]) error {
-	log.Printf("[devloop] Received StreamLogs request for rule %q with filter %q", req.GetRuleName(), req.GetFilter())
+	log.Printf("[devloop] Received StreamLogs request for rule %q with filter %q and timeout %d", req.GetRuleName(), req.GetFilter(), req.GetTimeout())
 
 	// Create a gocurrent Writer that forwards messages to the gRPC stream
 	writer := gocurrent.NewWriter(func(response *protos.StreamLogsResponse) error {
 		return stream.Send(response)
 	})
-	defer writer.Stop()
+	stopped := false
+	defer func() {
+		if !stopped {
+			writer.Stop()
+		}
+	}()
 
 	// Call the orchestrator's StreamLogs method with our writer
-	err := s.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), writer)
+	err := s.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), req.GetTimeout(), writer)
+
+	// StreamLogs has returned - either success, timeout, or error
+	// Stop the writer to signal completion
+	writer.Stop()
+	stopped = true
+
 	if err != nil {
 		log.Printf("[devloop] Error streaming logs: %v", err)
 		return status.Errorf(codes.Internal, "failed to stream logs: %v", err)
 	}
 
-	// Wait for the writer to complete (or for context cancellation)
-	select {
-	case <-stream.Context().Done():
-		log.Printf("[devloop] StreamLogs cancelled by client")
-		return stream.Context().Err()
-	case err := <-writer.ClosedChan():
-		log.Printf("[devloop] StreamLogs writer closed")
-		if err != nil {
-			return status.Errorf(codes.Internal, "writer error: %v", err)
+	defer log.Printf("[devloop] StreamLogs completed successfully")
+	if false {
+		select {
+		case <-stream.Context().Done():
+			log.Printf("[devloop] StreamLogs cancelled by client")
+			return stream.Context().Err()
+		case err := <-writer.ClosedChan():
+			log.Printf("[devloop] StreamLogs writer closed")
+			if err != nil {
+				return status.Errorf(codes.Internal, "writer error: %v", err)
+			}
+			return nil
 		}
-		return nil
 	}
+	return nil
 }
 
 func (s *AgentService) TriggerRule(ctx context.Context, req *protos.TriggerRuleRequest) (resp *protos.TriggerRuleResponse, err error) {

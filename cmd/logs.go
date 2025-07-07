@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,8 @@ var (
 	logsFilter     string
 	logsFollow     bool
 	logsTimeStamps bool
+	logsForever    bool
+	logsTimeout    int64
 )
 
 // logsCmd represents the logs command
@@ -49,9 +52,11 @@ func init() {
 	rootCmd.AddCommand(logsCmd)
 
 	logsCmd.Flags().StringVarP(&logsServerAddr, "server", "s", "localhost:5555", "Server address (host:port)")
-	logsCmd.Flags().StringVarP(&logsFilter, "filter", "f", "", "Filter logs containing this text")
+	logsCmd.Flags().StringVar(&logsFilter, "filter", "", "Filter logs containing this text")
 	logsCmd.Flags().BoolVar(&logsFollow, "follow", true, "Follow log output (default true)")
-	logsCmd.Flags().BoolVarP(&logsTimeStamps, "timestamps", "t", false, "Include timestamps in output")
+	logsCmd.Flags().BoolVar(&logsTimeStamps, "timestamps", false, "Include timestamps in output")
+	logsCmd.Flags().BoolVarP(&logsForever, "forever", "f", false, "Stream logs forever (no timeout)")
+	logsCmd.Flags().Int64VarP(&logsTimeout, "timeout", "t", 3, "Timeout in seconds when no new logs (negative = forever)")
 }
 
 func runStreamLogs(ruleName string) {
@@ -64,8 +69,20 @@ func runStreamLogs(ruleName string) {
 	}
 	defer client.Close()
 
+	// Calculate timeout value
+	var timeoutValue int64
+	if logsForever {
+		timeoutValue = -1 // Forever
+	} else {
+		timeoutValue = logsTimeout
+		// Use default of 3 if timeout is 0
+		if timeoutValue == 0 {
+			timeoutValue = 3
+		}
+	}
+
 	// Start streaming logs
-	stream, err := client.StreamLogs(ruleName, logsFilter)
+	stream, err := client.StreamLogs(ruleName, logsFilter, timeoutValue)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to start log stream: %v\n", err)
 		os.Exit(1)
@@ -120,8 +137,14 @@ func runStreamLogs(ruleName string) {
 		case err := <-errChan:
 			fmt.Fprintf(os.Stderr, "Error: Log stream failed: %v\n", err)
 			os.Exit(1)
-		case logLine := <-logChan:
+		case logLine, ok := <-logChan:
+			if !ok {
+				// Channel closed - stream ended
+				fmt.Printf("\nLog streaming ended.\n")
+				return
+			}
 			if logLine == nil {
+				log.Println("Did we come here?  should we quit?")
 				continue
 			}
 			printLogLine(logLine)

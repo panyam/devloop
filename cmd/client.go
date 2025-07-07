@@ -112,10 +112,11 @@ func (c *Client) ListWatchedPaths() ([]string, error) {
 }
 
 // StreamLogs streams real-time logs for a specific rule
-func (c *Client) StreamLogs(ruleName, filter string) (pb.AgentService_StreamLogsClient, error) {
+func (c *Client) StreamLogs(ruleName, filter string, timeout int64) (pb.AgentService_StreamLogsClient, error) {
 	stream, err := c.client.StreamLogs(c.ctx, &pb.StreamLogsRequest{
 		RuleName: ruleName,
 		Filter:   filter,
+		Timeout:  timeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start log stream for rule %q: %w", ruleName, err)

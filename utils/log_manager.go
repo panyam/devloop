@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/panyam/gocurrent"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
+	"github.com/panyam/gocurrent"
 )
 
 // LogManager manages log files and provides streaming capabilities.
@@ -52,7 +52,7 @@ func (lm *LogManager) SignalFinished(ruleName string) {
 }
 
 // StreamLogs streams logs for a given rule to the provided gocurrent Writer.
-func (lm *LogManager) StreamLogs(ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+func (lm *LogManager) StreamLogs(ruleName, filter string, timeoutSeconds int64, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
 	// Check if log file exists
 	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
 	_, err := os.Stat(logFilePath)
@@ -69,8 +69,8 @@ func (lm *LogManager) StreamLogs(ruleName, filter string, writer *gocurrent.Writ
 		// Rule has finished - stream all content and exit
 		return lm.streamFinishedLogs(logFilePath, ruleName, filter, writer)
 	} else {
-		// Rule is still running - stream in real-time
-		return lm.streamLiveLogs(logFilePath, ruleName, filter, writer)
+		// Rule is still running - stream in real-time with timeout
+		return lm.streamLiveLogs(logFilePath, ruleName, filter, timeoutSeconds, writer)
 	}
 }
 
@@ -123,7 +123,7 @@ func (lm *LogManager) streamFinishedLogs(logFilePath, ruleName, filter string, w
 }
 
 // streamLiveLogs streams logs for a rule that is currently running
-func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, timeoutSeconds int64, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
 	file, err := os.Open(logFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to open log file for streaming: %w", err)
@@ -131,6 +131,31 @@ func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, write
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
+
+	// Setup timeout logic
+	var timeoutDuration time.Duration
+	var timeoutTimer *time.Timer
+	var timeoutChan <-chan time.Time
+
+	if timeoutSeconds < 0 {
+		// Negative timeout means forever - no timeout
+		timeoutChan = nil
+	} else {
+		// Use provided timeout (default 3 seconds if 0)
+		if timeoutSeconds == 0 {
+			timeoutSeconds = 3
+		}
+		timeoutDuration = time.Duration(timeoutSeconds) * time.Second
+		timeoutTimer = time.NewTimer(timeoutDuration)
+		timeoutChan = timeoutTimer.C
+	}
+
+	// Helper function to reset timeout
+	resetTimeout := func() {
+		if timeoutTimer != nil {
+			timeoutTimer.Reset(timeoutDuration)
+		}
+	}
 
 	for {
 		// Check if rule has finished (without blocking)
@@ -197,11 +222,37 @@ func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, write
 					return fmt.Errorf("failed to send log line")
 				}
 			}
+			// Reset timeout since we got new content
+			resetTimeout()
 		}
 		if err == io.EOF {
-			// At end of file but rule is still running - wait and try again
-			time.Sleep(100 * time.Millisecond)
-			continue
+			// At end of file but rule is still running
+			// Check for timeout if configured
+			if timeoutChan != nil {
+				select {
+				case <-timeoutChan:
+					// Timeout reached - send timeout message and exit
+					timeoutMsg := &pb.StreamLogsResponse{
+						Lines: []*pb.LogLine{
+							{
+								RuleName:  ruleName,
+								Line:      fmt.Sprintf("Log streaming timed out after %d seconds of no new content", timeoutSeconds),
+								Timestamp: time.Now().UnixMilli(),
+							},
+						},
+					}
+					writer.Send(timeoutMsg)
+					return nil
+				default:
+					// No timeout yet - wait and try again
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+			} else {
+				// No timeout configured - wait forever
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 		}
 		if err != nil {
 			return err

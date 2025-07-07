@@ -358,7 +358,7 @@ func (o *Orchestrator) ReadFileContent(path string) ([]byte, error) {
 }
 
 // StreamLogs streams the logs for a given rule to the provided Writer
-func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+func (o *Orchestrator) StreamLogs(ruleName string, filter string, timeoutSeconds int64, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
 	// Check if rule exists
 	o.runnersMutex.RLock()
 	_, ruleExists := o.ruleRunners[ruleName]
@@ -375,7 +375,7 @@ func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurr
 
 	// Case 1: Log file exists - delegate to LogManager
 	if logFileExists {
-		return o.LogManager.StreamLogs(ruleName, filter, writer)
+		return o.LogManager.StreamLogs(ruleName, filter, timeoutSeconds, writer)
 	}
 
 	// Case 2: Log file doesn't exist - rule hasn't started yet
@@ -417,7 +417,7 @@ func (o *Orchestrator) StreamLogs(ruleName string, filter string, writer *gocurr
 			_, err := os.Stat(logFilePath)
 			if err == nil {
 				// Log file now exists - delegate to LogManager for streaming
-				return o.LogManager.StreamLogs(ruleName, filter, writer)
+				return o.LogManager.StreamLogs(ruleName, filter, timeoutSeconds, writer)
 			}
 		}
 	}
