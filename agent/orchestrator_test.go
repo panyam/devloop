@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/panyam/devloop/gateway"
+	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -51,18 +51,18 @@ func TestLoadConfig(t *testing.T) {
 func TestNewOrchestrator(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		// Test successful creation
-		orchestrator, err := NewOrchestratorForTesting("../testdata/test_devloop.yaml", "")
+		orchestrator, err := NewOrchestratorForTesting("../testdata/test_devloop.yaml")
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 		assert.NotNil(t, orchestrator.GetConfig())
 
 		// Test with non-existent config file
-		_, err = NewOrchestratorForTesting("non_existent.yaml", "")
+		_, err = NewOrchestratorForTesting("non_existent.yaml")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 
 		// Test with invalid config file
-		_, err = NewOrchestratorForTesting("../testdata/invalid.yaml", "")
+		_, err = NewOrchestratorForTesting("../testdata/invalid.yaml")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 	})
@@ -85,7 +85,7 @@ rules:
 		err := os.WriteFile(configPath, []byte(dummyConfigContent), 0644)
 		assert.NoError(t, err)
 
-		orchestrator, err := NewOrchestratorForTesting(configPath, "")
+		orchestrator, err := NewOrchestratorForTesting(configPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -125,14 +125,14 @@ func TestRuleMatches(t *testing.T) {
 	withTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
 		tests := []struct {
 			name           string
-			watchers       []*gateway.Matcher
+			watchers       []*pb.RuleMatcher
 			filePath       string
 			expectedMatch  bool
 			expectedAction string
 		}{
 			{
 				name: "Simple include",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"*.go"}},
 				},
 				filePath:       "main.go",
@@ -141,7 +141,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Simple exclude",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "exclude", Patterns: []string{"*.go"}},
 				},
 				filePath:       "main.go",
@@ -150,7 +150,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Include then exclude (include wins)",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"*.go"}},
 					{Action: "exclude", Patterns: []string{"main.go"}},
 				},
@@ -160,7 +160,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Exclude then include (exclude wins)",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "exclude", Patterns: []string{"*.go"}},
 					{Action: "include", Patterns: []string{"main.go"}},
 				},
@@ -170,7 +170,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "No match",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"*.js"}},
 				},
 				filePath:      "main.go",
@@ -178,7 +178,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Complex rule: include specific, exclude folder, include general",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
 					{Action: "exclude", Patterns: []string{"vendor/**"}},
 					{Action: "include", Patterns: []string{"**/*.go"}},
@@ -189,7 +189,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Complex rule: file in excluded folder",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
 					{Action: "exclude", Patterns: []string{"vendor/**"}},
 					{Action: "include", Patterns: []string{"**/*.go"}},
@@ -200,7 +200,7 @@ func TestRuleMatches(t *testing.T) {
 			},
 			{
 				name: "Complex rule: general go file",
-				watchers: []*gateway.Matcher{
+				watchers: []*pb.RuleMatcher{
 					{Action: "include", Patterns: []string{"vendor/specific/file.go"}},
 					{Action: "exclude", Patterns: []string{"vendor/**"}},
 					{Action: "include", Patterns: []string{"**/*.go"}},
@@ -213,10 +213,10 @@ func TestRuleMatches(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				rule := gateway.Rule{
+				rule := &pb.Rule{
 					Watch: tt.watchers,
 				}
-				matcher := rule.Matches(tt.filePath)
+				matcher := RuleMatches(rule, tt.filePath)
 				if tt.expectedMatch {
 					assert.NotNil(t, matcher)
 					assert.Equal(t, tt.expectedAction, matcher.Action)

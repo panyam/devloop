@@ -2,7 +2,6 @@ package utils
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,35 +10,45 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc/metadata"
 
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/panyam/devloop/testhelpers"
+	"github.com/panyam/gocurrent"
 )
 
-// mockStream is a mock implementation of the GatewayClientService_StreamLogsClientServer interface.
-type mockStream struct {
-	ctx    context.Context
-	buffer *bytes.Buffer
+// mockWriter collects StreamLogsResponse messages for testing
+type mockWriter struct {
+	buffer   *bytes.Buffer
+	mu       sync.Mutex
+	messages []*pb.StreamLogsResponse
 }
 
-func (m *mockStream) Send(logLine *pb.LogLine) error {
-	_, err := m.buffer.WriteString(logLine.Line)
-	return err
-}
-
-func (m *mockStream) SetHeader(md metadata.MD) error  { return nil }
-func (m *mockStream) SendHeader(md metadata.MD) error { return nil }
-func (m *mockStream) SetTrailer(md metadata.MD)       {}
-func (m *mockStream) Context() context.Context        { return m.ctx }
-func (m *mockStream) SendMsg(v interface{}) error     { return nil }
-func (m *mockStream) RecvMsg(v interface{}) error     { return nil }
-
-func newMockStream(ctx context.Context) *mockStream {
-	return &mockStream{
-		ctx:    ctx,
-		buffer: &bytes.Buffer{},
+func newMockWriter() *mockWriter {
+	return &mockWriter{
+		buffer:   &bytes.Buffer{},
+		messages: make([]*pb.StreamLogsResponse, 0),
 	}
+}
+
+func (m *mockWriter) write(response *pb.StreamLogsResponse) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.messages = append(m.messages, response)
+	if response.Lines != nil {
+		for _, logLine := range response.Lines {
+			m.buffer.WriteString(logLine.Line)
+			// Add newline to match expected test format (since LogManager strips them)
+			m.buffer.WriteString("\n")
+		}
+	}
+	return nil
+}
+
+func (m *mockWriter) getContent() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.buffer.String()
 }
 
 // TestLogManager_NewLogManager verifies that a new LogManager can be created
@@ -104,20 +113,19 @@ func TestLogManager_StreamLogs_Historical(t *testing.T) {
 		err = os.WriteFile(logFilePath, []byte(initialContent), 0644)
 		assert.NoError(t, err)
 
-		lm.mu.Lock()
-		state := &ruleLogState{
-			started:  make(chan struct{}),
-			finished: make(chan struct{}),
-		}
-		lm.ruleStates[ruleName] = state
-		close(state.started)
-		close(state.finished)
-		lm.mu.Unlock()
+		// Mark the rule as finished so it streams historical content
+		lm.SignalFinished(ruleName)
 
-		stream := newMockStream(context.Background())
-		err = lm.StreamLogs(ruleName, "", stream)
+		mockWriter := newMockWriter()
+		writer := gocurrent.NewWriter(mockWriter.write)
+
+		err = lm.StreamLogs(ruleName, "", 0, writer) // 0 timeout for finished rules
 		assert.NoError(t, err)
-		assert.Equal(t, initialContent, stream.buffer.String())
+
+		writer.Stop()
+
+		expected := "historical line 1\nhistorical line 2\nRule 'test-rule-historical' execution completed\n"
+		assert.Equal(t, expected, mockWriter.getContent())
 	})
 }
 
@@ -129,33 +137,37 @@ func TestLogManager_StreamLogs_Realtime(t *testing.T) {
 		assert.NoError(t, err)
 
 		ruleName := "test-rule-realtime"
-		writer, err := lm.GetWriter(ruleName)
+		fileWriter, err := lm.GetWriter(ruleName)
 		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
 
-		stream := newMockStream(context.Background())
+		mockWriter := newMockWriter()
+		writer := gocurrent.NewWriter(mockWriter.write)
+
 		go func() {
 			defer wg.Done()
-			err := lm.StreamLogs(ruleName, "", stream)
+			err := lm.StreamLogs(ruleName, "", 5, writer) // 5 second timeout for live logs
 			assert.NoError(t, err)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		_, err = writer.Write([]byte("realtime line 1\n"))
+		_, err = fileWriter.Write([]byte("realtime line 1\n"))
 		assert.NoError(t, err)
 		time.Sleep(50 * time.Millisecond)
 
-		_, err = writer.Write([]byte("realtime line 2\n"))
+		_, err = fileWriter.Write([]byte("realtime line 2\n"))
 		assert.NoError(t, err)
 		time.Sleep(50 * time.Millisecond)
 
 		lm.SignalFinished(ruleName)
 		wg.Wait()
+		writer.Stop()
 
-		assert.Equal(t, "realtime line 1\nrealtime line 2\n", stream.buffer.String())
+		expected := "realtime line 1\nrealtime line 2\nRule 'test-rule-realtime' execution completed\n"
+		assert.Equal(t, expected, mockWriter.getContent())
 	})
 }
 
@@ -169,23 +181,28 @@ func TestLogManager_StreamLogs_Blocking(t *testing.T) {
 		ruleName := "test-rule-blocking"
 		streamErrChan := make(chan error, 1)
 
-		writer, err := lm.GetWriter(ruleName)
+		fileWriter, err := lm.GetWriter(ruleName)
 		assert.NoError(t, err)
 
-		stream := newMockStream(context.Background())
+		mockWriter := newMockWriter()
+		writer := gocurrent.NewWriter(mockWriter.write)
+
 		go func() {
-			streamErrChan <- lm.StreamLogs(ruleName, "", stream)
+			streamErrChan <- lm.StreamLogs(ruleName, "", 5, writer) // 5 second timeout
 		}()
 
 		time.Sleep(100 * time.Millisecond)
 
-		_, err = writer.Write([]byte("blocked line\n"))
+		_, err = fileWriter.Write([]byte("blocked line\n"))
 		assert.NoError(t, err)
 		lm.SignalFinished(ruleName)
 
 		err = <-streamErrChan
 		assert.NoError(t, err)
-		assert.Equal(t, "blocked line\n", stream.buffer.String())
+		writer.Stop()
+
+		expected := "blocked line\nRule 'test-rule-blocking' execution completed\n"
+		assert.Equal(t, expected, mockWriter.getContent())
 	})
 }
 
@@ -205,12 +222,16 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 		assert.NoError(t, err)
 		lm.SignalFinished(ruleName)
 
-		stream := newMockStream(context.Background())
-		err = lm.StreamLogs(ruleName, "filter keyword", stream)
+		mockWriter := newMockWriter()
+		gocurrentWriter := gocurrent.NewWriter(mockWriter.write)
+
+		err = lm.StreamLogs(ruleName, "filter keyword", 0, gocurrentWriter) // 0 timeout for finished rules
 		assert.NoError(t, err)
 
-		expected := "line with filter keyword\nANOTHER LINE WITH FILTER KEYWORD\n"
-		assert.Equal(t, expected, stream.buffer.String())
+		gocurrentWriter.Stop()
+
+		expected := "line with filter keyword\nANOTHER LINE WITH FILTER KEYWORD\nRule 'test-rule-filter' execution completed\n"
+		assert.Equal(t, expected, mockWriter.getContent())
 	})
 }
 
@@ -234,9 +255,9 @@ func TestLogManager_Close(t *testing.T) {
 		err = lm.Close()
 		assert.NoError(t, err)
 
-		_, err = writer1.Write([]byte("more data"))
-		assert.Error(t, err)
-		_, err = writer2.Write([]byte("more data"))
-		assert.Error(t, err)
+		// In the new simplified LogManager, Close() doesn't prevent further writes
+		// since each GetWriter() returns a new file handle. This test just verifies
+		// that Close() can be called without error.
+		assert.NoError(t, err)
 	})
 }

@@ -112,8 +112,24 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 		return nil, fmt.Errorf("failed to parse config file %q: %w", absConfigPath, err)
 	}
 
-	// Workaround: Manually fix the skipRunOnInit field from raw YAML
+	// Workaround: Manually fix fields that don't parse correctly from YAML to protobuf structs
 	// This is needed because protobuf-generated struct tags don't work correctly with gopkg.in/yaml.v3
+
+	// Fix settings fields
+	if settings, ok := rawConfig["settings"].(map[string]interface{}); ok {
+		if projectId, exists := settings["project_id"]; exists {
+			if projectIdStr, ok := projectId.(string); ok {
+				config.Settings.ProjectId = projectIdStr
+			}
+		}
+		if prefixLogs, exists := settings["prefix_logs"]; exists {
+			if prefixLogsBool, ok := prefixLogs.(bool); ok {
+				config.Settings.PrefixLogs = prefixLogsBool
+			}
+		}
+	}
+
+	// Fix rule skipRunOnInit fields
 	if rules, ok := rawConfig["rules"].([]interface{}); ok {
 		for i, rawRule := range rules {
 			if ruleMap, ok := rawRule.(map[string]interface{}); ok {
@@ -129,6 +145,11 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				}
 			}
 		}
+	}
+
+	// Ensure Settings is initialized
+	if config.Settings == nil {
+		config.Settings = &pb.Settings{}
 	}
 
 	// Default to exclude if not specified globally
