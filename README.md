@@ -624,15 +624,12 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "devloop": {
-      "command": "devloop",
-      "args": ["--grpc-port", "5555", "--http-port", "9999", "--enable-mcp", "-c", "/path/to/project/.devloop.yaml"],
-      "env": {}
+      "type": "http",
+      "url": "http://localhost:9999/mcp/"
     }
   }
 }
 ```
-
-Alternatively, you can use the HTTP transport by configuring an HTTP MCP client to connect to `http://localhost:9999/mcp/`.
 
 ### Available MCP Tools
 
@@ -709,27 +706,6 @@ await use_mcp_tool("devloop", "watch_output", {
   project_id: "my-backend",
   rule_name: "api-server",
   duration_seconds: 30
-});
-```
-
-#### Code Intelligence
-```typescript
-// Read file content
-await use_mcp_tool("devloop", "read_file", {
-  project_id: "my-backend",
-  file_path: "src/main.go"
-});
-
-// Search for files
-await use_mcp_tool("devloop", "find_files", {
-  project_id: "my-backend",
-  pattern: "**/*_test.go"
-});
-
-// Analyze build errors
-await use_mcp_tool("devloop", "analyze_errors", {
-  project_id: "my-backend",
-  include_suggestions: true
 });
 ```
 
