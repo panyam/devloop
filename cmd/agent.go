@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -284,7 +283,7 @@ func (s *Agent) shutdown() error {
 	// Stop HTTP server
 	if s.httpServer != nil {
 		if err := s.httpServer.Shutdown(context.Background()); err != nil {
-			log.Printf("HTTP server shutdown error: %v", err)
+			utils.LogDevloop("HTTP server shutdown error: %v", err)
 		}
 	}
 
@@ -302,7 +301,7 @@ func (s *Agent) withLogger(handler http.Handler) http.Handler {
 		m := httpsnoop.CaptureMetrics(handler, writer, request)
 		// printing extracted data (only log non-200 responses to reduce noise)
 		if m.Code != 200 {
-			log.Printf("http[%d] %s %s, Query: %s, Duration: %s\n",
+			utils.LogDevloop("http[%d] %s %s, Query: %s, Duration: %s",
 				m.Code, request.Method, request.URL.Path, request.URL.RawQuery, m.Duration)
 		}
 	})

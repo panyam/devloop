@@ -4,7 +4,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,9 +164,9 @@ func (o *Orchestrator) Start() error {
 			}
 
 			if err := o.Watcher.Add(path); err != nil {
-				log.Printf("Error watching %s: %v", path, err)
+				utils.LogDevloop("Error watching %s: %v", path, err)
 			} else if o.Verbose {
-				log.Printf("[devloop] Watching directory: %s", path)
+				utils.LogDevloop("Watching directory: %s", path)
 			}
 		}
 		return nil
@@ -231,7 +230,7 @@ func (o *Orchestrator) watchFiles() {
 			if !ok {
 				return
 			}
-			log.Printf("[devloop] Watcher error: %v", err)
+			utils.LogDevloop("Watcher error: %v", err)
 
 		case <-o.done:
 			return
@@ -282,7 +281,7 @@ func (o *Orchestrator) safeDone() {
 
 // Stop gracefully shuts down the orchestrator
 func (o *Orchestrator) Stop() error {
-	log.Println("[devloop] Stopping orchestrator...")
+	utils.LogDevloop("Stopping orchestrator...")
 	o.safeDone()
 
 	// Stop all RuleRunners
@@ -293,21 +292,21 @@ func (o *Orchestrator) Stop() error {
 		go func(n string, r *RuleRunner) {
 			defer wg.Done()
 			if err := r.Stop(); err != nil {
-				log.Printf("[devloop] Error stopping rule %q: %v", n, err)
+				utils.LogDevloop("Error stopping rule %q: %v", n, err)
 			}
 		}(name, runner)
 	}
 	o.runnersMutex.RUnlock()
 
 	wg.Wait()
-	log.Println("[devloop] All rules stopped")
+	utils.LogDevloop("All rules stopped")
 
 	// Disconnect from gateway
 	// if o.gatewayStream != nil { o.disconnectFromGateway() }
 
 	// Close log manager
 	if err := o.LogManager.Close(); err != nil {
-		log.Printf("Error closing log manager: %v", err)
+		utils.LogDevloop("Error closing log manager: %v", err)
 	}
 
 	return o.Watcher.Close()
@@ -538,11 +537,9 @@ func (o *Orchestrator) logDevloop(format string, args ...interface{}) {
 	} else {
 		// Standard log format but with devloop color if available
 		if o.ColorManager != nil && o.ColorManager.IsEnabled() {
-			devloopRule := &pb.Rule{Name: "devloop"}
-			coloredDevloop := o.ColorManager.FormatPrefix("[devloop]", devloopRule)
-			log.Printf("%s %s", coloredDevloop, message)
+			utils.LogDevloop("%s", message)
 		} else {
-			log.Printf("[devloop] %s", message)
+			utils.LogDevloop("%s", message)
 		}
 	}
 }
@@ -556,7 +553,7 @@ func (o *Orchestrator) handleGatewayStreamSend() {
 			return
 		case msg := <-o.gatewaySendChan:
 			if err := o.gatewayStream.Send(msg); err != nil {
-				log.Printf("[devloop] Error sending message to gateway: %v", err)
+				utils.LogDevloop("Error sending message to gateway: %v", err)
 				o.safeDone()
 				return
 			}
@@ -598,7 +595,7 @@ func (o *Orchestrator) connectToGateway(gatewayAddr string) error {
 			return fmt.Errorf("failed to send registration to gateway: %w", err)
 		}
 
-		log.Printf("[devloop] Registered with gateway as project %q", o.projectID)
+		utils.LogDevloop("Registered with gateway as project %q", o.projectID)
 
 		// Start gateway communication handlers
 		go o.handleGatewayStreamRecv()
@@ -618,7 +615,7 @@ func (o *Orchestrator) disconnectFromGateway() {
 		}
 
 		if err := o.gatewayStream.Send(unregisterMsg); err != nil {
-			log.Printf("[devloop] Error sending unregister message to gateway: %v", err)
+			utils.LogDevloop("Error sending unregister message to gateway: %v", err)
 		}
 
 		o.gatewayStream.CloseSend()
@@ -626,21 +623,21 @@ func (o *Orchestrator) disconnectFromGateway() {
 
 // handleGatewayStreamRecv handles incoming messages from gateway
 func (o *Orchestrator) handleGatewayStreamRecv() {
-	log.Println("[devloop] Starting gateway stream receiver.")
+	utils.LogDevloop("Starting gateway stream receiver.")
 	for {
 		select {
 		case <-o.done:
-			log.Println("[devloop] Gateway stream receiver stopping.")
+			utils.LogDevloop("Gateway stream receiver stopping.")
 			return
 		default:
 			msg, err := o.gatewayStream.Recv()
 			if err == io.EOF {
-				log.Println("[devloop] Gateway closed stream (EOF). Shutting down.")
+				utils.LogDevloop("Gateway closed stream (EOF). Shutting down.")
 				o.safeDone()
 				return
 			}
 			if err != nil {
-				log.Printf("[devloop] Error receiving from gateway stream: %v. Shutting down.", err)
+				utils.LogDevloop("Error receiving from gateway stream: %v. Shutting down.", err)
 				o.safeDone()
 				return
 			}
@@ -660,13 +657,13 @@ func (o *Orchestrator) handleGatewayStreamRecv() {
 				go o.handleGetHistoricalLogsRequest(msg.GetCorrelationId(), content.GetHistoricalLogsRequest)
 			// Handle responses to devloop-initiated requests
 			case *pb.DevloopMessage_RegisterRequest:
-				log.Printf("[devloop] Received unexpected RegisterRequest from pb.")
+				utils.LogDevloop("Received unexpected RegisterRequest from pb.")
 			case *pb.DevloopMessage_UnregisterRequest:
-				log.Printf("[devloop] Received unexpected UnregisterRequest from pb.")
+				utils.LogDevloop("Received unexpected UnregisterRequest from pb.")
 			case *pb.DevloopMessage_LogLine:
-				log.Printf("[devloop] Received unexpected LogLine from pb.")
+				utils.LogDevloop("Received unexpected LogLine from pb.")
 			case *pb.DevloopMessage_UpdateRuleStatusRequest:
-				log.Printf("[devloop] Received unexpected UpdateRuleStatusRequest from pb.")
+				utils.LogDevloop("Received unexpected UpdateRuleStatusRequest from pb.")
 			default:
 				// This is a response to a devloop-initiated request
 				if msg.GetCorrelationId() != "" {
@@ -677,10 +674,10 @@ func (o *Orchestrator) handleGatewayStreamRecv() {
 						select {
 						case respChan <- msg:
 						default:
-							log.Printf("[devloop] Response channel for correlation ID %s is full, dropping response.", msg.GetCorrelationId())
+							utils.LogDevloop("Response channel for correlation ID %s is full, dropping response.", msg.GetCorrelationId())
 						}
 					} else {
-						log.Printf("[devloop] Received response for unknown correlation ID %s: %T", msg.GetCorrelationId(), content)
+						utils.LogDevloop("Received response for unknown correlation ID %s: %T", msg.GetCorrelationId(), content)
 					}
 				}
 			}

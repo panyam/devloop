@@ -56,7 +56,6 @@ package agent
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"

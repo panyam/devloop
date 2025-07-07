@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,14 +68,14 @@ func (r *RuleRunner) Start() error {
 	// Skip execution if skip_run_on_init is true
 	if r.rule.SkipRunOnInit {
 		if r.isVerbose() {
-			log.Printf("[%s] Skipping initialization execution (skip_run_on_init: true)", r.rule.Name)
+			utils.LogDevloop("[%s] Skipping initialization execution (skip_run_on_init: true)", r.rule.Name)
 		}
 		return nil
 	}
 
 	// Execute on init (default behavior)
 	if r.isVerbose() {
-		log.Printf("[%s] Executing rule %q on initialization", r.rule.Name, r.rule.Name)
+		utils.LogDevloop("[%s] Executing rule %q on initialization", r.rule.Name, r.rule.Name)
 	}
 	if err := r.Execute(); err != nil {
 		return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
@@ -153,12 +152,12 @@ func (r *RuleRunner) TriggerDebounced() {
 	// Set new timer
 	r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
 		if err := r.Execute(); err != nil {
-			log.Printf("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
+			utils.LogDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
 		}
 	})
 
 	if r.isVerbose() {
-		log.Printf("[%s] File change detected, execution scheduled in %v", r.rule.Name, r.debounceDuration)
+		utils.LogDevloop("[%s] File change detected, execution scheduled in %v", r.rule.Name, r.debounceDuration)
 	}
 }
 
@@ -196,7 +195,7 @@ func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
 			select {
 			case r.orchestrator.gatewaySendChan <- statusMsg:
 			default:
-				log.Printf("[%s] Failed to send rule status update: channel full", r.rule.Name)
+				utils.LogDevloop("[%s] Failed to send rule status update: channel full", r.rule.Name)
 			}
 		}
 	*/
@@ -228,12 +227,12 @@ func (r *RuleRunner) Execute() error {
 	r.updateStatus(true, "RUNNING")
 
 	if r.isVerbose() {
-		log.Printf("[devloop] Executing commands for rule %q", r.rule.Name)
+		utils.LogDevloop("Executing commands for rule %q", r.rule.Name)
 	}
 
 	// Terminate any previously running commands
 	if err := r.TerminateProcesses(); err != nil {
-		log.Printf("[devloop] Error terminating previous processes for rule %q: %v", r.rule.Name, err)
+		utils.LogDevloop("Error terminating previous processes for rule %q: %v", r.rule.Name, err)
 	}
 
 	// Get log writer for this rule
@@ -272,7 +271,7 @@ func (r *RuleRunner) Execute() error {
 		}
 
 		if err := cmd.Start(); err != nil {
-			log.Printf("[devloop] Command %q failed to start for rule %q: %v", cmdStr, r.rule.Name, err)
+			utils.LogDevloop("Command %q failed to start for rule %q: %v", cmdStr, r.rule.Name, err)
 			r.updateStatus(false, "FAILED")
 			return fmt.Errorf("failed to start command: %w", err)
 		}
@@ -282,7 +281,7 @@ func (r *RuleRunner) Execute() error {
 		// For non-last commands, wait for completion before proceeding
 		if i < len(r.rule.Commands)-1 {
 			if err := cmd.Wait(); err != nil {
-				log.Printf("[devloop] Command failed for rule %q: %v", r.rule.Name, err)
+				utils.LogDevloop("Command failed for rule %q: %v", r.rule.Name, err)
 				r.updateStatus(false, "FAILED")
 				return fmt.Errorf("command failed: %w", err)
 			}
@@ -304,7 +303,7 @@ func (r *RuleRunner) Execute() error {
 		// No long-running command, mark as successful
 		r.updateStatus(false, "SUCCESS")
 		r.orchestrator.LogManager.SignalFinished(r.rule.Name)
-		log.Printf("[devloop] Rule %q commands finished.", r.rule.Name)
+		utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
 	}
 
 	return nil
@@ -358,14 +357,14 @@ func (r *RuleRunner) monitorLastCommand(cmd *exec.Cmd) {
 	err := cmd.Wait()
 
 	if err != nil {
-		log.Printf("[devloop] Command for rule %q failed: %v", r.rule.Name, err)
+		utils.LogDevloop("Command for rule %q failed: %v", r.rule.Name, err)
 		r.updateStatus(false, "FAILED")
 	} else {
 		r.updateStatus(false, "SUCCESS")
 	}
 
 	r.orchestrator.LogManager.SignalFinished(r.rule.Name)
-	log.Printf("[devloop] Rule %q commands finished.", r.rule.Name)
+	utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
 }
 
 // TerminateProcesses terminates all running processes for this rule
@@ -395,19 +394,19 @@ func (r *RuleRunner) TerminateProcesses() error {
 			if err := syscall.Kill(pid, 0); err != nil {
 				// Process already dead
 				if r.isVerbose() {
-					log.Printf("[devloop] Process %d for rule %q already terminated", pid, r.rule.Name)
+					utils.LogDevloop("Process %d for rule %q already terminated", pid, r.rule.Name)
 				}
 				return
 			}
 
 			// Try graceful termination first
 			if r.isVerbose() {
-				log.Printf("[devloop] Terminating process group %d for rule %q", pid, r.rule.Name)
+				utils.LogDevloop("Terminating process group %d for rule %q", pid, r.rule.Name)
 			}
 
 			if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 				if !strings.Contains(err.Error(), "no such process") {
-					log.Printf("Error sending SIGTERM to process group %d for rule %q: %v",
+					utils.LogDevloop("Error sending SIGTERM to process group %d for rule %q: %v",
 						pid, r.rule.Name, err)
 				}
 			}
@@ -422,12 +421,12 @@ func (r *RuleRunner) TerminateProcesses() error {
 			select {
 			case <-done:
 				if r.isVerbose() {
-					log.Printf("[devloop] Process group %d for rule %q terminated gracefully",
+					utils.LogDevloop("Process group %d for rule %q terminated gracefully",
 						pid, r.rule.Name)
 				}
 			case <-time.After(2 * time.Second):
 				// Force kill
-				log.Printf("[devloop] Force killing process group %d for rule %q", pid, r.rule.Name)
+				utils.LogDevloop("Force killing process group %d for rule %q", pid, r.rule.Name)
 				syscall.Kill(-pid, syscall.SIGKILL)
 				c.Process.Kill()
 				<-done
@@ -435,7 +434,7 @@ func (r *RuleRunner) TerminateProcesses() error {
 
 			// Verify termination
 			if err := syscall.Kill(pid, 0); err == nil {
-				log.Printf("WARNING: Process %d for rule %q still exists after termination",
+				utils.LogDevloop("WARNING: Process %d for rule %q still exists after termination",
 					pid, r.rule.Name)
 				syscall.Kill(pid, syscall.SIGKILL)
 			}
