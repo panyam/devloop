@@ -337,7 +337,7 @@ func (o *Orchestrator) GetWatchedPaths() []string {
 
 	watchedPaths := make(map[string]struct{})
 	for _, rule := range o.Config.Rules {
-		for _, matcher := range rule.Matchers {
+		for _, matcher := range rule.Watch {
 			for _, pattern := range matcher.Patterns {
 				watchedPaths[pattern] = struct{}{}
 			}

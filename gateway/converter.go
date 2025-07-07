@@ -87,7 +87,7 @@ func ConvertAirToml(inputPath string) error {
 		includePatterns = append(includePatterns, fmt.Sprintf("%s/**/*", dir))
 	}
 	if len(includePatterns) > 0 {
-		devloopRule.Matchers = append(devloopRule.Matchers, &pb.RuleMatcher{
+		devloopRule.Watch = append(devloopRule.Watch, &pb.RuleMatcher{
 			Action:   "include",
 			Patterns: includePatterns,
 		})
@@ -99,7 +99,7 @@ func ConvertAirToml(inputPath string) error {
 	}
 	excludePatterns = append(excludePatterns, airConfig.Build.ExcludeFile...)
 	if len(excludePatterns) > 0 {
-		devloopRule.Matchers = append(devloopRule.Matchers, &pb.RuleMatcher{
+		devloopRule.Watch = append(devloopRule.Watch, &pb.RuleMatcher{
 			Action:   "exclude",
 			Patterns: excludePatterns,
 		})

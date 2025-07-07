@@ -226,7 +226,7 @@ func main() {
 		utils.LogDevloop("Config loaded successfully:")
 		for _, rule := range orchestrator.Config.Rules {
 			fmt.Printf("  Rule Name: %s\n", rule.Name)
-			fmt.Printf("    Watch: %v\n", rule.Matchers)
+			fmt.Printf("    Watch: %v\n", rule.Watch)
 			fmt.Printf("    Commands: %v\n", rule.Commands)
 		}
 	}

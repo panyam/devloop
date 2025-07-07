@@ -118,8 +118,8 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 			rule.DefaultAction = config.Settings.DefaultWatchAction
 		}
 
-		for j := range rule.Matchers {
-			matcher := rule.Matchers[j]
+		for j := range rule.Watch {
+			matcher := rule.Watch[j]
 			for k, pattern := range matcher.Patterns {
 				if !filepath.IsAbs(pattern) {
 					// Make relative patterns absolute relative to the config file's directory.

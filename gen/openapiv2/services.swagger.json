@@ -298,7 +298,7 @@
           },
           "title": "The commands that will be executed for this rule"
         },
-        "matchers": {
+        "watch": {
           "type": "array",
           "items": {
             "type": "object",

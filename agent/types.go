@@ -93,7 +93,7 @@ func (r *Rule) GetPrefix() string {
 
 // Matches checks if the given file path matches the rule's watch criteria.
 func RuleMatches(r *pb.Rule, filePath string) *pb.RuleMatcher {
-	for _, matcher := range r.Matchers {
+	for _, matcher := range r.Watch {
 		if MatcherMatches(matcher, filePath) {
 			return matcher
 		}
