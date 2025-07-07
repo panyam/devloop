@@ -9,13 +9,13 @@ import (
 )
 
 var (
-	configPath    string
-	verbose       bool
-	httpPort      int
-	grpcPort      int
-	gatewayAddr   string
-	enableMCP     bool
-	autoPorts     bool
+	configPath  string
+	verbose     bool
+	httpPort    int
+	grpcPort    int
+	gatewayAddr string
+	enableMCP   bool
+	autoPorts   bool
 )
 
 // rootCmd represents the base command when called without any subcommands

@@ -33,7 +33,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(convertCmd)
-	
+
 	convertCmd.Flags().StringVarP(&convertInput, "input", "i", ".air.toml", "Path to the .air.toml input file")
 }
 
@@ -42,6 +42,6 @@ func runConvert() {
 		fmt.Fprintf(os.Stderr, "Error: Failed to convert .air.toml: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Printf("✅ Successfully converted %s to .devloop.yaml\n", convertInput)
 }

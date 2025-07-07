@@ -39,7 +39,7 @@ rules:
 		require.NoError(t, err)
 
 		// Start Gateway Service
-		gatewayOrchestrator, err := NewOrchestratorForTesting(gatewayConfigPath, "")
+		gatewayOrchestrator, err := NewOrchestratorForTesting(gatewayConfigPath)
 		require.NoError(t, err)
 
 		gatewayService := gateway.NewGatewayService(gatewayOrchestrator)

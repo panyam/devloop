@@ -43,7 +43,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -107,7 +107,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -168,7 +168,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -241,7 +241,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run runApp in a goroutine
-		orchestrator, err := NewOrchestratorForTesting(customMultiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(customMultiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -317,7 +317,7 @@ rules:
 		assert.NoError(t, err)
 
 		// Run Orchestrator
-		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
@@ -408,7 +408,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 2. Run Orchestrator
-		orchestrator, err := NewOrchestratorForTesting(multiYamlPath, "")
+		orchestrator, err := NewOrchestratorForTesting(multiYamlPath)
 		assert.NoError(t, err)
 		assert.NotNil(t, orchestrator)
 
