@@ -166,16 +166,10 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 			rule.DefaultAction = config.Settings.DefaultWatchAction
 		}
 
-		for j := range rule.Watch {
-			matcher := rule.Watch[j]
-			for k, pattern := range matcher.Patterns {
-				if !filepath.IsAbs(pattern) {
-					// Make relative patterns absolute relative to the config file's directory.
-					resolvedPattern := filepath.Join(filepath.Dir(absConfigPath), pattern)
-					matcher.Patterns[k] = resolvedPattern
-				}
-			}
-		}
+		// Note: We no longer resolve relative patterns to absolute paths here.
+		// Patterns will be resolved dynamically relative to each rule's work_dir
+		// when matching files. This allows patterns to be relative to the rule's
+		// working directory instead of the config file location.
 	}
 
 	return &config, nil

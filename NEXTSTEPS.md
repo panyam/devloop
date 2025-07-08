@@ -2,7 +2,24 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-07-07)
+## Recently Completed (2025-07-08)
+
+- ✅ **Watcher Robustness & Pattern Resolution Fix:**
+  - **Problem**: Three critical watcher issues affecting reliability and intuitive behavior
+    1. Patterns resolved relative to project root instead of rule's working directory
+    2. Relative paths in patterns not properly honored
+    3. Watcher flakiness when directories are added/removed
+  - **Solution**: Complete overhaul of pattern resolution and directory watching logic
+  - **Implementation**:
+    - Modified `LoadConfig()` to preserve relative patterns instead of resolving to absolute paths
+    - Created `resolvePattern()` helper for dynamic pattern resolution relative to rule's `workdir`
+    - Enhanced `shouldWatchDirectory()` with pattern-based logic instead of hard-coded exclusions
+    - Added dynamic directory watching for CREATE/DELETE events
+    - Updated `RuleMatches()` to use runtime pattern resolution
+  - **Result**: Patterns now work intuitively relative to each rule's working directory
+  - **Impact**: Rules with different workdirs properly isolate their pattern matching, watcher handles dynamic filesystem changes
+
+## Previously Completed (2025-07-07)
 
 - ✅ **CLI Restructuring with Cobra Framework:**
   - **Problem**: Monolithic main.go with basic flag parsing and poor user experience

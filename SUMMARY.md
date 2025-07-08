@@ -184,6 +184,12 @@ settings:
   - **Default Behavior:** `devloop` starts server, subcommands act as client
   - **Signal Handling Fix:** Resolved Ctrl-C interrupt issues in server mode
   - **Code Organization:** Modular structure with `cmd/`, `server/`, `client/` packages
+- ✅ **Watcher Robustness & Pattern Resolution Fix (2025-07-08):** Fixed critical pattern resolution and watcher reliability issues
+  - **Workdir-Relative Patterns:** Patterns now resolve relative to rule's working directory instead of project root
+  - **Dynamic Directory Watching:** Added support for directories created/deleted after startup
+  - **Pattern-Based Exclusions:** Replaced hard-coded exclusions with intelligent pattern-based logic
+  - **Cross-Rule Isolation:** Rules with different workdirs now properly isolate their pattern matching
+  - **Comprehensive Testing:** Added tests for workdir-relative patterns and pattern resolution
 - Implement grpcrouter-based gateway mode
 - Add comprehensive tests for the gRPC API endpoints
 - Enhance Agent Service with streaming capabilities

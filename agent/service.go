@@ -40,17 +40,17 @@ func (s *AgentService) GetRule(ctx context.Context, req *protos.GetRuleRequest) 
 	} else {
 		// Create a copy of the rule and populate the Status field
 		ruleWithStatus := &protos.Rule{
-			ProjectId:       rule.ProjectId,
-			Name:            rule.Name,
-			Commands:        rule.Commands,
-			Watch:           rule.Watch,
-			DefaultAction:   rule.DefaultAction,
-			Prefix:          rule.Prefix,
-			WorkDir:         rule.WorkDir,
-			SkipRunOnInit:   rule.SkipRunOnInit,
-			Color:           rule.Color,
-			Env:             rule.Env,
-			Status:          ruleStatus,
+			ProjectId:     rule.ProjectId,
+			Name:          rule.Name,
+			Commands:      rule.Commands,
+			Watch:         rule.Watch,
+			DefaultAction: rule.DefaultAction,
+			Prefix:        rule.Prefix,
+			WorkDir:       rule.WorkDir,
+			SkipRunOnInit: rule.SkipRunOnInit,
+			Color:         rule.Color,
+			Env:           rule.Env,
+			Status:        ruleStatus,
 		}
 		resp = &protos.GetRuleResponse{
 			Rule: ruleWithStatus,

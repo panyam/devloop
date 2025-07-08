@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fsnotify/fsnotify"
 	"github.com/panyam/gocurrent"
 
@@ -154,19 +155,19 @@ func (o *Orchestrator) Start() error {
 			return err
 		}
 		if info.IsDir() {
-			// Skip hidden directories and common dependency folders
-			base := filepath.Base(path)
-			if strings.HasPrefix(base, ".") && path != projectRoot {
+			// Use pattern-based logic to determine if directory should be watched
+			if o.shouldWatchDirectory(path) {
+				if err := o.Watcher.Add(path); err != nil {
+					utils.LogDevloop("Error watching %s: %v", path, err)
+				} else if o.Verbose {
+					utils.LogDevloop("Watching directory: %s", path)
+				}
+			} else {
+				// Skip this directory and its subdirectories
+				if o.Verbose {
+					utils.LogDevloop("Skipping directory: %s", path)
+				}
 				return filepath.SkipDir
-			}
-			if base == "node_modules" || base == "vendor" || base == "gen" {
-				return filepath.SkipDir
-			}
-
-			if err := o.Watcher.Add(path); err != nil {
-				utils.LogDevloop("Error watching %s: %v", path, err)
-			} else if o.Verbose {
-				utils.LogDevloop("Watching directory: %s", path)
 			}
 		}
 		return nil
@@ -197,11 +198,35 @@ func (o *Orchestrator) watchFiles() {
 				o.logDevloop("File event: %s on %s", event.Op, event.Name)
 			}
 
+			// Handle directory creation - add new directories to watcher
+			if event.Op&fsnotify.Create == fsnotify.Create {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+					// Check if this directory should be watched based on user patterns
+					shouldWatch := o.shouldWatchDirectory(event.Name)
+					if shouldWatch {
+						if err := o.Watcher.Add(event.Name); err != nil {
+							utils.LogDevloop("Error watching new directory %s: %v", event.Name, err)
+						} else if o.Verbose {
+							o.logDevloop("Started watching new directory: %s", event.Name)
+						}
+					}
+				}
+			}
+
+			// Handle directory removal - remove from watcher
+			if event.Op&fsnotify.Remove == fsnotify.Remove {
+				// Try to remove from watcher (will silently fail if not being watched)
+				o.Watcher.Remove(event.Name)
+				if o.Verbose {
+					o.logDevloop("Stopped watching removed path: %s", event.Name)
+				}
+			}
+
 			// Check which rules match this file
 			o.runnersMutex.RLock()
 			for _, runner := range o.ruleRunners {
 				rule := runner.GetRule()
-				if matcher := RuleMatches(rule, event.Name); matcher != nil {
+				if matcher := RuleMatches(rule, event.Name, o.ConfigPath); matcher != nil {
 					// Pattern matched - check action
 					if matcher.Action == "include" {
 						if o.Verbose {
@@ -246,6 +271,79 @@ func (o *Orchestrator) shouldTriggerByDefault(rule *pb.Rule) bool {
 	}
 	// Fall back to global default
 	return o.Config.Settings.DefaultWatchAction == "include"
+}
+
+// shouldWatchDirectory determines if a directory should be watched based on user patterns
+func (o *Orchestrator) shouldWatchDirectory(dirPath string) bool {
+	// Default exclusion patterns (can be overridden by user patterns)
+	defaultExclusions := []string{
+		"**/node_modules/**",
+		"**/vendor/**",
+		"**/.*/**", // hidden directories
+	}
+
+	// Check if any user pattern would potentially match files in this directory
+	o.runnersMutex.RLock()
+	defer o.runnersMutex.RUnlock()
+
+	for _, rule := range o.Config.Rules {
+		for _, matcher := range rule.Watch {
+			for _, pattern := range matcher.Patterns {
+				// Resolve pattern relative to rule's work_dir
+				resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
+
+				// Check if this pattern could match files in the directory
+				if o.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
+					return true
+				}
+			}
+		}
+	}
+
+	// If no user patterns would match, check against default exclusions
+	for _, exclusion := range defaultExclusions {
+		if matched, _ := doublestar.Match(exclusion, dirPath); matched {
+			return false
+		}
+	}
+
+	// Default to watching if no exclusions match
+	return true
+}
+
+// patternCouldMatchInDirectory checks if a pattern could potentially match files in a directory
+func (o *Orchestrator) patternCouldMatchInDirectory(pattern, dirPath string) bool {
+	// If pattern is exact match to directory, it should be watched
+	if pattern == dirPath {
+		return true
+	}
+
+	// If pattern contains the directory as a prefix, it could match files inside
+	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
+		return true
+	}
+
+	// If directory is a prefix of pattern, it could match files inside
+	if strings.HasPrefix(dirPath, filepath.Dir(pattern)) {
+		return true
+	}
+
+	// Use glob matching to check if pattern could match files in directory
+	testFile := filepath.Join(dirPath, "test.txt")
+	if matched, _ := doublestar.Match(pattern, testFile); matched {
+		return true
+	}
+
+	// Check with a few common file extensions
+	extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h"}
+	for _, ext := range extensions {
+		testFile := filepath.Join(dirPath, "test"+ext)
+		if matched, _ := doublestar.Match(pattern, testFile); matched {
+			return true
+		}
+	}
+
+	return false
 }
 
 // getDebounceDelayForRule returns the effective debounce delay for a rule

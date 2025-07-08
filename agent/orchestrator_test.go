@@ -22,18 +22,15 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "Test Rule 1", config.Rules[0].Name)
 		assert.Len(t, config.Rules[0].Watch, 1)
 		assert.Equal(t, "include", config.Rules[0].Watch[0].Action)
-		// Patterns should be resolved to absolute paths relative to config file
-		absConfigPath, _ := filepath.Abs(configPath)
-		expectedPath1 := filepath.Join(filepath.Dir(absConfigPath), "src/**/*.go")
-		assert.Equal(t, []string{expectedPath1}, config.Rules[0].Watch[0].Patterns)
+		// Patterns should be preserved as relative paths
+		assert.Equal(t, []string{"src/**/*.go"}, config.Rules[0].Watch[0].Patterns)
 		assert.Equal(t, []string{"go build"}, config.Rules[0].Commands)
 
 		assert.Equal(t, "Test Rule 2", config.Rules[1].Name)
 		assert.Len(t, config.Rules[1].Watch, 1)
 		assert.Equal(t, "include", config.Rules[1].Watch[0].Action)
-		// Patterns should be resolved to absolute paths relative to config file
-		expectedPath2 := filepath.Join(filepath.Dir(absConfigPath), "web/**/*.js")
-		assert.Equal(t, []string{expectedPath2}, config.Rules[1].Watch[0].Patterns)
+		// Patterns should be preserved as relative paths
+		assert.Equal(t, []string{"web/**/*.js"}, config.Rules[1].Watch[0].Patterns)
 		assert.Equal(t, []string{"npm run build"}, config.Rules[1].Commands)
 
 		// Test non-existent file
@@ -216,7 +213,13 @@ func TestRuleMatches(t *testing.T) {
 				rule := &pb.Rule{
 					Watch: tt.watchers,
 				}
-				matcher := RuleMatches(rule, tt.filePath)
+				// Create a config path in the tmpDir for proper pattern resolution
+				configPath := filepath.Join(tmpDir, ".devloop.yaml")
+
+				// Create absolute path for the test file
+				absFilePath := filepath.Join(tmpDir, tt.filePath)
+
+				matcher := RuleMatches(rule, absFilePath, configPath)
 				if tt.expectedMatch {
 					assert.NotNil(t, matcher)
 					assert.Equal(t, tt.expectedAction, matcher.Action)
@@ -225,5 +228,80 @@ func TestRuleMatches(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestWorkdirRelativePatterns(t *testing.T) {
+	withTestContext(t, 5*time.Second, func(t *testing.T, tmpDir string) {
+		// Create test directory structure
+		backendDir := filepath.Join(tmpDir, "backend")
+		err := os.MkdirAll(filepath.Join(backendDir, "src"), 0755)
+		assert.NoError(t, err)
+
+		frontendDir := filepath.Join(tmpDir, "frontend")
+		err = os.MkdirAll(filepath.Join(frontendDir, "src"), 0755)
+		assert.NoError(t, err)
+
+		// Create test config with workdir-relative patterns
+		configContent := `
+rules:
+  - name: "Backend Rule"
+    workdir: "./backend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "echo 'Backend file changed' >> output.txt"
+  - name: "Frontend Rule"
+    workdir: "./frontend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.js"
+    commands:
+      - "echo 'Frontend file changed' >> output.txt"
+`
+		configPath := filepath.Join(tmpDir, ".devloop.yaml")
+		err = os.WriteFile(configPath, []byte(configContent), 0644)
+		assert.NoError(t, err)
+
+		// Load config and test pattern resolution
+		config, err := LoadConfig(configPath)
+		assert.NoError(t, err)
+		assert.Len(t, config.Rules, 2)
+
+		// Test that patterns are preserved as relative
+		assert.Equal(t, "src/**/*.go", config.Rules[0].Watch[0].Patterns[0])
+		assert.Equal(t, "src/**/*.js", config.Rules[1].Watch[0].Patterns[0])
+
+		// Test RuleMatches with workdir-relative patterns
+		backendRule := config.Rules[0]
+		frontendRule := config.Rules[1]
+
+		// Test backend file matching
+		backendFile := filepath.Join(backendDir, "src", "main.go")
+		matcher := RuleMatches(backendRule, backendFile, configPath)
+		assert.NotNil(t, matcher)
+		assert.Equal(t, "include", matcher.Action)
+
+		// Test frontend file matching
+		frontendFile := filepath.Join(frontendDir, "src", "app.js")
+		matcher = RuleMatches(frontendRule, frontendFile, configPath)
+		assert.NotNil(t, matcher)
+		assert.Equal(t, "include", matcher.Action)
+
+		// Test cross-matching (backend rule should NOT match frontend files)
+		matcher = RuleMatches(backendRule, frontendFile, configPath)
+		assert.Nil(t, matcher)
+
+		// Test cross-matching (frontend rule should NOT match backend files)
+		matcher = RuleMatches(frontendRule, backendFile, configPath)
+		assert.Nil(t, matcher)
+
+		// Test files in wrong location (should not match)
+		wrongFile := filepath.Join(tmpDir, "src", "wrong.go")
+		matcher = RuleMatches(backendRule, wrongFile, configPath)
+		assert.Nil(t, matcher)
 	})
 }

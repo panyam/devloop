@@ -48,6 +48,8 @@
 package agent
 
 import (
+	"path/filepath"
+
 	"github.com/bmatcuk/doublestar/v4"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 )
@@ -91,19 +93,47 @@ func (r *Rule) GetPrefix() string {
 	return r.Prefix
 }
 
+// resolvePattern resolves a pattern relative to a rule's working directory
+func resolvePattern(pattern string, rule *pb.Rule, configPath string) string {
+	// If pattern is already absolute, return as-is
+	if filepath.IsAbs(pattern) {
+		return pattern
+	}
+
+	// Determine the base directory for pattern resolution
+	var baseDir string
+	if rule.WorkDir != "" {
+		// If rule has a work_dir, use it as the base
+		if filepath.IsAbs(rule.WorkDir) {
+			baseDir = rule.WorkDir
+		} else {
+			// work_dir is relative to config file location
+			baseDir = filepath.Join(filepath.Dir(configPath), rule.WorkDir)
+		}
+	} else {
+		// No work_dir specified, use config file directory
+		baseDir = filepath.Dir(configPath)
+	}
+
+	// Resolve pattern relative to base directory
+	return filepath.Join(baseDir, pattern)
+}
+
 // Matches checks if the given file path matches the rule's watch criteria.
-func RuleMatches(r *pb.Rule, filePath string) *pb.RuleMatcher {
+func RuleMatches(r *pb.Rule, filePath string, configPath string) *pb.RuleMatcher {
 	for _, matcher := range r.Watch {
-		if MatcherMatches(matcher, filePath) {
+		if MatcherMatches(matcher, filePath, r, configPath) {
 			return matcher
 		}
 	}
 	return nil
 }
 
-func MatcherMatches(m *pb.RuleMatcher, filePath string) bool {
+func MatcherMatches(m *pb.RuleMatcher, filePath string, rule *pb.Rule, configPath string) bool {
 	for _, pattern := range m.Patterns {
-		matched, err := doublestar.Match(pattern, filePath)
+		// Resolve pattern relative to rule's work_dir
+		resolvedPattern := resolvePattern(pattern, rule, configPath)
+		matched, err := doublestar.Match(resolvedPattern, filePath)
 		if err != nil {
 			// Log error but continue with other patterns
 			continue
