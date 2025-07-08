@@ -232,6 +232,44 @@
         }
       }
     },
+    "v1CycleDetectionSettings": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "title": "Whether to enable cycle detection (default: true)"
+        },
+        "staticValidation": {
+          "type": "boolean",
+          "title": "Whether to perform static validation at startup (default: true)"
+        },
+        "dynamicProtection": {
+          "type": "boolean",
+          "title": "Whether to enable dynamic rate limiting (default: false for now)"
+        },
+        "maxTriggersPerMinute": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Maximum triggers per minute before rate limiting kicks in (default: 10)"
+        },
+        "maxChainDepth": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Maximum chain depth for trigger relationships (default: 5)"
+        },
+        "fileThrashWindowSeconds": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Time window for file modification frequency detection in seconds (default: 60)"
+        },
+        "fileThrashThreshold": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Number of modifications within window to consider \"thrashing\" (default: 5)"
+        }
+      },
+      "title": "Settings for cycle detection and prevention"
+    },
     "v1GetConfigResponse": {
       "type": "object",
       "properties": {
@@ -328,7 +366,7 @@
         },
         "skipRunOnInit": {
           "type": "boolean",
-          "title": "Whether to skip running on init (default false = will run on init)"
+          "title": "Whether to skip running on init (default false = will run on init)\nSet to true to prevent rule from executing when devloop starts up\nExample: skip_run_on_init: true"
         },
         "verbose": {
           "type": "boolean",
@@ -348,6 +386,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "cycleProtection": {
+          "type": "boolean",
+          "title": "Per-rule cycle protection override (if not set, inherits from global settings)\nSet to false to disable cycle protection for this specific rule"
         },
         "status": {
           "$ref": "#/definitions/v1RuleStatus",
@@ -439,6 +481,10 @@
         },
         "defaultWatchAction": {
           "type": "string"
+        },
+        "cycleDetection": {
+          "$ref": "#/definitions/v1CycleDetectionSettings",
+          "title": "Cycle detection configuration"
         }
       },
       "description": "Settings defines global settings for devloop."

@@ -1,0 +1,69 @@
+# Strict Cycle Detection Configuration
+# This configuration shows aggressive cycle detection settings
+
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Strict cycle detection settings
+  cycle_detection:
+    enabled: true
+    static_validation: true
+    dynamic_protection: true
+    max_triggers_per_minute: 5      # Lower threshold
+    max_chain_depth: 3              # Shorter chains
+    file_thrash_window_seconds: 30  # Shorter window
+    file_thrash_threshold: 3        # Lower threshold
+
+rules:
+  # All rules use strict global settings (no overrides)
+  - name: "strict-logger"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Strict logger triggered' >> logs/strict.log"
+
+  - name: "strict-processor"
+    watch:
+      - action: include
+        patterns:
+          - "input/**/*"
+    commands:
+      - "mkdir -p processed"
+      - "echo '[$(date)] Strict processing' > processed/strict.txt"
+
+  - name: "strict-backend"
+    workdir: "./backend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "mkdir -p bin"
+      - "echo '[$(date)] Strict backend build' > src/build.log"
+      - "go build -o bin/server ./src || echo 'Build failed' >> src/build.log"
+
+  - name: "strict-frontend"
+    workdir: "./frontend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.js"
+    commands:
+      - "mkdir -p dist"
+      - "echo '[$(date)] Strict frontend build' > src/build.log"
+      - "cp src/app.js dist/app.js"
+
+  - name: "strict-test-runner"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"
+          - "**/*.js"
+    commands:
+      - "mkdir -p logs"
+      - "echo '[$(date)] Strict test runner' > logs/test-results.log"

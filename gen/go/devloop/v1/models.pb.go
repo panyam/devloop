@@ -162,8 +162,10 @@ type Settings struct {
 	ColorScheme        string            `protobuf:"bytes,7,opt,name=color_scheme,json=colorScheme,proto3" json:"color_scheme,omitempty"`
 	CustomColors       map[string]string `protobuf:"bytes,8,rep,name=custom_colors,json=customColors,proto3" json:"custom_colors,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	DefaultWatchAction string            `protobuf:"bytes,9,opt,name=default_watch_action,json=defaultWatchAction,proto3" json:"default_watch_action,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Cycle detection configuration
+	CycleDetection *CycleDetectionSettings `protobuf:"bytes,10,opt,name=cycle_detection,json=cycleDetection,proto3" json:"cycle_detection,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Settings) Reset() {
@@ -259,6 +261,113 @@ func (x *Settings) GetDefaultWatchAction() string {
 	return ""
 }
 
+func (x *Settings) GetCycleDetection() *CycleDetectionSettings {
+	if x != nil {
+		return x.CycleDetection
+	}
+	return nil
+}
+
+// Settings for cycle detection and prevention
+type CycleDetectionSettings struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Whether to enable cycle detection (default: true)
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// Whether to perform static validation at startup (default: true)
+	StaticValidation bool `protobuf:"varint,2,opt,name=static_validation,json=staticValidation,proto3" json:"static_validation,omitempty"`
+	// Whether to enable dynamic rate limiting (default: false for now)
+	DynamicProtection bool `protobuf:"varint,3,opt,name=dynamic_protection,json=dynamicProtection,proto3" json:"dynamic_protection,omitempty"`
+	// Maximum triggers per minute before rate limiting kicks in (default: 10)
+	MaxTriggersPerMinute uint32 `protobuf:"varint,4,opt,name=max_triggers_per_minute,json=maxTriggersPerMinute,proto3" json:"max_triggers_per_minute,omitempty"`
+	// Maximum chain depth for trigger relationships (default: 5)
+	MaxChainDepth uint32 `protobuf:"varint,5,opt,name=max_chain_depth,json=maxChainDepth,proto3" json:"max_chain_depth,omitempty"`
+	// Time window for file modification frequency detection in seconds (default: 60)
+	FileThrashWindowSeconds uint32 `protobuf:"varint,6,opt,name=file_thrash_window_seconds,json=fileThrashWindowSeconds,proto3" json:"file_thrash_window_seconds,omitempty"`
+	// Number of modifications within window to consider "thrashing" (default: 5)
+	FileThrashThreshold uint32 `protobuf:"varint,7,opt,name=file_thrash_threshold,json=fileThrashThreshold,proto3" json:"file_thrash_threshold,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *CycleDetectionSettings) Reset() {
+	*x = CycleDetectionSettings{}
+	mi := &file_devloop_v1_models_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CycleDetectionSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CycleDetectionSettings) ProtoMessage() {}
+
+func (x *CycleDetectionSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_devloop_v1_models_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CycleDetectionSettings.ProtoReflect.Descriptor instead.
+func (*CycleDetectionSettings) Descriptor() ([]byte, []int) {
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CycleDetectionSettings) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *CycleDetectionSettings) GetStaticValidation() bool {
+	if x != nil {
+		return x.StaticValidation
+	}
+	return false
+}
+
+func (x *CycleDetectionSettings) GetDynamicProtection() bool {
+	if x != nil {
+		return x.DynamicProtection
+	}
+	return false
+}
+
+func (x *CycleDetectionSettings) GetMaxTriggersPerMinute() uint32 {
+	if x != nil {
+		return x.MaxTriggersPerMinute
+	}
+	return 0
+}
+
+func (x *CycleDetectionSettings) GetMaxChainDepth() uint32 {
+	if x != nil {
+		return x.MaxChainDepth
+	}
+	return 0
+}
+
+func (x *CycleDetectionSettings) GetFileThrashWindowSeconds() uint32 {
+	if x != nil {
+		return x.FileThrashWindowSeconds
+	}
+	return 0
+}
+
+func (x *CycleDetectionSettings) GetFileThrashThreshold() uint32 {
+	if x != nil {
+		return x.FileThrashThreshold
+	}
+	return 0
+}
+
 // LogLine represents a single log entry from a rule execution.
 // Used for streaming real-time logs and retrieving historical log data.
 type LogLine struct {
@@ -279,7 +388,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_devloop_v1_models_proto_msgTypes[3]
+	mi := &file_devloop_v1_models_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -291,7 +400,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[3]
+	mi := &file_devloop_v1_models_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -304,7 +413,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{3}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *LogLine) GetProjectId() string {
@@ -353,6 +462,8 @@ type Rule struct {
 	// The workdir for this rule.  If not specified then will default to the directory where the devloop config is in.
 	WorkDir string `protobuf:"bytes,7,opt,name=work_dir,json=workDir,proto3" json:"work_dir,omitempty"`
 	// Whether to skip running on init (default false = will run on init)
+	// Set to true to prevent rule from executing when devloop starts up
+	// Example: skip_run_on_init: true
 	SkipRunOnInit bool `protobuf:"varint,8,opt,name=skip_run_on_init,json=skipRunOnInit,proto3" json:"skip_run_on_init,omitempty"`
 	// Whether the rule will have verbose logs or not
 	Verbose *bool `protobuf:"varint,9,opt,name=verbose,proto3,oneof" json:"verbose,omitempty"`
@@ -361,15 +472,18 @@ type Rule struct {
 	// Color to use to show the logs for this rule
 	Color string            `protobuf:"bytes,11,opt,name=color,proto3" json:"color,omitempty"`
 	Env   map[string]string `protobuf:"bytes,12,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Per-rule cycle protection override (if not set, inherits from global settings)
+	// Set to false to disable cycle protection for this specific rule
+	CycleProtection *bool `protobuf:"varint,13,opt,name=cycle_protection,json=cycleProtection,proto3,oneof" json:"cycle_protection,omitempty"`
 	// Status of this rule
-	Status        *RuleStatus `protobuf:"bytes,13,opt,name=status,proto3" json:"status,omitempty"`
+	Status        *RuleStatus `protobuf:"bytes,14,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
 	*x = Rule{}
-	mi := &file_devloop_v1_models_proto_msgTypes[4]
+	mi := &file_devloop_v1_models_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +495,7 @@ func (x *Rule) String() string {
 func (*Rule) ProtoMessage() {}
 
 func (x *Rule) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[4]
+	mi := &file_devloop_v1_models_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +508,7 @@ func (x *Rule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Rule.ProtoReflect.Descriptor instead.
 func (*Rule) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{4}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Rule) GetProjectId() string {
@@ -481,6 +595,13 @@ func (x *Rule) GetEnv() map[string]string {
 	return nil
 }
 
+func (x *Rule) GetCycleProtection() bool {
+	if x != nil && x.CycleProtection != nil {
+		return *x.CycleProtection
+	}
+	return false
+}
+
 func (x *Rule) GetStatus() *RuleStatus {
 	if x != nil {
 		return x.Status
@@ -500,7 +621,7 @@ type RuleMatcher struct {
 
 func (x *RuleMatcher) Reset() {
 	*x = RuleMatcher{}
-	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	mi := &file_devloop_v1_models_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +633,7 @@ func (x *RuleMatcher) String() string {
 func (*RuleMatcher) ProtoMessage() {}
 
 func (x *RuleMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	mi := &file_devloop_v1_models_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +646,7 @@ func (x *RuleMatcher) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleMatcher.ProtoReflect.Descriptor instead.
 func (*RuleMatcher) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{5}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RuleMatcher) GetPatterns() []string {
@@ -569,7 +690,7 @@ type RuleStatus struct {
 
 func (x *RuleStatus) Reset() {
 	*x = RuleStatus{}
-	mi := &file_devloop_v1_models_proto_msgTypes[6]
+	mi := &file_devloop_v1_models_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +702,7 @@ func (x *RuleStatus) String() string {
 func (*RuleStatus) ProtoMessage() {}
 
 func (x *RuleStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[6]
+	mi := &file_devloop_v1_models_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,7 +715,7 @@ func (x *RuleStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleStatus.ProtoReflect.Descriptor instead.
 func (*RuleStatus) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{6}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RuleStatus) GetProjectId() string {
@@ -653,7 +774,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
 	"\bsettings\x18\x02 \x01(\v2\x14.devloop.v1.SettingsR\bsettings\x12&\n" +
-	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xe8\x03\n" +
+	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xb5\x04\n" +
 	"\bSettings\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
@@ -666,17 +787,27 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"color_logs\x18\x06 \x01(\bR\tcolorLogs\x12!\n" +
 	"\fcolor_scheme\x18\a \x01(\tR\vcolorScheme\x12K\n" +
 	"\rcustom_colors\x18\b \x03(\v2&.devloop.v1.Settings.CustomColorsEntryR\fcustomColors\x120\n" +
-	"\x14default_watch_action\x18\t \x01(\tR\x12defaultWatchAction\x1a?\n" +
+	"\x14default_watch_action\x18\t \x01(\tR\x12defaultWatchAction\x12K\n" +
+	"\x0fcycle_detection\x18\n" +
+	" \x01(\v2\".devloop.v1.CycleDetectionSettingsR\x0ecycleDetection\x1a?\n" +
 	"\x11CustomColorsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x19\n" +
-	"\x17_default_debounce_delay\"w\n" +
+	"\x17_default_debounce_delay\"\xde\x02\n" +
+	"\x16CycleDetectionSettings\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12+\n" +
+	"\x11static_validation\x18\x02 \x01(\bR\x10staticValidation\x12-\n" +
+	"\x12dynamic_protection\x18\x03 \x01(\bR\x11dynamicProtection\x125\n" +
+	"\x17max_triggers_per_minute\x18\x04 \x01(\rR\x14maxTriggersPerMinute\x12&\n" +
+	"\x0fmax_chain_depth\x18\x05 \x01(\rR\rmaxChainDepth\x12;\n" +
+	"\x1afile_thrash_window_seconds\x18\x06 \x01(\rR\x17fileThrashWindowSeconds\x122\n" +
+	"\x15file_thrash_threshold\x18\a \x01(\rR\x13fileThrashThreshold\"w\n" +
 	"\aLogLine\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\trule_name\x18\x02 \x01(\tR\bruleName\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\x9c\x04\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xe1\x04\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -692,13 +823,15 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	" \x01(\x04H\x01R\rdebounceDelay\x88\x01\x01\x12\x14\n" +
 	"\x05color\x18\v \x01(\tR\x05color\x12+\n" +
 	"\x03env\x18\f \x03(\v2\x19.devloop.v1.Rule.EnvEntryR\x03env\x12.\n" +
-	"\x06status\x18\r \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x1a6\n" +
+	"\x10cycle_protection\x18\r \x01(\bH\x02R\x0fcycleProtection\x88\x01\x01\x12.\n" +
+	"\x06status\x18\x0e \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +
 	"\n" +
 	"\b_verboseB\x11\n" +
-	"\x0f_debounce_delay\"A\n" +
+	"\x0f_debounce_delayB\x13\n" +
+	"\x11_cycle_protection\"A\n" +
 	"\vRuleMatcher\x12\x1a\n" +
 	"\bpatterns\x18\x01 \x03(\tR\bpatterns\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\"\x92\x02\n" +
@@ -729,33 +862,35 @@ func file_devloop_v1_models_proto_rawDescGZIP() []byte {
 	return file_devloop_v1_models_proto_rawDescData
 }
 
-var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_devloop_v1_models_proto_goTypes = []any{
-	(*ProjectInfo)(nil),           // 0: devloop.v1.ProjectInfo
-	(*Config)(nil),                // 1: devloop.v1.Config
-	(*Settings)(nil),              // 2: devloop.v1.Settings
-	(*LogLine)(nil),               // 3: devloop.v1.LogLine
-	(*Rule)(nil),                  // 4: devloop.v1.Rule
-	(*RuleMatcher)(nil),           // 5: devloop.v1.RuleMatcher
-	(*RuleStatus)(nil),            // 6: devloop.v1.RuleStatus
-	nil,                           // 7: devloop.v1.Settings.CustomColorsEntry
-	nil,                           // 8: devloop.v1.Rule.EnvEntry
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*ProjectInfo)(nil),            // 0: devloop.v1.ProjectInfo
+	(*Config)(nil),                 // 1: devloop.v1.Config
+	(*Settings)(nil),               // 2: devloop.v1.Settings
+	(*CycleDetectionSettings)(nil), // 3: devloop.v1.CycleDetectionSettings
+	(*LogLine)(nil),                // 4: devloop.v1.LogLine
+	(*Rule)(nil),                   // 5: devloop.v1.Rule
+	(*RuleMatcher)(nil),            // 6: devloop.v1.RuleMatcher
+	(*RuleStatus)(nil),             // 7: devloop.v1.RuleStatus
+	nil,                            // 8: devloop.v1.Settings.CustomColorsEntry
+	nil,                            // 9: devloop.v1.Rule.EnvEntry
+	(*timestamppb.Timestamp)(nil),  // 10: google.protobuf.Timestamp
 }
 var file_devloop_v1_models_proto_depIdxs = []int32{
-	2, // 0: devloop.v1.Config.settings:type_name -> devloop.v1.Settings
-	4, // 1: devloop.v1.Config.rules:type_name -> devloop.v1.Rule
-	7, // 2: devloop.v1.Settings.custom_colors:type_name -> devloop.v1.Settings.CustomColorsEntry
-	5, // 3: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
-	8, // 4: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
-	6, // 5: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
-	9, // 6: devloop.v1.RuleStatus.start_time:type_name -> google.protobuf.Timestamp
-	9, // 7: devloop.v1.RuleStatus.last_build_time:type_name -> google.protobuf.Timestamp
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	2,  // 0: devloop.v1.Config.settings:type_name -> devloop.v1.Settings
+	5,  // 1: devloop.v1.Config.rules:type_name -> devloop.v1.Rule
+	8,  // 2: devloop.v1.Settings.custom_colors:type_name -> devloop.v1.Settings.CustomColorsEntry
+	3,  // 3: devloop.v1.Settings.cycle_detection:type_name -> devloop.v1.CycleDetectionSettings
+	6,  // 4: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
+	9,  // 5: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
+	7,  // 6: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
+	10, // 7: devloop.v1.RuleStatus.start_time:type_name -> google.protobuf.Timestamp
+	10, // 8: devloop.v1.RuleStatus.last_build_time:type_name -> google.protobuf.Timestamp
+	9,  // [9:9] is the sub-list for method output_type
+	9,  // [9:9] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_devloop_v1_models_proto_init() }
@@ -764,14 +899,14 @@ func file_devloop_v1_models_proto_init() {
 		return
 	}
 	file_devloop_v1_models_proto_msgTypes[2].OneofWrappers = []any{}
-	file_devloop_v1_models_proto_msgTypes[4].OneofWrappers = []any{}
+	file_devloop_v1_models_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_devloop_v1_models_proto_rawDesc), len(file_devloop_v1_models_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

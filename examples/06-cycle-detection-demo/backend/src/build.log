@@ -1,0 +1,3 @@
+[$(date)] Building backend...
+[$(date)] Build complete
+[$(date)] Workdir self-ref triggered

@@ -1,0 +1,38 @@
+# Debug Cycle Detection Configuration
+# This config shows cycle detection with detailed verbose output
+
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Cycle detection with explicit settings
+  cycle_detection:
+    enabled: true
+    static_validation: true
+    dynamic_protection: false
+    max_triggers_per_minute: 10
+    max_chain_depth: 5
+    file_thrash_window_seconds: 60
+    file_thrash_threshold: 5
+
+rules:
+  # Simple self-referential test
+  - name: "simple-self-ref"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Simple self-ref triggered' >> logs/simple.log"
+
+  # Workdir-relative self-reference
+  - name: "workdir-self-ref"
+    workdir: "./backend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "echo '[$(date)] Workdir self-ref triggered' >> src/build.log"

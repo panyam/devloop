@@ -1,0 +1,83 @@
+# Mixed Cycle Protection Configuration
+# This configuration shows per-rule cycle protection overrides
+
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Global cycle detection enabled
+  cycle_detection:
+    enabled: true
+    static_validation: true
+    dynamic_protection: false
+    max_triggers_per_minute: 10
+
+rules:
+  # Rule with cycle protection explicitly enabled (redundant but clear)
+  - name: "protected-logger"
+    cycle_protection: true
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Protected logger triggered' >> logs/protected.log"
+
+  # Rule with cycle protection explicitly disabled
+  - name: "unprotected-logger"
+    cycle_protection: false
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Unprotected logger triggered' >> logs/unprotected.log"
+
+  # Rule using global settings (no override)
+  - name: "global-settings-logger"
+    watch:
+      - action: include
+        patterns:
+          - "input/**/*"
+    commands:
+      - "mkdir -p processed"
+      - "echo '[$(date)] Using global settings' > processed/global.txt"
+
+  # Backend builder with protection enabled
+  - name: "protected-backend"
+    workdir: "./backend"
+    cycle_protection: true
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "mkdir -p bin"
+      - "echo '[$(date)] Protected backend build' > src/build.log"
+      - "go build -o bin/server ./src || echo 'Build failed' >> src/build.log"
+
+  # Frontend builder with protection disabled
+  - name: "unprotected-frontend"
+    workdir: "./frontend"
+    cycle_protection: false
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.js"
+    commands:
+      - "mkdir -p dist"
+      - "echo '[$(date)] Unprotected frontend build' > src/build.log"
+      - "cp src/app.js dist/app.js"
+
+  # Test runner with global settings
+  - name: "test-runner"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"
+          - "**/*.js"
+    commands:
+      - "mkdir -p logs"
+      - "echo '[$(date)] Test runner (global settings)' > logs/test-results.log"

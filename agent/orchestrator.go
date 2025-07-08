@@ -102,6 +102,11 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		debounceDuration: 500 * time.Millisecond,
 	}
 
+	// Validate configuration for potential cycles
+	if err := orchestrator.ValidateConfig(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
 	// Create log manager
 	logManager, err := utils.NewLogManager("./logs")
 	if err != nil {
@@ -640,6 +645,161 @@ func (o *Orchestrator) logDevloop(format string, args ...interface{}) {
 			utils.LogDevloop("%s", message)
 		}
 	}
+}
+
+// ValidateConfig performs static cycle detection and validation on the loaded configuration
+func (o *Orchestrator) ValidateConfig() error {
+	// Check if cycle detection is enabled
+	if !o.isCycleDetectionEnabled() {
+		return nil
+	}
+	
+	// Check if static validation is enabled
+	if !o.isStaticValidationEnabled() {
+		return nil
+	}
+	
+	if err := o.detectStaticCycles(); err != nil {
+		return fmt.Errorf("static cycle detected: %w", err)
+	}
+	return nil
+}
+
+// detectStaticCycles performs static analysis to detect potential infinite loops
+func (o *Orchestrator) detectStaticCycles() error {
+	for _, rule := range o.Config.Rules {
+		if err := o.validateRuleForSelfReference(rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateRuleForSelfReference checks if a rule might trigger itself
+func (o *Orchestrator) validateRuleForSelfReference(rule *pb.Rule) error {
+	// Check if cycle protection is enabled for this specific rule
+	if !o.isRuleCycleProtectionEnabled(rule) {
+		return nil
+	}
+	
+	// Get the rule's working directory
+	workdir := o.getRuleWorkdir(rule)
+	
+	// Check each watch pattern against the working directory
+	for _, matcher := range rule.Watch {
+		for _, pattern := range matcher.Patterns {
+			// Resolve pattern relative to rule's work_dir
+			resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
+			
+			// Check if the pattern could watch files in the rule's working directory
+			if o.pathOverlaps(resolvedPattern, workdir) {
+				utils.LogDevloop("Warning: Rule %q may trigger itself - pattern %q watches workdir %q", 
+					rule.Name, pattern, workdir)
+				// For now, just warn - don't error out to maintain backward compatibility
+			}
+		}
+	}
+	return nil
+}
+
+// getRuleWorkdir returns the effective working directory for a rule
+func (o *Orchestrator) getRuleWorkdir(rule *pb.Rule) string {
+	if rule.WorkDir != "" {
+		if filepath.IsAbs(rule.WorkDir) {
+			return rule.WorkDir
+		}
+		// Relative to config file location
+		return filepath.Join(filepath.Dir(o.ConfigPath), rule.WorkDir)
+	}
+	// Default to config file directory
+	return filepath.Dir(o.ConfigPath)
+}
+
+// pathOverlaps checks if a pattern could potentially match files in a directory
+func (o *Orchestrator) pathOverlaps(pattern, dirPath string) bool {
+	// Make paths comparable by cleaning them
+	pattern = filepath.Clean(pattern)
+	dirPath = filepath.Clean(dirPath)
+	
+	// If pattern is exact match to directory, it overlaps
+	if pattern == dirPath {
+		return true
+	}
+	
+	// If pattern contains the directory as a prefix, it could match files inside
+	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
+		return true
+	}
+	
+	// If directory is a prefix of pattern, it could match files inside
+	if strings.HasPrefix(dirPath, filepath.Dir(pattern)) {
+		return true
+	}
+	
+	// Use glob matching to check if pattern could match files in directory
+	testFile := filepath.Join(dirPath, "test.txt")
+	if matched, _ := doublestar.Match(pattern, testFile); matched {
+		return true
+	}
+	
+	// Check with common file extensions that might be created by commands
+	extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".txt", ".md"}
+	for _, ext := range extensions {
+		testFile := filepath.Join(dirPath, "test"+ext)
+		if matched, _ := doublestar.Match(pattern, testFile); matched {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// getCycleDetectionSettings returns the effective cycle detection settings with defaults
+func (o *Orchestrator) getCycleDetectionSettings() *pb.CycleDetectionSettings {
+	if o.Config.Settings.CycleDetection != nil {
+		return o.Config.Settings.CycleDetection
+	}
+	
+	// Return default settings if not configured
+	return &pb.CycleDetectionSettings{
+		Enabled:                 true,  // Enable by default
+		StaticValidation:        true,  // Enable static validation by default
+		DynamicProtection:       false, // Disable dynamic protection by default for now
+		MaxTriggersPerMinute:    10,    // Default rate limit
+		MaxChainDepth:           5,     // Default chain depth limit
+		FileThrashWindowSeconds: 60,    // Default 60 second window
+		FileThrashThreshold:     5,     // Default threshold
+	}
+}
+
+// isCycleDetectionEnabled checks if cycle detection is enabled globally
+func (o *Orchestrator) isCycleDetectionEnabled() bool {
+	settings := o.getCycleDetectionSettings()
+	return settings.Enabled
+}
+
+// isStaticValidationEnabled checks if static validation is enabled
+func (o *Orchestrator) isStaticValidationEnabled() bool {
+	settings := o.getCycleDetectionSettings()
+	return settings.StaticValidation
+}
+
+// isRuleCycleProtectionEnabled checks if cycle protection is enabled for a specific rule
+func (o *Orchestrator) isRuleCycleProtectionEnabled(rule *pb.Rule) bool {
+	// Check rule-specific override first
+	if rule.CycleProtection != nil {
+		if o.Verbose {
+			utils.LogDevloop("Rule %q has cycle_protection override: %v", rule.Name, *rule.CycleProtection)
+		}
+		return *rule.CycleProtection
+	}
+	
+	// Fall back to global setting
+	globalEnabled := o.isCycleDetectionEnabled()
+	if o.Verbose {
+		utils.LogDevloop("Rule %q using global cycle detection setting: %v", rule.Name, globalEnabled)
+	}
+	return globalEnabled
 }
 
 //// Gateway related things

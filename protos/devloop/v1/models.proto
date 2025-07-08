@@ -54,6 +54,33 @@ message Settings {
   map<string, string> custom_colors = 8;
 
   string default_watch_action = 9;
+
+  // Cycle detection configuration
+  CycleDetectionSettings cycle_detection = 10;
+}
+
+// Settings for cycle detection and prevention
+message CycleDetectionSettings {
+  // Whether to enable cycle detection (default: true)
+  bool enabled = 1;
+  
+  // Whether to perform static validation at startup (default: true)
+  bool static_validation = 2;
+  
+  // Whether to enable dynamic rate limiting (default: false for now)
+  bool dynamic_protection = 3;
+  
+  // Maximum triggers per minute before rate limiting kicks in (default: 10)
+  uint32 max_triggers_per_minute = 4;
+  
+  // Maximum chain depth for trigger relationships (default: 5)
+  uint32 max_chain_depth = 5;
+  
+  // Time window for file modification frequency detection in seconds (default: 60)
+  uint32 file_thrash_window_seconds = 6;
+  
+  // Number of modifications within window to consider "thrashing" (default: 5)
+  uint32 file_thrash_threshold = 7;
 }
 
 // LogLine represents a single log entry from a rule execution.
@@ -113,8 +140,12 @@ message Rule {
 
   map<string, string> env = 12;
 
+  // Per-rule cycle protection override (if not set, inherits from global settings)
+  // Set to false to disable cycle protection for this specific rule
+  optional bool cycle_protection = 13;
+
   // Status of this rule
-  RuleStatus status = 13;
+  RuleStatus status = 14;
 }
 
 message RuleMatcher {

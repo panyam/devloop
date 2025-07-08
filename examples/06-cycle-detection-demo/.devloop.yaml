@@ -1,0 +1,115 @@
+# Default Cycle Detection Demo Configuration
+# This configuration demonstrates various cycle scenarios with detection enabled
+
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Cycle detection with default settings
+  cycle_detection:
+    enabled: true
+    static_validation: true
+    dynamic_protection: false
+    max_triggers_per_minute: 10
+    max_chain_depth: 5
+    file_thrash_window_seconds: 60
+    file_thrash_threshold: 5
+
+rules:
+  # 1. Self-Referential Cycle: Watches logs but creates logs
+  - name: "self-ref-logger"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Self-referential logger triggered' >> logs/self-ref.log"
+      - "sleep 1"
+      - "echo '[$(date)] Processing complete' >> logs/self-ref.log"
+
+  # 2. Self-Referential with Different Pattern: Watches all files, creates files
+  - name: "file-processor"
+    watch:
+      - action: include
+        patterns:
+          - "input/**/*"
+    commands:
+      - "mkdir -p processed"
+      - "echo '[$(date)] Processing input files' > processed/status.txt"
+      - "ls input/ > processed/file-list.txt"
+
+  # 3. Workdir-Relative Cycle: Backend builder that logs to watched directory
+  - name: "backend-builder"
+    workdir: "./backend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "mkdir -p bin"
+      - "echo '[$(date)] Building backend...' > src/build.log"
+      - "go build -o bin/server ./src || echo 'Build failed' >> src/build.log"
+      - "echo '[$(date)] Build complete' >> src/build.log"
+
+  # 4. Cross-Rule Cycle Part 1: Config generator
+  - name: "config-generator"
+    watch:
+      - action: include
+        patterns:
+          - "input/*.yaml"
+    commands:
+      - "mkdir -p generated"
+      - "echo '[$(date)] Generating config from input' > generated/config.json"
+      - "echo '{\"status\": \"generated\", \"timestamp\": \"$(date)\"}' >> generated/config.json"
+
+  # 5. Cross-Rule Cycle Part 2: Config processor (creates files watched by generator)
+  - name: "config-processor"
+    watch:
+      - action: include
+        patterns:
+          - "generated/*.json"
+    commands:
+      - "mkdir -p input"
+      - "echo '[$(date)] Processing generated config' > input/processed.yaml"
+      - "echo 'status: processed' >> input/processed.yaml"
+
+  # 6. Frontend with potential self-reference
+  - name: "frontend-builder"
+    workdir: "./frontend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.js"
+          - "src/**/*.css"
+    commands:
+      - "mkdir -p dist"
+      - "echo '[$(date)] Building frontend...' > src/build.log"
+      - "cp src/app.js dist/app.js"
+      - "echo '[$(date)] Frontend build complete' >> src/build.log"
+
+  # 7. Log aggregator - intentionally self-referential
+  - name: "log-aggregator"
+    watch:
+      - action: include
+        patterns:
+          - "logs/*.log"
+    commands:
+      - "mkdir -p logs"
+      - "echo '[$(date)] Aggregating logs...' >> logs/aggregated.log"
+      - "find logs -name '*.log' -not -name 'aggregated.log' -exec cat {} >> logs/aggregated.log \\;"
+      - "echo '--- End aggregation ---' >> logs/aggregated.log"
+
+  # 8. Test runner that creates test logs
+  - name: "test-runner"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"
+          - "**/*.js"
+    commands:
+      - "mkdir -p logs"
+      - "echo '[$(date)] Running tests...' > logs/test-results.log"
+      - "echo 'Test suite: PASSED' >> logs/test-results.log"
+      - "echo 'Coverage: 85%' >> logs/test-results.log"

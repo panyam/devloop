@@ -1,0 +1,55 @@
+# No Cycle Detection Configuration
+# This configuration disables cycle detection to show behavior without protection
+
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Cycle detection completely disabled
+  cycle_detection:
+    enabled: false
+    static_validation: false
+    dynamic_protection: false
+
+rules:
+  # Same rules as default config but without cycle protection
+  - name: "self-ref-logger"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.log"
+    commands:
+      - "echo '[$(date)] Self-referential logger triggered (NO PROTECTION)' >> logs/self-ref.log"
+      - "sleep 1"
+
+  - name: "file-processor"
+    watch:
+      - action: include
+        patterns:
+          - "input/**/*"
+    commands:
+      - "mkdir -p processed"
+      - "echo '[$(date)] Processing input files (NO PROTECTION)' > processed/status.txt"
+
+  - name: "backend-builder"
+    workdir: "./backend"
+    watch:
+      - action: include
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "mkdir -p bin"
+      - "echo '[$(date)] Building backend (NO PROTECTION)' > src/build.log"
+      - "go build -o bin/server ./src || echo 'Build failed' >> src/build.log"
+
+  - name: "log-aggregator"
+    watch:
+      - action: include
+        patterns:
+          - "logs/*.log"
+    commands:
+      - "mkdir -p logs"
+      - "echo '[$(date)] Aggregating logs (NO PROTECTION)' >> logs/aggregated.log"
+      - "find logs -name '*.log' -not -name 'aggregated.log' -exec cat {} >> logs/aggregated.log \\;"

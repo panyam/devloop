@@ -305,3 +305,193 @@ rules:
 		assert.Nil(t, matcher)
 	})
 }
+
+func TestCycleDetection(t *testing.T) {
+	withTestContext(t, 5*time.Second, func(t *testing.T, tmpDir string) {
+		// Create test directory structure
+		workDir := filepath.Join(tmpDir, "test_work")
+		err := os.MkdirAll(workDir, 0755)
+		assert.NoError(t, err)
+
+		tests := []struct {
+			name           string
+			config         *pb.Config
+			expectWarnings bool
+			expectErrors   bool
+		}{
+			{
+				name: "Self-referential rule with cycle detection enabled",
+				config: &pb.Config{
+					Settings: &pb.Settings{
+						CycleDetection: &pb.CycleDetectionSettings{
+							Enabled:          true,
+							StaticValidation: true,
+						},
+					},
+					Rules: []*pb.Rule{
+						{
+							Name:    "Self-Ref Rule",
+							WorkDir: workDir,
+							Watch: []*pb.RuleMatcher{
+								{
+									Action:   "include",
+									Patterns: []string{"**/*.log"},
+								},
+							},
+							Commands: []string{"echo 'test' >> test.log"},
+						},
+					},
+				},
+				expectWarnings: true,
+				expectErrors:   false,
+			},
+			{
+				name: "Self-referential rule with cycle detection disabled globally",
+				config: &pb.Config{
+					Settings: &pb.Settings{
+						CycleDetection: &pb.CycleDetectionSettings{
+							Enabled:          false,
+							StaticValidation: true,
+						},
+					},
+					Rules: []*pb.Rule{
+						{
+							Name:    "Self-Ref Rule",
+							WorkDir: workDir,
+							Watch: []*pb.RuleMatcher{
+								{
+									Action:   "include",
+									Patterns: []string{"**/*.log"},
+								},
+							},
+							Commands: []string{"echo 'test' >> test.log"},
+						},
+					},
+				},
+				expectWarnings: false,
+				expectErrors:   false,
+			},
+			{
+				name: "Self-referential rule with per-rule cycle protection disabled",
+				config: &pb.Config{
+					Settings: &pb.Settings{
+						CycleDetection: &pb.CycleDetectionSettings{
+							Enabled:          true,
+							StaticValidation: true,
+						},
+					},
+					Rules: []*pb.Rule{
+						{
+							Name:            "Self-Ref Rule",
+							WorkDir:         workDir,
+							CycleProtection: boolPtr(false),
+							Watch: []*pb.RuleMatcher{
+								{
+									Action:   "include",
+									Patterns: []string{"**/*.log"},
+								},
+							},
+							Commands: []string{"echo 'test' >> test.log"},
+						},
+					},
+				},
+				expectWarnings: false,
+				expectErrors:   false,
+			},
+			{
+				name: "Non-self-referential rule",
+				config: &pb.Config{
+					Settings: &pb.Settings{
+						CycleDetection: &pb.CycleDetectionSettings{
+							Enabled:          true,
+							StaticValidation: true,
+						},
+					},
+					Rules: []*pb.Rule{
+						{
+							Name:    "Safe Rule",
+							WorkDir: workDir,
+							Watch: []*pb.RuleMatcher{
+								{
+									Action:   "include",
+									Patterns: []string{"../other/**/*.go"},
+								},
+							},
+							Commands: []string{"echo 'test' >> test.log"},
+						},
+					},
+				},
+				expectWarnings: false,
+				expectErrors:   false,
+			},
+			{
+				name: "Default configuration (no cycle detection settings)",
+				config: &pb.Config{
+					Settings: &pb.Settings{}, // No cycle detection settings
+					Rules: []*pb.Rule{
+						{
+							Name:    "Default Rule",
+							WorkDir: workDir,
+							Watch: []*pb.RuleMatcher{
+								{
+									Action:   "include",
+									Patterns: []string{"**/*.log"},
+								},
+							},
+							Commands: []string{"echo 'test' >> test.log"},
+						},
+					},
+				},
+				expectWarnings: true, // Should warn with default settings
+				expectErrors:   false,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Create temporary config file
+				configPath := filepath.Join(tmpDir, "test_config.yaml")
+				
+				// Create orchestrator with test config
+				orchestrator := &Orchestrator{
+					ConfigPath: configPath,
+					Config:     tt.config,
+				}
+
+				// Test cycle detection
+				err := orchestrator.ValidateConfig()
+				if tt.expectErrors {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+
+				// Test individual helper methods
+				settings := orchestrator.getCycleDetectionSettings()
+				assert.NotNil(t, settings)
+				
+				if tt.config.Settings.CycleDetection != nil {
+					assert.Equal(t, tt.config.Settings.CycleDetection.Enabled, orchestrator.isCycleDetectionEnabled())
+					assert.Equal(t, tt.config.Settings.CycleDetection.StaticValidation, orchestrator.isStaticValidationEnabled())
+				}
+				
+				// Test per-rule cycle protection
+				if len(tt.config.Rules) > 0 {
+					rule := tt.config.Rules[0]
+					expected := true // default
+					if rule.CycleProtection != nil {
+						expected = *rule.CycleProtection
+					} else if tt.config.Settings.CycleDetection != nil {
+						expected = tt.config.Settings.CycleDetection.Enabled
+					}
+					assert.Equal(t, expected, orchestrator.isRuleCycleProtectionEnabled(rule))
+				}
+			})
+		}
+	})
+}
+
+// Helper function to create bool pointer
+func boolPtr(b bool) *bool {
+	return &b
+}

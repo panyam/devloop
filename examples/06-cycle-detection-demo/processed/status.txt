@@ -1,0 +1,1 @@
+[$(date)] Processing input files
