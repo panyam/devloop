@@ -127,6 +127,57 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				config.Settings.PrefixLogs = prefixLogsBool
 			}
 		}
+		
+		// Fix cycle_detection field
+		if cycleDetection, exists := settings["cycle_detection"]; exists {
+			if cycleDetectionMap, ok := cycleDetection.(map[string]interface{}); ok {
+				cycleSettings := &pb.CycleDetectionSettings{}
+				
+				if enabled, exists := cycleDetectionMap["enabled"]; exists {
+					if enabledBool, ok := enabled.(bool); ok {
+						cycleSettings.Enabled = enabledBool
+					}
+				}
+				
+				if staticValidation, exists := cycleDetectionMap["static_validation"]; exists {
+					if staticValidationBool, ok := staticValidation.(bool); ok {
+						cycleSettings.StaticValidation = staticValidationBool
+					}
+				}
+				
+				if dynamicProtection, exists := cycleDetectionMap["dynamic_protection"]; exists {
+					if dynamicProtectionBool, ok := dynamicProtection.(bool); ok {
+						cycleSettings.DynamicProtection = dynamicProtectionBool
+					}
+				}
+				
+				if maxTriggersPerMinute, exists := cycleDetectionMap["max_triggers_per_minute"]; exists {
+					if maxTriggersInt, ok := maxTriggersPerMinute.(int); ok {
+						cycleSettings.MaxTriggersPerMinute = uint32(maxTriggersInt)
+					}
+				}
+				
+				if maxChainDepth, exists := cycleDetectionMap["max_chain_depth"]; exists {
+					if maxChainDepthInt, ok := maxChainDepth.(int); ok {
+						cycleSettings.MaxChainDepth = uint32(maxChainDepthInt)
+					}
+				}
+				
+				if fileThrashWindowSeconds, exists := cycleDetectionMap["file_thrash_window_seconds"]; exists {
+					if fileThrashWindowSecondsInt, ok := fileThrashWindowSeconds.(int); ok {
+						cycleSettings.FileThrashWindowSeconds = uint32(fileThrashWindowSecondsInt)
+					}
+				}
+				
+				if fileThrashThreshold, exists := cycleDetectionMap["file_thrash_threshold"]; exists {
+					if fileThrashThresholdInt, ok := fileThrashThreshold.(int); ok {
+						cycleSettings.FileThrashThreshold = uint32(fileThrashThresholdInt)
+					}
+				}
+				
+				config.Settings.CycleDetection = cycleSettings
+			}
+		}
 	}
 
 	// Fix rule skipRunOnInit fields

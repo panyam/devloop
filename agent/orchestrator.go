@@ -18,6 +18,357 @@ import (
 	"github.com/panyam/devloop/utils"
 )
 
+// TriggerChain tracks cross-rule trigger relationships for cycle detection
+type TriggerChain struct {
+	chains map[string][]string // ruleName -> list of rules it triggered
+	mutex  sync.RWMutex
+}
+
+// NewTriggerChain creates a new trigger chain tracker
+func NewTriggerChain() *TriggerChain {
+	return &TriggerChain{
+		chains: make(map[string][]string),
+	}
+}
+
+// RecordTrigger records that sourceRule triggered targetRule
+func (tc *TriggerChain) RecordTrigger(sourceRule, targetRule string) {
+	tc.mutex.Lock()
+	defer tc.mutex.Unlock()
+	
+	if tc.chains[sourceRule] == nil {
+		tc.chains[sourceRule] = make([]string, 0)
+	}
+	
+	// Add to chain if not already present
+	for _, existing := range tc.chains[sourceRule] {
+		if existing == targetRule {
+			return
+		}
+	}
+	
+	tc.chains[sourceRule] = append(tc.chains[sourceRule], targetRule)
+}
+
+// DetectCycle detects if adding a new trigger would create a cycle
+func (tc *TriggerChain) DetectCycle(sourceRule, targetRule string, maxDepth uint32) bool {
+	tc.mutex.RLock()
+	defer tc.mutex.RUnlock()
+	
+	visited := make(map[string]bool)
+	return tc.detectCycleRecursive(targetRule, sourceRule, visited, 0, maxDepth)
+}
+
+// detectCycleRecursive performs recursive cycle detection
+func (tc *TriggerChain) detectCycleRecursive(currentRule, targetRule string, visited map[string]bool, depth uint32, maxDepth uint32) bool {
+	if depth > maxDepth {
+		return true // Consider max depth exceeded as a cycle
+	}
+	
+	if currentRule == targetRule {
+		return true // Cycle detected
+	}
+	
+	if visited[currentRule] {
+		return false // Already visited this path
+	}
+	
+	visited[currentRule] = true
+	
+	// Check all rules that currentRule triggers
+	for _, triggeredRule := range tc.chains[currentRule] {
+		if tc.detectCycleRecursive(triggeredRule, targetRule, visited, depth+1, maxDepth) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// GetChainLength returns the length of the trigger chain starting from a rule
+func (tc *TriggerChain) GetChainLength(ruleName string) int {
+	tc.mutex.RLock()
+	defer tc.mutex.RUnlock()
+	
+	visited := make(map[string]bool)
+	return tc.getChainLengthRecursive(ruleName, visited, 0)
+}
+
+// getChainLengthRecursive calculates chain length recursively
+func (tc *TriggerChain) getChainLengthRecursive(ruleName string, visited map[string]bool, depth int) int {
+	if visited[ruleName] {
+		return depth // Cycle detected, return current depth
+	}
+	
+	visited[ruleName] = true
+	maxDepth := depth
+	
+	for _, triggeredRule := range tc.chains[ruleName] {
+		childDepth := tc.getChainLengthRecursive(triggeredRule, visited, depth+1)
+		if childDepth > maxDepth {
+			maxDepth = childDepth
+		}
+	}
+	
+	return maxDepth
+}
+
+// CleanupOldChains removes old trigger chains to prevent memory growth
+func (tc *TriggerChain) CleanupOldChains() {
+	tc.mutex.Lock()
+	defer tc.mutex.Unlock()
+	
+	// For now, just clear all chains periodically
+	// In a more sophisticated implementation, we could track timestamps
+	tc.chains = make(map[string][]string)
+}
+
+// FileModificationTracker tracks file modification frequencies for thrashing detection
+type FileModificationTracker struct {
+	modifications map[string][]time.Time // filePath -> modification timestamps
+	mutex         sync.RWMutex
+}
+
+// NewFileModificationTracker creates a new file modification tracker
+func NewFileModificationTracker() *FileModificationTracker {
+	return &FileModificationTracker{
+		modifications: make(map[string][]time.Time),
+	}
+}
+
+// RecordModification records a file modification
+func (fmt *FileModificationTracker) RecordModification(filePath string) {
+	fmt.mutex.Lock()
+	defer fmt.mutex.Unlock()
+	
+	if fmt.modifications[filePath] == nil {
+		fmt.modifications[filePath] = make([]time.Time, 0)
+	}
+	
+	fmt.modifications[filePath] = append(fmt.modifications[filePath], time.Now())
+}
+
+// IsFileThrashing checks if a file is being modified too frequently
+func (fmt *FileModificationTracker) IsFileThrashing(filePath string, windowSeconds, threshold uint32) bool {
+	fmt.mutex.RLock()
+	defer fmt.mutex.RUnlock()
+	
+	modifications := fmt.modifications[filePath]
+	if modifications == nil {
+		return false
+	}
+	
+	cutoff := time.Now().Add(-time.Duration(windowSeconds) * time.Second)
+	count := 0
+	
+	for _, modTime := range modifications {
+		if modTime.After(cutoff) {
+			count++
+		}
+	}
+	
+	return uint32(count) > threshold
+}
+
+// GetModificationCount returns the number of modifications within the time window
+func (fmt *FileModificationTracker) GetModificationCount(filePath string, windowSeconds uint32) int {
+	fmt.mutex.RLock()
+	defer fmt.mutex.RUnlock()
+	
+	modifications := fmt.modifications[filePath]
+	if modifications == nil {
+		return 0
+	}
+	
+	cutoff := time.Now().Add(-time.Duration(windowSeconds) * time.Second)
+	count := 0
+	
+	for _, modTime := range modifications {
+		if modTime.After(cutoff) {
+			count++
+		}
+	}
+	
+	return count
+}
+
+// CleanupOldModifications removes old modification records
+func (fmt *FileModificationTracker) CleanupOldModifications(maxAge time.Duration) {
+	fmt.mutex.Lock()
+	defer fmt.mutex.Unlock()
+	
+	cutoff := time.Now().Add(-maxAge)
+	
+	for filePath, modifications := range fmt.modifications {
+		validMods := make([]time.Time, 0)
+		
+		for _, modTime := range modifications {
+			if modTime.After(cutoff) {
+				validMods = append(validMods, modTime)
+			}
+		}
+		
+		if len(validMods) == 0 {
+			delete(fmt.modifications, filePath)
+		} else {
+			fmt.modifications[filePath] = validMods
+		}
+	}
+}
+
+// GetThrashingFiles returns a list of files that are currently thrashing
+func (fmt *FileModificationTracker) GetThrashingFiles(windowSeconds, threshold uint32) []string {
+	fmt.mutex.RLock()
+	defer fmt.mutex.RUnlock()
+	
+	thrashingFiles := make([]string, 0)
+	cutoff := time.Now().Add(-time.Duration(windowSeconds) * time.Second)
+	
+	for filePath, modifications := range fmt.modifications {
+		count := 0
+		for _, modTime := range modifications {
+			if modTime.After(cutoff) {
+				count++
+			}
+		}
+		
+		if uint32(count) > threshold {
+			thrashingFiles = append(thrashingFiles, filePath)
+		}
+	}
+	
+	return thrashingFiles
+}
+
+// CycleBreaker manages advanced cycle breaking and resolution mechanisms
+type CycleBreaker struct {
+	disabledRules    map[string]time.Time // ruleName -> time when disabled
+	disabledMutex    sync.RWMutex
+	emergencyBreaks  map[string]int       // ruleName -> number of emergency breaks
+	emergencyMutex   sync.RWMutex
+}
+
+// NewCycleBreaker creates a new cycle breaker
+func NewCycleBreaker() *CycleBreaker {
+	return &CycleBreaker{
+		disabledRules:   make(map[string]time.Time),
+		emergencyBreaks: make(map[string]int),
+	}
+}
+
+// DisableRule temporarily disables a rule for cycle breaking
+func (cb *CycleBreaker) DisableRule(ruleName string, duration time.Duration) {
+	cb.disabledMutex.Lock()
+	defer cb.disabledMutex.Unlock()
+	
+	cb.disabledRules[ruleName] = time.Now().Add(duration)
+}
+
+// IsRuleDisabled checks if a rule is currently disabled
+func (cb *CycleBreaker) IsRuleDisabled(ruleName string) bool {
+	cb.disabledMutex.RLock()
+	defer cb.disabledMutex.RUnlock()
+	
+	disabledUntil, exists := cb.disabledRules[ruleName]
+	if !exists {
+		return false
+	}
+	
+	if time.Now().After(disabledUntil) {
+		// Rule is no longer disabled, clean up
+		delete(cb.disabledRules, ruleName)
+		return false
+	}
+	
+	return true
+}
+
+// TriggerEmergencyBreak triggers an emergency cycle break for a rule
+func (cb *CycleBreaker) TriggerEmergencyBreak(ruleName string) {
+	cb.emergencyMutex.Lock()
+	defer cb.emergencyMutex.Unlock()
+	
+	cb.emergencyBreaks[ruleName]++
+	
+	// Disable rule for progressively longer periods
+	disableDuration := time.Duration(cb.emergencyBreaks[ruleName]) * time.Minute
+	if disableDuration > 30*time.Minute {
+		disableDuration = 30 * time.Minute
+	}
+	
+	cb.disabledMutex.Lock()
+	cb.disabledRules[ruleName] = time.Now().Add(disableDuration)
+	cb.disabledMutex.Unlock()
+}
+
+// GetEmergencyBreakCount returns the number of emergency breaks for a rule
+func (cb *CycleBreaker) GetEmergencyBreakCount(ruleName string) int {
+	cb.emergencyMutex.RLock()
+	defer cb.emergencyMutex.RUnlock()
+	
+	return cb.emergencyBreaks[ruleName]
+}
+
+// GetDisabledRules returns a map of currently disabled rules and their disable times
+func (cb *CycleBreaker) GetDisabledRules() map[string]time.Time {
+	cb.disabledMutex.RLock()
+	defer cb.disabledMutex.RUnlock()
+	
+	result := make(map[string]time.Time)
+	for ruleName, disabledUntil := range cb.disabledRules {
+		if time.Now().Before(disabledUntil) {
+			result[ruleName] = disabledUntil
+		}
+	}
+	
+	return result
+}
+
+// GenerateCycleResolutionSuggestions generates suggestions for resolving detected cycles
+func (cb *CycleBreaker) GenerateCycleResolutionSuggestions(ruleName string, cycleType string) []string {
+	suggestions := make([]string, 0)
+	
+	switch cycleType {
+	case "self-referential":
+		suggestions = append(suggestions, fmt.Sprintf("Consider excluding output files from rule %q patterns", ruleName))
+		suggestions = append(suggestions, fmt.Sprintf("Add 'cycle_protection: false' to rule %q if intentional", ruleName))
+		suggestions = append(suggestions, fmt.Sprintf("Use a different working directory for rule %q outputs", ruleName))
+	case "cross-rule":
+		suggestions = append(suggestions, fmt.Sprintf("Review file patterns for rule %q to avoid triggering cycles", ruleName))
+		suggestions = append(suggestions, fmt.Sprintf("Add exclusion patterns to break the cycle chain"))
+		suggestions = append(suggestions, fmt.Sprintf("Consider using different working directories for related rules"))
+	case "file-thrashing":
+		suggestions = append(suggestions, fmt.Sprintf("Rule %q is causing file thrashing - consider increasing debounce delay", ruleName))
+		suggestions = append(suggestions, fmt.Sprintf("Add file exclusion patterns to avoid watching frequently modified files"))
+		suggestions = append(suggestions, fmt.Sprintf("Review command output patterns for rule %q", ruleName))
+	default:
+		suggestions = append(suggestions, fmt.Sprintf("Review rule %q configuration for potential cycle causes", ruleName))
+		suggestions = append(suggestions, "Consider enabling verbose logging to identify the cycle source")
+	}
+	
+	return suggestions
+}
+
+// CleanupOldData removes old emergency break and disable records
+func (cb *CycleBreaker) CleanupOldData() {
+	cb.emergencyMutex.Lock()
+	defer cb.emergencyMutex.Unlock()
+	
+	cb.disabledMutex.Lock()
+	defer cb.disabledMutex.Unlock()
+	
+	// Clean up old disabled rules
+	for ruleName, disabledUntil := range cb.disabledRules {
+		if time.Now().After(disabledUntil.Add(time.Hour)) { // Keep records for 1 hour after expiry
+			delete(cb.disabledRules, ruleName)
+		}
+	}
+	
+	// Reset emergency break counts after 24 hours of no issues
+	// (In a real implementation, this would be more sophisticated)
+	cb.emergencyBreaks = make(map[string]int)
+}
+
 // Orchestrator manages file watching and delegates execution to RuleRunners
 type Orchestrator struct {
 	projectID    string
@@ -31,6 +382,19 @@ type Orchestrator struct {
 	// Rule management
 	ruleRunners  map[string]*RuleRunner
 	runnersMutex sync.RWMutex
+
+	// Trigger chain tracking for cross-rule cycle detection
+	triggerChain *TriggerChain
+	
+	// File modification tracking for thrashing detection
+	fileModTracker *FileModificationTracker
+	
+	// Advanced cycle breaking and resolution
+	cycleBreaker *CycleBreaker
+	
+	// Currently executing rule context for trigger chain tracking
+	currentExecutingRule string
+	executionMutex       sync.RWMutex
 
 	// Control channels
 	done     chan bool
@@ -91,14 +455,15 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 	}
 
 	orchestrator := &Orchestrator{
-		ConfigPath:  absConfigPath,
-		Config:      config,
-		Watcher:     watcher,
-		projectID:   projectID,
-		done:        make(chan bool),
-		ruleRunners: make(map[string]*RuleRunner),
-		// gatewaySendChan:  make(chan *pb.DevloopMessage, 100),
-		// responseChan:     make(map[string]chan *pb.DevloopMessage),
+		ConfigPath:       absConfigPath,
+		Config:           config,
+		Watcher:          watcher,
+		projectID:        projectID,
+		done:             make(chan bool),
+		ruleRunners:      make(map[string]*RuleRunner),
+		triggerChain:     NewTriggerChain(),
+		fileModTracker:   NewFileModificationTracker(),
+		cycleBreaker:     NewCycleBreaker(),
 		debounceDuration: 500 * time.Millisecond,
 	}
 
@@ -185,6 +550,9 @@ func (o *Orchestrator) Start() error {
 	// Start file watching goroutine
 	go o.watchFiles()
 
+	// Start trigger history cleanup goroutine
+	go o.cleanupTriggerHistory()
+
 	// Wait for shutdown
 	<-o.done
 	return nil
@@ -227,17 +595,71 @@ func (o *Orchestrator) watchFiles() {
 				}
 			}
 
+			// Record file modification for thrashing detection
+			o.fileModTracker.RecordModification(event.Name)
+			
+			// Check for file thrashing
+			if o.isDynamicProtectionEnabled() {
+				settings := o.getCycleDetectionSettings()
+				if o.fileModTracker.IsFileThrashing(event.Name, settings.FileThrashWindowSeconds, settings.FileThrashThreshold) {
+					if o.Verbose {
+						count := o.fileModTracker.GetModificationCount(event.Name, settings.FileThrashWindowSeconds)
+						o.logDevloop("File thrashing detected: %s (%d modifications in %ds), skipping rules", event.Name, count, settings.FileThrashWindowSeconds)
+						
+						// Provide suggestions for file thrashing resolution
+						suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions("", "file-thrashing")
+						for _, suggestion := range suggestions {
+							o.logDevloop("Suggestion: %s", suggestion)
+						}
+					}
+					continue
+				}
+			}
+			
 			// Check which rules match this file
 			o.runnersMutex.RLock()
+			currentExecutingRule := o.getCurrentExecutingRule()
+			
 			for _, runner := range o.ruleRunners {
 				rule := runner.GetRule()
+				
+				// Check if rule is disabled by cycle breaker
+				if o.cycleBreaker.IsRuleDisabled(rule.Name) {
+					if o.Verbose {
+						o.logDevloop("Rule %q is disabled by cycle breaker, skipping execution", rule.Name)
+					}
+					continue
+				}
+				
 				if matcher := RuleMatches(rule, event.Name, o.ConfigPath); matcher != nil {
 					// Pattern matched - check action
 					if matcher.Action == "include" {
 						if o.Verbose {
 							o.logDevloop("Rule %q matched (included) for file %s", rule.Name, event.Name)
 						}
-						runner.TriggerDebounced()
+						
+						// Check for cross-rule cycle detection
+						if o.isDynamicProtectionEnabled() && currentExecutingRule != "" && currentExecutingRule != rule.Name {
+							settings := o.getCycleDetectionSettings()
+							if o.triggerChain.DetectCycle(currentExecutingRule, rule.Name, settings.MaxChainDepth) {
+								if o.Verbose {
+									suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions(rule.Name, "cross-rule")
+									o.logDevloop("Cross-rule cycle detected: %s -> %s, skipping execution", currentExecutingRule, rule.Name)
+									for _, suggestion := range suggestions {
+										o.logDevloop("Suggestion: %s", suggestion)
+									}
+								}
+								
+								// Trigger emergency break for repeated cycles
+								o.cycleBreaker.TriggerEmergencyBreak(rule.Name)
+								continue
+							}
+							
+							// Record the trigger chain
+							o.triggerChain.RecordTrigger(currentExecutingRule, rule.Name)
+						}
+						
+						runner.TriggerDebouncedWithOptions(false)
 					} else if matcher.Action == "exclude" {
 						if o.Verbose {
 							o.logDevloop("Rule %q matched (excluded) for file %s", rule.Name, event.Name)
@@ -250,7 +672,29 @@ func (o *Orchestrator) watchFiles() {
 						if o.Verbose {
 							o.logDevloop("Rule %q matched (default) for file %s", rule.Name, event.Name)
 						}
-						runner.TriggerDebounced()
+						
+						// Check for cross-rule cycle detection
+						if o.isDynamicProtectionEnabled() && currentExecutingRule != "" && currentExecutingRule != rule.Name {
+							settings := o.getCycleDetectionSettings()
+							if o.triggerChain.DetectCycle(currentExecutingRule, rule.Name, settings.MaxChainDepth) {
+								if o.Verbose {
+									suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions(rule.Name, "cross-rule")
+									o.logDevloop("Cross-rule cycle detected: %s -> %s, skipping execution", currentExecutingRule, rule.Name)
+									for _, suggestion := range suggestions {
+										o.logDevloop("Suggestion: %s", suggestion)
+									}
+								}
+								
+								// Trigger emergency break for repeated cycles
+								o.cycleBreaker.TriggerEmergencyBreak(rule.Name)
+								continue
+							}
+							
+							// Record the trigger chain
+							o.triggerChain.RecordTrigger(currentExecutingRule, rule.Name)
+						}
+						
+						runner.TriggerDebouncedWithOptions(false)
 					}
 				}
 			}
@@ -535,8 +979,8 @@ func (o *Orchestrator) TriggerRule(ruleName string) error {
 		return fmt.Errorf("rule %q not found", ruleName)
 	}
 
-	// Trigger the rule runner's debounced execution
-	runner.TriggerDebounced()
+	// Trigger the rule runner's debounced execution (bypass rate limiting for manual triggers)
+	runner.TriggerDebouncedWithOptions(true)
 	return nil
 }
 
@@ -784,6 +1228,12 @@ func (o *Orchestrator) isStaticValidationEnabled() bool {
 	return settings.StaticValidation
 }
 
+// isDynamicProtectionEnabled checks if dynamic protection (rate limiting) is enabled
+func (o *Orchestrator) isDynamicProtectionEnabled() bool {
+	settings := o.getCycleDetectionSettings()
+	return settings.DynamicProtection
+}
+
 // isRuleCycleProtectionEnabled checks if cycle protection is enabled for a specific rule
 func (o *Orchestrator) isRuleCycleProtectionEnabled(rule *pb.Rule) bool {
 	// Check rule-specific override first
@@ -800,6 +1250,55 @@ func (o *Orchestrator) isRuleCycleProtectionEnabled(rule *pb.Rule) bool {
 		utils.LogDevloop("Rule %q using global cycle detection setting: %v", rule.Name, globalEnabled)
 	}
 	return globalEnabled
+}
+
+// setCurrentExecutingRule sets the currently executing rule for trigger chain tracking
+func (o *Orchestrator) setCurrentExecutingRule(ruleName string) {
+	o.executionMutex.Lock()
+	defer o.executionMutex.Unlock()
+	o.currentExecutingRule = ruleName
+}
+
+// getCurrentExecutingRule returns the currently executing rule
+func (o *Orchestrator) getCurrentExecutingRule() string {
+	o.executionMutex.RLock()
+	defer o.executionMutex.RUnlock()
+	return o.currentExecutingRule
+}
+
+// clearCurrentExecutingRule clears the currently executing rule
+func (o *Orchestrator) clearCurrentExecutingRule() {
+	o.executionMutex.Lock()
+	defer o.executionMutex.Unlock()
+	o.currentExecutingRule = ""
+}
+
+// cleanupTriggerHistory periodically cleans up old trigger records to prevent memory growth
+func (o *Orchestrator) cleanupTriggerHistory() {
+	ticker := time.NewTicker(5 * time.Minute) // Cleanup every 5 minutes
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-o.done:
+			return
+		case <-ticker.C:
+			o.runnersMutex.RLock()
+			for _, runner := range o.ruleRunners {
+				runner.CleanupTriggerHistory()
+			}
+			o.runnersMutex.RUnlock()
+			
+			// Cleanup trigger chains
+			o.triggerChain.CleanupOldChains()
+			
+			// Cleanup file modification tracking
+			o.fileModTracker.CleanupOldModifications(10 * time.Minute)
+			
+			// Cleanup cycle breaker data
+			o.cycleBreaker.CleanupOldData()
+		}
+	}
 }
 
 //// Gateway related things

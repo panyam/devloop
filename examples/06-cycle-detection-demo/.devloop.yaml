@@ -7,15 +7,15 @@ settings:
   prefix_max_length: 20
   verbose: true
   
-  # Cycle detection with default settings
+  # Cycle detection with AGGRESSIVE settings for testing
   cycle_detection:
     enabled: true
     static_validation: true
-    dynamic_protection: false
-    max_triggers_per_minute: 10
-    max_chain_depth: 5
-    file_thrash_window_seconds: 60
-    file_thrash_threshold: 5
+    dynamic_protection: true
+    max_triggers_per_minute: 3      # Very low threshold for testing
+    max_chain_depth: 2              # Very short chains
+    file_thrash_window_seconds: 10  # Short window
+    file_thrash_threshold: 2        # Low threshold
 
 rules:
   # 1. Self-Referential Cycle: Watches logs but creates logs

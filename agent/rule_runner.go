@@ -16,6 +16,125 @@ import (
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TriggerTracker tracks rule execution frequency for rate limiting
+type TriggerTracker struct {
+	triggers       []time.Time
+	mutex          sync.RWMutex
+	backoffLevel   int       // Current backoff level
+	backoffUntil   time.Time // Time until which rule is backing off
+	backoffMutex   sync.RWMutex
+}
+
+// NewTriggerTracker creates a new trigger tracker
+func NewTriggerTracker() *TriggerTracker {
+	return &TriggerTracker{
+		triggers: make([]time.Time, 0),
+	}
+}
+
+// RecordTrigger records a new trigger event
+func (t *TriggerTracker) RecordTrigger() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	t.triggers = append(t.triggers, time.Now())
+}
+
+// GetTriggerCount returns the number of triggers within the specified duration
+func (t *TriggerTracker) GetTriggerCount(duration time.Duration) int {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	
+	cutoff := time.Now().Add(-duration)
+	count := 0
+	
+	// Count triggers within the time window
+	for _, trigger := range t.triggers {
+		if trigger.After(cutoff) {
+			count++
+		}
+	}
+	
+	return count
+}
+
+// CleanupOldTriggers removes trigger records older than the specified duration
+func (t *TriggerTracker) CleanupOldTriggers(duration time.Duration) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	
+	cutoff := time.Now().Add(-duration)
+	validTriggers := make([]time.Time, 0)
+	
+	// Keep only triggers within the time window
+	for _, trigger := range t.triggers {
+		if trigger.After(cutoff) {
+			validTriggers = append(validTriggers, trigger)
+		}
+	}
+	
+	t.triggers = validTriggers
+}
+
+// GetLastTrigger returns the timestamp of the most recent trigger
+func (t *TriggerTracker) GetLastTrigger() *time.Time {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	
+	if len(t.triggers) == 0 {
+		return nil
+	}
+	
+	return &t.triggers[len(t.triggers)-1]
+}
+
+// GetTriggerRate returns the current trigger rate (triggers per minute)
+func (t *TriggerTracker) GetTriggerRate() float64 {
+	count := t.GetTriggerCount(time.Minute)
+	return float64(count)
+}
+
+// IsInBackoff checks if the rule is currently in backoff period
+func (t *TriggerTracker) IsInBackoff() bool {
+	t.backoffMutex.RLock()
+	defer t.backoffMutex.RUnlock()
+	return time.Now().Before(t.backoffUntil)
+}
+
+// GetBackoffLevel returns the current backoff level
+func (t *TriggerTracker) GetBackoffLevel() int {
+	t.backoffMutex.RLock()
+	defer t.backoffMutex.RUnlock()
+	return t.backoffLevel
+}
+
+// SetBackoff sets the backoff period based on the current level
+func (t *TriggerTracker) SetBackoff() {
+	t.backoffMutex.Lock()
+	defer t.backoffMutex.Unlock()
+	
+	t.backoffLevel++
+	
+	// Exponential backoff: 2^level seconds, capped at 60 seconds
+	backoffDuration := time.Duration(1<<uint(t.backoffLevel)) * time.Second
+	if backoffDuration > 60*time.Second {
+		backoffDuration = 60 * time.Second
+	}
+	
+	t.backoffUntil = time.Now().Add(backoffDuration)
+}
+
+// ResetBackoff resets the backoff level if enough time has passed
+func (t *TriggerTracker) ResetBackoff() {
+	t.backoffMutex.Lock()
+	defer t.backoffMutex.Unlock()
+	
+	// Reset backoff if we haven't triggered in the last 2 minutes
+	if time.Since(t.backoffUntil) > 2*time.Minute {
+		t.backoffLevel = 0
+		t.backoffUntil = time.Time{}
+	}
+}
+
 // RuleRunner manages the execution lifecycle of a single rule
 type RuleRunner struct {
 	rule         *pb.Rule
@@ -38,6 +157,9 @@ type RuleRunner struct {
 	verbose     bool
 	configMutex sync.RWMutex
 
+	// Trigger tracking for rate limiting
+	triggerTracker *TriggerTracker
+
 	// Control
 	stopChan    chan struct{}
 	stoppedChan chan struct{}
@@ -57,6 +179,7 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 		},
 		debounceDuration: orchestrator.getDebounceDelayForRule(rule),
 		verbose:          orchestrator.isVerboseForRule(rule),
+		triggerTracker:   NewTriggerTracker(),
 		stopChan:         make(chan struct{}),
 		stoppedChan:      make(chan struct{}),
 	}
@@ -141,8 +264,38 @@ func (r *RuleRunner) GetRule() *pb.Rule {
 
 // TriggerDebounced triggers execution after debounce period
 func (r *RuleRunner) TriggerDebounced() {
+	r.TriggerDebouncedWithOptions(false)
+}
+
+// TriggerDebouncedWithOptions triggers execution after debounce period with options
+func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 	r.debounceMutex.Lock()
 	defer r.debounceMutex.Unlock()
+
+	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
+	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
+		// Check if we're in backoff period
+		if r.triggerTracker.IsInBackoff() {
+			level := r.triggerTracker.GetBackoffLevel()
+			r.logDevloop("[%s] In backoff period (level %d), skipping execution", r.rule.Name, level)
+			return
+		}
+		
+		// Check if we're exceeding rate limits (check before recording new trigger)
+		if r.isRateLimited() {
+			r.triggerTracker.SetBackoff()
+			rate := r.triggerTracker.GetTriggerRate()
+			level := r.triggerTracker.GetBackoffLevel()
+			r.logDevloop("[%s] Rate limit exceeded (%.1f triggers/min), entering backoff (level %d)", r.rule.Name, rate, level)
+			return
+		}
+		
+		// Reset backoff if we're not rate limited
+		r.triggerTracker.ResetBackoff()
+	}
+
+	// Record the trigger for rate limiting (only after passing rate limit checks)
+	r.triggerTracker.RecordTrigger()
 
 	// Cancel existing timer if any
 	if r.debounceTimer != nil {
@@ -152,13 +305,46 @@ func (r *RuleRunner) TriggerDebounced() {
 	// Set new timer
 	r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
 		if err := r.Execute(); err != nil {
-			utils.LogDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
+			r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
 		}
 	})
 
 	if r.isVerbose() {
-		utils.LogDevloop("[%s] File change detected, execution scheduled in %v", r.rule.Name, r.debounceDuration)
+		triggerType := "File change"
+		if bypassRateLimit {
+			triggerType = "Manual trigger"
+		}
+		r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
 	}
+}
+
+// isRateLimited checks if the rule is currently rate limited
+func (r *RuleRunner) isRateLimited() bool {
+	settings := r.orchestrator.getCycleDetectionSettings()
+	maxTriggers := settings.MaxTriggersPerMinute
+	
+	if maxTriggers == 0 {
+		return false // No rate limiting
+	}
+	
+	currentRate := r.triggerTracker.GetTriggerCount(time.Minute)
+	return uint32(currentRate) > maxTriggers
+}
+
+// GetTriggerRate returns the current trigger rate for this rule
+func (r *RuleRunner) GetTriggerRate() float64 {
+	return r.triggerTracker.GetTriggerRate()
+}
+
+// GetTriggerCount returns the trigger count within the specified duration
+func (r *RuleRunner) GetTriggerCount(duration time.Duration) int {
+	return r.triggerTracker.GetTriggerCount(duration)
+}
+
+// CleanupTriggerHistory removes old trigger records to prevent memory growth
+func (r *RuleRunner) CleanupTriggerHistory() {
+	// Keep triggers for up to 5 minutes to allow for rate limiting calculations
+	r.triggerTracker.CleanupOldTriggers(5 * time.Minute)
 }
 
 // updateStatus updates the rule status and notifies gateway if connected
@@ -222,9 +408,18 @@ func (r *RuleRunner) isVerbose() bool {
 	return r.verbose
 }
 
+// logDevloop logs a message using the orchestrator's logging mechanism
+func (r *RuleRunner) logDevloop(format string, args ...interface{}) {
+	r.orchestrator.logDevloop(format, args...)
+}
+
 // Execute runs the commands for this rule
 func (r *RuleRunner) Execute() error {
 	r.updateStatus(true, "RUNNING")
+	
+	// Set current executing rule for trigger chain tracking
+	r.orchestrator.setCurrentExecutingRule(r.rule.Name)
+	defer r.orchestrator.clearCurrentExecutingRule()
 
 	if r.isVerbose() {
 		utils.LogDevloop("Executing commands for rule %q", r.rule.Name)

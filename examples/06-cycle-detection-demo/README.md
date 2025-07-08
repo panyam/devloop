@@ -77,7 +77,7 @@ rules:
       - "echo 'Processed config' > input/processed.yaml"
 ```
 
-**Detection**: Future phase will detect cross-rule trigger chains.
+**Detection**: ✅ **IMPLEMENTED** - Cross-rule cycle detection with trigger chain tracking.
 
 ### 3. Workdir-Relative Cycles
 
@@ -130,44 +130,54 @@ rules:
 
 ### Static Detection Output
 
-When you run `devloop -c .devloop.yaml`, you'll see:
+When you run `devloop server`, you'll see:
 
 ```
-[devloop] Starting orchestrator...
 [devloop] Warning: Rule "self-ref-logger" may trigger itself - pattern "**/*.log" watches workdir "/path/to/examples/06-cycle-detection-demo"
 [devloop] Warning: Rule "backend-builder" may trigger itself - pattern "src/**/*.go" watches workdir "/path/to/examples/06-cycle-detection-demo/backend"
-[devloop] Configuration validated successfully
+[devloop] Starting with ports: HTTP=9999, gRPC=5555
+[devloop] Starting orchestrator...
 ```
 
-### Runtime Behavior
+### Runtime Behavior with Dynamic Protection
 
-1. **Self-Referential Rules**: Will trigger themselves when they create watched files
-2. **Cross-Rule Cycles**: Will trigger each other in a chain
-3. **Protected Rules**: Will show warnings but continue execution
-4. **Unprotected Rules**: Will run without cycle detection
+With `dynamic_protection: true`, you'll see cycle prevention in action:
+
+1. **Rate Limiting**: Rules exceeding `max_triggers_per_minute` enter backoff periods
+2. **Cross-Rule Cycle Detection**: Trigger chains are tracked and cycles broken automatically
+3. **File Thrashing Detection**: Rapid file modifications are detected and rules skipped
+4. **Emergency Breaks**: Persistent cycles trigger emergency rule disabling
+
+Example dynamic protection output:
+```
+[devloop] [simple-cycle] Rate limit exceeded (45.2 triggers/min), entering backoff (level 1)
+[devloop] [simple-cycle] In backoff period (level 1), skipping execution
+[devloop] Cross-rule cycle detected: config-generator -> config-processor, skipping execution
+[devloop] File thrashing detected: test-output.log (8 modifications in 10s), skipping rules
+```
 
 ## Testing Different Configurations
 
 ### 1. No Cycle Detection
 ```bash
-devloop -c .devloop-no-cycles.yaml
+devloop server -c .devloop-no-cycles.yaml
 ```
 - No warnings at startup
 - All cycles will run without protection
 
-### 2. Mixed Protection
+### 2. Rate Limiting Test
 ```bash
-devloop -c .devloop-mixed-protection.yaml
+devloop server -c test-rate-limit.yaml
 ```
-- Some rules protected, others not
-- Demonstrates per-rule overrides
+- Tests aggressive rate limiting with low thresholds
+- Demonstrates dynamic protection in action
 
-### 3. Strict Protection
+### 3. Full Cycle Demo
 ```bash
-devloop -c .devloop-strict.yaml
+devloop server
 ```
-- All cycle detection enabled
-- Shows comprehensive warnings
+- Uses default .devloop.yaml with comprehensive cycle scenarios
+- Shows both static warnings and dynamic protection
 
 ## File Structure
 

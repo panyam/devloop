@@ -55,6 +55,14 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] **Signal Handling:** Fixed Ctrl-C interrupt handling for proper server shutdown
   - [x] **Code Organization:** Modular structure with `cmd/`, `server/`, `client/` packages
   - [x] **Professional UX:** Help system, usage examples, and consistent flag handling
+- [x] **Cycle Detection & Prevention (Completed 2025-07-08):**
+  - [x] **Static Validation:** Startup detection of self-referential patterns in rule configurations
+  - [x] **Dynamic Rate Limiting:** TriggerTracker with frequency monitoring and exponential backoff
+  - [x] **Cross-Rule Cycle Detection:** Trigger chain tracking with configurable max depth limits
+  - [x] **File Thrashing Detection:** Sliding window frequency analysis for rapid file modifications
+  - [x] **Emergency Cycle Breaking:** Rule disabling and cycle resolution suggestions
+  - [x] **Configuration Parser Fix:** Fixed YAML-to-protobuf parsing for cycle_detection settings
+  - [x] **Comprehensive Configuration:** Full cycle_detection settings block with all parameters
 - [ ] **Web-based UI:**
   - [ ] A simple web interface, built on the Agent Service HTTP API, to visualize rule status, logs, and trigger commands manually.
 

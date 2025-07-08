@@ -1,0 +1,28 @@
+# Simple rate limit test configuration
+settings:
+  color_logs: true
+  prefix_logs: true
+  prefix_max_length: 20
+  verbose: true
+  
+  # Very aggressive cycle detection settings for testing
+  cycle_detection:
+    enabled: true
+    static_validation: true
+    dynamic_protection: true
+    max_triggers_per_minute: 3      # 3 triggers per minute (1 every 20 seconds)
+    max_chain_depth: 2
+    file_thrash_window_seconds: 5
+    file_thrash_threshold: 2
+
+rules:
+  # Simple self-referential rule that should trigger rate limiting quickly
+  - name: "simple-cycle"
+    debounce_ms: 100    # Very short debounce to trigger faster
+    watch:
+      - action: include
+        patterns:
+          - "test-output.log"
+    commands:
+      - "echo '[$(date)] Simple cycle triggered' >> test-output.log"
+      # Remove sleep to make it trigger faster
