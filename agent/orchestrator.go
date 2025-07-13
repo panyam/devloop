@@ -1130,7 +1130,11 @@ func (o *Orchestrator) validateRuleForSelfReference(rule *pb.Rule) error {
 	workdir := o.getRuleWorkdir(rule)
 	
 	// Check each watch pattern against the working directory
+	// Only consider "include" patterns for cycle detection, as "exclude" patterns prevent triggering
 	for _, matcher := range rule.Watch {
+		if matcher.Action != "include" {
+			continue // Skip exclude patterns for cycle detection
+		}
 		for _, pattern := range matcher.Patterns {
 			// Resolve pattern relative to rule's work_dir
 			resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)

@@ -53,7 +53,7 @@ type LoggerConfig struct {
 // ColorFormatter interface for formatting colored prefixes
 type ColorFormatter interface {
 	IsEnabled() bool
-	FormatPrefix(prefix string, rule interface{}) string
+	FormatPrefix(prefix string, rule any) string
 }
 
 // DevloopLogger provides consistent logging across all components
@@ -73,7 +73,7 @@ func NewDevloopLogger(prefixLogs bool, prefixMaxLength int, colorManager ColorFo
 }
 
 // LogWithPrefix logs a message with the specified prefix (e.g., "devloop", "gateway", "mcp")
-func (dl *DevloopLogger) LogWithPrefix(prefix, format string, args ...interface{}) {
+func (dl *DevloopLogger) LogWithPrefix(prefix, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 
 	if dl.config.PrefixLogs && dl.config.PrefixMaxLength > 0 {
@@ -85,7 +85,7 @@ func (dl *DevloopLogger) LogWithPrefix(prefix, format string, args ...interface{
 		// Add color if enabled
 		if dl.config.ColorManager != nil && dl.config.ColorManager.IsEnabled() {
 			// Create a simple map for the prefix to get consistent coloring
-			rule := map[string]interface{}{"Name": prefix}
+			rule := map[string]any{"Name": prefix}
 			coloredPrefix := dl.config.ColorManager.FormatPrefix(prefixStr, rule)
 			fmt.Printf("%s%s\n", coloredPrefix, message)
 		} else {
@@ -94,7 +94,7 @@ func (dl *DevloopLogger) LogWithPrefix(prefix, format string, args ...interface{
 	} else {
 		// Standard log format but with prefix color if available
 		if dl.config.ColorManager != nil && dl.config.ColorManager.IsEnabled() {
-			rule := map[string]interface{}{"Name": prefix}
+			rule := map[string]any{"Name": prefix}
 			coloredPrefix := dl.config.ColorManager.FormatPrefix("["+prefix+"]", rule)
 			log.Printf("%s %s", coloredPrefix, message)
 		} else {
@@ -112,7 +112,7 @@ func InitGlobalLogger(prefixLogs bool, prefixMaxLength int, colorManager ColorFo
 }
 
 // LogDevloop logs a devloop message using the global logger
-func LogDevloop(format string, args ...interface{}) {
+func LogDevloop(format string, args ...any) {
 	if globalLogger != nil {
 		globalLogger.LogWithPrefix("devloop", format, args...)
 	} else {
@@ -121,7 +121,7 @@ func LogDevloop(format string, args ...interface{}) {
 }
 
 // LogGateway logs a gateway message using the global logger
-func LogGateway(format string, args ...interface{}) {
+func LogGateway(format string, args ...any) {
 	if globalLogger != nil {
 		globalLogger.LogWithPrefix("gateway", format, args...)
 	} else {
@@ -130,7 +130,7 @@ func LogGateway(format string, args ...interface{}) {
 }
 
 // LogMCP logs an MCP message using the global logger
-func LogMCP(format string, args ...interface{}) {
+func LogMCP(format string, args ...any) {
 	if globalLogger != nil {
 		globalLogger.LogWithPrefix("mcp", format, args...)
 	} else {
