@@ -146,6 +146,17 @@ message Rule {
 
   // Status of this rule
   RuleStatus status = 14;
+
+  // Whether to exit devloop when this rule fails startup (default: false)
+  // Set to true to use legacy behavior where devloop exits on startup failure
+  bool exit_on_failed_init = 15;
+
+  // Maximum number of retry attempts for failed startup (default: 10)
+  uint32 max_init_retries = 16;
+
+  // Base backoff duration in milliseconds for startup retries (default: 3000ms)
+  // Grows exponentially: 3s, 6s, 12s, 24s, etc.
+  uint64 init_retry_backoff_base = 17;
 }
 
 message RuleMatcher {

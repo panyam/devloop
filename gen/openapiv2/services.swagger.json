@@ -394,6 +394,20 @@
         "status": {
           "$ref": "#/definitions/v1RuleStatus",
           "title": "Status of this rule"
+        },
+        "exitOnFailedInit": {
+          "type": "boolean",
+          "title": "Whether to exit devloop when this rule fails startup (default: false)\nSet to true to use legacy behavior where devloop exits on startup failure"
+        },
+        "maxInitRetries": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Maximum number of retry attempts for failed startup (default: 10)"
+        },
+        "initRetryBackoffBase": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Base backoff duration in milliseconds for startup retries (default: 3000ms)\nGrows exponentially: 3s, 6s, 12s, 24s, etc."
         }
       }
     },

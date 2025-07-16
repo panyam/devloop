@@ -451,7 +451,7 @@ func TestCycleDetection(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				// Create temporary config file
 				configPath := filepath.Join(tmpDir, "test_config.yaml")
-				
+
 				// Create orchestrator with test config
 				orchestrator := &Orchestrator{
 					ConfigPath: configPath,
@@ -469,12 +469,12 @@ func TestCycleDetection(t *testing.T) {
 				// Test individual helper methods
 				settings := orchestrator.getCycleDetectionSettings()
 				assert.NotNil(t, settings)
-				
+
 				if tt.config.Settings.CycleDetection != nil {
 					assert.Equal(t, tt.config.Settings.CycleDetection.Enabled, orchestrator.isCycleDetectionEnabled())
 					assert.Equal(t, tt.config.Settings.CycleDetection.StaticValidation, orchestrator.isStaticValidationEnabled())
 				}
-				
+
 				// Test per-rule cycle protection
 				if len(tt.config.Rules) > 0 {
 					rule := tt.config.Rules[0]

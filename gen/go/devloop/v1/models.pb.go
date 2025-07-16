@@ -476,9 +476,17 @@ type Rule struct {
 	// Set to false to disable cycle protection for this specific rule
 	CycleProtection *bool `protobuf:"varint,13,opt,name=cycle_protection,json=cycleProtection,proto3,oneof" json:"cycle_protection,omitempty"`
 	// Status of this rule
-	Status        *RuleStatus `protobuf:"bytes,14,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Status *RuleStatus `protobuf:"bytes,14,opt,name=status,proto3" json:"status,omitempty"`
+	// Whether to exit devloop when this rule fails startup (default: false)
+	// Set to true to use legacy behavior where devloop exits on startup failure
+	ExitOnFailedInit bool `protobuf:"varint,15,opt,name=exit_on_failed_init,json=exitOnFailedInit,proto3" json:"exit_on_failed_init,omitempty"`
+	// Maximum number of retry attempts for failed startup (default: 10)
+	MaxInitRetries uint32 `protobuf:"varint,16,opt,name=max_init_retries,json=maxInitRetries,proto3" json:"max_init_retries,omitempty"`
+	// Base backoff duration in milliseconds for startup retries (default: 3000ms)
+	// Grows exponentially: 3s, 6s, 12s, 24s, etc.
+	InitRetryBackoffBase uint64 `protobuf:"varint,17,opt,name=init_retry_backoff_base,json=initRetryBackoffBase,proto3" json:"init_retry_backoff_base,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
@@ -607,6 +615,27 @@ func (x *Rule) GetStatus() *RuleStatus {
 		return x.Status
 	}
 	return nil
+}
+
+func (x *Rule) GetExitOnFailedInit() bool {
+	if x != nil {
+		return x.ExitOnFailedInit
+	}
+	return false
+}
+
+func (x *Rule) GetMaxInitRetries() uint32 {
+	if x != nil {
+		return x.MaxInitRetries
+	}
+	return 0
+}
+
+func (x *Rule) GetInitRetryBackoffBase() uint64 {
+	if x != nil {
+		return x.InitRetryBackoffBase
+	}
+	return 0
 }
 
 type RuleMatcher struct {
@@ -807,7 +836,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\trule_name\x18\x02 \x01(\tR\bruleName\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xe1\x04\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xf1\x05\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -824,7 +853,10 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x05color\x18\v \x01(\tR\x05color\x12+\n" +
 	"\x03env\x18\f \x03(\v2\x19.devloop.v1.Rule.EnvEntryR\x03env\x12.\n" +
 	"\x10cycle_protection\x18\r \x01(\bH\x02R\x0fcycleProtection\x88\x01\x01\x12.\n" +
-	"\x06status\x18\x0e \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x1a6\n" +
+	"\x06status\x18\x0e \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x12-\n" +
+	"\x13exit_on_failed_init\x18\x0f \x01(\bR\x10exitOnFailedInit\x12(\n" +
+	"\x10max_init_retries\x18\x10 \x01(\rR\x0emaxInitRetries\x125\n" +
+	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +

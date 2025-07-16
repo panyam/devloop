@@ -18,11 +18,11 @@ import (
 
 // TriggerTracker tracks rule execution frequency for rate limiting
 type TriggerTracker struct {
-	triggers       []time.Time
-	mutex          sync.RWMutex
-	backoffLevel   int       // Current backoff level
-	backoffUntil   time.Time // Time until which rule is backing off
-	backoffMutex   sync.RWMutex
+	triggers     []time.Time
+	mutex        sync.RWMutex
+	backoffLevel int       // Current backoff level
+	backoffUntil time.Time // Time until which rule is backing off
+	backoffMutex sync.RWMutex
 }
 
 // NewTriggerTracker creates a new trigger tracker
@@ -43,17 +43,17 @@ func (t *TriggerTracker) RecordTrigger() {
 func (t *TriggerTracker) GetTriggerCount(duration time.Duration) int {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
-	
+
 	cutoff := time.Now().Add(-duration)
 	count := 0
-	
+
 	// Count triggers within the time window
 	for _, trigger := range t.triggers {
 		if trigger.After(cutoff) {
 			count++
 		}
 	}
-	
+
 	return count
 }
 
@@ -61,17 +61,17 @@ func (t *TriggerTracker) GetTriggerCount(duration time.Duration) int {
 func (t *TriggerTracker) CleanupOldTriggers(duration time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	
+
 	cutoff := time.Now().Add(-duration)
 	validTriggers := make([]time.Time, 0)
-	
+
 	// Keep only triggers within the time window
 	for _, trigger := range t.triggers {
 		if trigger.After(cutoff) {
 			validTriggers = append(validTriggers, trigger)
 		}
 	}
-	
+
 	t.triggers = validTriggers
 }
 
@@ -79,11 +79,11 @@ func (t *TriggerTracker) CleanupOldTriggers(duration time.Duration) {
 func (t *TriggerTracker) GetLastTrigger() *time.Time {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
-	
+
 	if len(t.triggers) == 0 {
 		return nil
 	}
-	
+
 	return &t.triggers[len(t.triggers)-1]
 }
 
@@ -111,15 +111,15 @@ func (t *TriggerTracker) GetBackoffLevel() int {
 func (t *TriggerTracker) SetBackoff() {
 	t.backoffMutex.Lock()
 	defer t.backoffMutex.Unlock()
-	
+
 	t.backoffLevel++
-	
+
 	// Exponential backoff: 2^level seconds, capped at 60 seconds
 	backoffDuration := time.Duration(1<<uint(t.backoffLevel)) * time.Second
 	if backoffDuration > 60*time.Second {
 		backoffDuration = 60 * time.Second
 	}
-	
+
 	t.backoffUntil = time.Now().Add(backoffDuration)
 }
 
@@ -127,7 +127,7 @@ func (t *TriggerTracker) SetBackoff() {
 func (t *TriggerTracker) ResetBackoff() {
 	t.backoffMutex.Lock()
 	defer t.backoffMutex.Unlock()
-	
+
 	// Reset backoff if we haven't triggered in the last 2 minutes
 	if time.Since(t.backoffUntil) > 2*time.Minute {
 		t.backoffLevel = 0
@@ -196,14 +196,75 @@ func (r *RuleRunner) Start() error {
 		return nil
 	}
 
-	// Execute on init (default behavior)
+	// Execute on init with retry logic
 	if r.isVerbose() {
 		utils.LogDevloop("[%s] Executing rule %q on initialization", r.rule.Name, r.rule.Name)
 	}
-	if err := r.Execute(); err != nil {
-		return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
+
+	err := r.executeWithRetry()
+	if err != nil {
+		// Check if we should exit on failed init
+		if r.rule.ExitOnFailedInit {
+			return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
+		}
+		// Log the failure but don't return error (devloop continues)
+		utils.LogDevloop("[%s] Rule %q failed startup after all retries, but continuing devloop (exit_on_failed_init: false)", r.rule.Name, r.rule.Name)
 	}
 	return nil
+}
+
+// executeWithRetry executes the rule with exponential backoff retry logic
+func (r *RuleRunner) executeWithRetry() error {
+	maxRetries := r.getMaxInitRetries()
+	backoffBase := r.getInitRetryBackoffBase()
+
+	var lastErr error
+	for attempt := uint32(0); attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Calculate backoff duration: backoffBase * 2^(attempt-1)
+			backoffMs := backoffBase * (1 << (attempt - 1))
+			backoffDuration := time.Duration(backoffMs) * time.Millisecond
+
+			nextRetryTime := time.Now().Add(backoffDuration)
+			utils.LogDevloop("[%s] Rule %q failed, retrying in %v (attempt %d/%d) at %s",
+				r.rule.Name, r.rule.Name, backoffDuration, attempt+1, maxRetries+1,
+				nextRetryTime.Format("15:04:05"))
+
+			time.Sleep(backoffDuration)
+		}
+
+		if err := r.Execute(); err != nil {
+			lastErr = err
+			utils.LogDevloop("[%s] Rule %q execution failed (attempt %d/%d): %v",
+				r.rule.Name, r.rule.Name, attempt+1, maxRetries+1, err)
+			continue
+		}
+
+		// Success!
+		if attempt > 0 {
+			utils.LogDevloop("[%s] Rule %q succeeded on attempt %d/%d",
+				r.rule.Name, r.rule.Name, attempt+1, maxRetries+1)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("rule %q failed after %d attempts: %w", r.rule.Name, maxRetries+1, lastErr)
+}
+
+// getMaxInitRetries returns the max retry count with default fallback
+func (r *RuleRunner) getMaxInitRetries() uint32 {
+	if r.rule.MaxInitRetries == 0 {
+		return 10 // default
+	}
+	return r.rule.MaxInitRetries
+}
+
+// getInitRetryBackoffBase returns the base backoff duration with default fallback
+func (r *RuleRunner) getInitRetryBackoffBase() uint64 {
+	if r.rule.InitRetryBackoffBase == 0 {
+		return 3000 // default 3000ms
+	}
+	return r.rule.InitRetryBackoffBase
 }
 
 // Stop terminates all processes and cleans up
@@ -280,7 +341,7 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 			r.logDevloop("[%s] In backoff period (level %d), skipping execution", r.rule.Name, level)
 			return
 		}
-		
+
 		// Check if we're exceeding rate limits (check before recording new trigger)
 		if r.isRateLimited() {
 			r.triggerTracker.SetBackoff()
@@ -289,7 +350,7 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 			r.logDevloop("[%s] Rate limit exceeded (%.1f triggers/min), entering backoff (level %d)", r.rule.Name, rate, level)
 			return
 		}
-		
+
 		// Reset backoff if we're not rate limited
 		r.triggerTracker.ResetBackoff()
 	}
@@ -322,11 +383,11 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 func (r *RuleRunner) isRateLimited() bool {
 	settings := r.orchestrator.getCycleDetectionSettings()
 	maxTriggers := settings.MaxTriggersPerMinute
-	
+
 	if maxTriggers == 0 {
 		return false // No rate limiting
 	}
-	
+
 	currentRate := r.triggerTracker.GetTriggerCount(time.Minute)
 	return uint32(currentRate) > maxTriggers
 }
@@ -416,7 +477,7 @@ func (r *RuleRunner) logDevloop(format string, args ...interface{}) {
 // Execute runs the commands for this rule
 func (r *RuleRunner) Execute() error {
 	r.updateStatus(true, "RUNNING")
-	
+
 	// Set current executing rule for trigger chain tracking
 	r.orchestrator.setCurrentExecutingRule(r.rule.Name)
 	defer r.orchestrator.clearCurrentExecutingRule()
