@@ -70,6 +70,7 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] **Retry Configuration:** `max_init_retries` and `init_retry_backoff_base` for fine-tuned retry behavior
   - [x] **Comprehensive Logging:** Detailed retry attempt logging with next retry time and success notifications
   - [x] **Backward Compatibility:** Default behavior allows devloop to continue running despite startup failures
+  - [x] **Non-Blocking Implementation:** Fixed blocking issue by moving retry logic to background execution
 - [ ] **Web-based UI:**
   - [ ] A simple web interface, built on the Agent Service HTTP API, to visualize rule status, logs, and trigger commands manually.
 

@@ -4,6 +4,26 @@ This document outlines the immediate next steps for the `devloop` project.
 
 ## Recently Completed (2025-07-16)
 
+- ✅ **Non-Blocking Auto-Restart Fix:**
+  - **Problem**: Auto-restart was blocking file watching, preventing responses to file changes during startup
+  - **Root Cause**: Orchestrator.Start() was waiting synchronously for all rules to complete startup with retry logic before starting file watching
+  - **Solution**: Moved retry logic from orchestrator startup to background rule execution
+  - **Implementation**:
+    - **Modified RuleRunner.Start()**: Made non-blocking by moving retry logic to background goroutine
+    - **Added startWithRetry()**: Background method that runs initialization retry logic using debounced execution
+    - **Added triggerDebouncedWithRetry()**: Specialized debounced trigger that includes retry logic for startup
+    - **Enhanced Orchestrator.Start()**: Starts file watching immediately without waiting for rule initialization
+    - **Critical Failure Channel**: Added `criticalFailure` channel for rules with `exit_on_failed_init: true`
+    - **Test Fix**: Corrected `TestDebouncing` to use proper `skip_run_on_init: true` instead of invalid `run_on_init: false`
+  - **Features Delivered**:
+    - File watching starts immediately on orchestrator startup
+    - Rules initialize in background with full retry logic preserved
+    - File changes trigger during startup, enabling continuous development workflow
+    - Critical rules can still exit devloop via background channel communication
+    - All existing retry configuration and logging preserved
+  - **Result**: File changes now trigger during startup while rules retry initialization in background
+  - **Impact**: Eliminates blocking behavior - developers can respond to file changes immediately
+
 - ✅ **Startup Resilience & Exponential Backoff Retry Logic:**
   - **Problem**: When devloop starts, if any rule fails the first time, devloop quits entirely - preventing development from continuing even during transient failures
   - **Solution**: Comprehensive startup retry system with exponential backoff that allows devloop to continue running while retrying failed rules

@@ -397,8 +397,9 @@ type Orchestrator struct {
 	executionMutex       sync.RWMutex
 
 	// Control channels
-	done     chan bool
-	doneOnce sync.Once
+	done            chan bool
+	doneOnce        sync.Once
+	criticalFailure chan string // Channel for critical rule failures
 
 	// Debounce settings
 	debounceDuration time.Duration
@@ -460,6 +461,7 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		Watcher:          watcher,
 		projectID:        projectID,
 		done:             make(chan bool),
+		criticalFailure:  make(chan string, 10), // Buffered channel for critical failures
 		ruleRunners:      make(map[string]*RuleRunner),
 		triggerChain:     NewTriggerChain(),
 		fileModTracker:   NewFileModificationTracker(),
@@ -507,35 +509,16 @@ func (o *Orchestrator) GetConfig() *pb.Config {
 
 // Start begins file watching and initializes all RuleRunners
 func (o *Orchestrator) Start() error {
-	// Start all RuleRunners - collect failures but don't exit immediately
-	var startupErrors []error
-	var criticalFailures []string
-
+	// Start all RuleRunners (now non-blocking - rules initialize in background)
 	for name, runner := range o.ruleRunners {
 		if err := runner.Start(); err != nil {
-			startupErrors = append(startupErrors, fmt.Errorf("rule %q: %w", name, err))
-			criticalFailures = append(criticalFailures, name)
+			// Only immediate validation failures would cause Start() to return error
+			utils.LogDevloop("Failed to start rule %q: %v", name, err)
+			return fmt.Errorf("rule validation failed for %q: %w", name, err)
 		}
 	}
 
-	// Check if we should exit on any startup failures
-	if len(criticalFailures) > 0 {
-		utils.LogDevloop("The following rules failed to start: %v", criticalFailures)
-		// Only exit if at least one failed rule has exit_on_failed_init: true
-		shouldExit := false
-		for _, ruleName := range criticalFailures {
-			if runner, exists := o.ruleRunners[ruleName]; exists && runner.GetRule().ExitOnFailedInit {
-				shouldExit = true
-				break
-			}
-		}
-
-		if shouldExit {
-			return fmt.Errorf("devloop startup failed due to critical rule failures: %v", startupErrors)
-		}
-
-		utils.LogDevloop("Continuing devloop startup despite rule failures (no rules have exit_on_failed_init: true)")
-	}
+	utils.LogDevloop("All rules started - initialization retry logic running in background")
 
 	// Setup file watching
 	projectRoot := o.ProjectRoot()
@@ -576,9 +559,13 @@ func (o *Orchestrator) Start() error {
 	// Start trigger history cleanup goroutine
 	go o.cleanupTriggerHistory()
 
-	// Wait for shutdown
-	<-o.done
-	return nil
+	// Wait for shutdown or critical failure
+	select {
+	case <-o.done:
+		return nil
+	case failedRule := <-o.criticalFailure:
+		return fmt.Errorf("devloop exiting due to critical failure in rule %q", failedRule)
+	}
 }
 
 // watchFiles monitors for file changes and triggers appropriate RuleRunners

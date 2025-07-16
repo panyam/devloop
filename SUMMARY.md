@@ -137,6 +137,14 @@ settings:
   - **Simplified Architecture:** Uses same Agent Service as gRPC API
   - Core tools: GetConfig, GetRule, ListWatchedPaths, TriggerRule, StreamLogs
   - Manual project ID configuration support for consistent AI tool identification
+- ✅ **Non-Blocking Auto-Restart:** Fixed critical blocking issue in startup retry system
+  - **Problem Fixed:** Auto-restart was blocking file watching, preventing responses to file changes during startup
+  - **Solution:** Moved retry logic from orchestrator startup to background rule execution
+  - **Non-Blocking Startup:** File watching starts immediately while rules initialize in background
+  - **Background Retry Logic:** Rules retry startup failures using exponential backoff in background goroutines
+  - **Critical Failure Handling:** Added `criticalFailure` channel for rules with `exit_on_failed_init: true`
+  - **Preserved Features:** All existing retry configuration and logging preserved
+  - **Test Fix:** Corrected `TestDebouncing` to use proper `skip_run_on_init: true` configuration
 - ✅ **Startup Resilience & Retry Logic:** Comprehensive startup retry system with exponential backoff
   - **Exponential Backoff Retries:** Configurable retry logic for failed rule startup (default: 10 attempts, 3s base backoff)
   - **Graceful Failure Handling:** Rules fail independently without stopping devloop unless explicitly configured
@@ -165,6 +173,10 @@ settings:
   - Before: Devloop quit entirely if any rule failed during startup, preventing development workflow
   - After: Rules retry with exponential backoff (3s, 6s, 12s...), devloop continues running even with failed rules
   - Impact: Major usability improvement - eliminates frustration of devloop quitting on transient startup failures
+- **Non-Blocking Auto-Restart Fix (Critical):** Fixed auto-restart blocking file watching behavior
+  - Before: Auto-restart blocked file watching startup, preventing response to file changes during rule initialization
+  - After: File watching starts immediately while rules initialize in background with retry logic
+  - Impact: File changes now trigger during startup, enabling continuous development workflow
 
 **Current Architecture Strengths:**
 - **Simplified Single Implementation:** Single orchestrator implementation with no version complexity

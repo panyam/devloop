@@ -93,7 +93,7 @@ func TestDebouncing(t *testing.T) {
 		multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Debounce Test Rule"
-    run_on_init: false
+    skip_run_on_init: true
     watch:
       - action: include
         patterns:

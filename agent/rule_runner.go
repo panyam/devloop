@@ -186,7 +186,7 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 	return runner
 }
 
-// Start begins monitoring for this rule
+// Start begins monitoring for this rule (non-blocking)
 func (r *RuleRunner) Start() error {
 	// Skip execution if skip_run_on_init is true
 	if r.rule.SkipRunOnInit {
@@ -196,21 +196,22 @@ func (r *RuleRunner) Start() error {
 		return nil
 	}
 
-	// Execute on init with retry logic
+	// Start background retry logic - don't block orchestrator startup
 	if r.isVerbose() {
-		utils.LogDevloop("[%s] Executing rule %q on initialization", r.rule.Name, r.rule.Name)
+		utils.LogDevloop("[%s] Starting background initialization for rule %q", r.rule.Name, r.rule.Name)
 	}
 
-	err := r.executeWithRetry()
-	if err != nil {
-		// Check if we should exit on failed init
-		if r.rule.ExitOnFailedInit {
-			return fmt.Errorf("failed to execute rule %q on init: %w", r.rule.Name, err)
-		}
-		// Log the failure but don't return error (devloop continues)
-		utils.LogDevloop("[%s] Rule %q failed startup after all retries, but continuing devloop (exit_on_failed_init: false)", r.rule.Name, r.rule.Name)
-	}
+	// Run initialization in background goroutine
+	go r.startWithRetry()
+
 	return nil
+}
+
+// startWithRetry runs the initialization retry logic in background
+func (r *RuleRunner) startWithRetry() {
+	// Use debounced execution for startup to coordinate with file change triggers
+	// This ensures startup and file change executions are properly serialized
+	r.triggerDebouncedWithRetry(true) // bypass rate limiting for startup
 }
 
 // executeWithRetry executes the rule with exponential backoff retry logic
@@ -326,6 +327,77 @@ func (r *RuleRunner) GetRule() *pb.Rule {
 // TriggerDebounced triggers execution after debounce period
 func (r *RuleRunner) TriggerDebounced() {
 	r.TriggerDebouncedWithOptions(false)
+}
+
+// triggerDebouncedWithRetry triggers execution with retry logic after debounce period
+func (r *RuleRunner) triggerDebouncedWithRetry(bypassRateLimit bool) {
+	r.debounceMutex.Lock()
+	defer r.debounceMutex.Unlock()
+
+	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
+	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
+		// Check if we're in backoff period
+		if r.triggerTracker.IsInBackoff() {
+			level := r.triggerTracker.GetBackoffLevel()
+			r.logDevloop("[%s] In backoff period (level %d), skipping execution", r.rule.Name, level)
+			return
+		}
+
+		// Check if we're exceeding rate limits (check before recording new trigger)
+		if r.isRateLimited() {
+			r.triggerTracker.SetBackoff()
+			rate := r.triggerTracker.GetTriggerRate()
+			level := r.triggerTracker.GetBackoffLevel()
+			r.logDevloop("[%s] Rate limit exceeded (%.1f triggers/min), entering backoff (level %d)", r.rule.Name, rate, level)
+			return
+		}
+
+		// Reset backoff if we're not rate limited
+		r.triggerTracker.ResetBackoff()
+	}
+
+	// Record the trigger for rate limiting (only after passing rate limit checks)
+	r.triggerTracker.RecordTrigger()
+
+	// Cancel existing timer if any
+	if r.debounceTimer != nil {
+		r.debounceTimer.Stop()
+	}
+
+	// Set new timer with retry logic for startup
+	// Use very short delay for startup to avoid interfering with file change debouncing
+	startupDelay := 1 * time.Millisecond
+	if !bypassRateLimit {
+		startupDelay = r.debounceDuration // Use normal debounce delay for file changes
+	}
+	r.debounceTimer = time.AfterFunc(startupDelay, func() {
+		err := r.executeWithRetry()
+		if err != nil {
+			// Check if we should exit on failed init
+			if r.rule.ExitOnFailedInit {
+				utils.LogDevloop("[%s] Critical rule %q failed after all retries - signaling devloop to exit", r.rule.Name, r.rule.Name)
+				// Send critical failure to orchestrator
+				select {
+				case r.orchestrator.criticalFailure <- r.rule.Name:
+					// Critical failure sent successfully
+				default:
+					// Channel is full, log error
+					utils.LogDevloop("[%s] Failed to send critical failure for rule %q - channel full", r.rule.Name, r.rule.Name)
+				}
+				return
+			}
+			// Log the failure but continue (devloop continues)
+			utils.LogDevloop("[%s] Rule %q failed startup after all retries, but continuing devloop (exit_on_failed_init: false)", r.rule.Name, r.rule.Name)
+		}
+	})
+
+	if r.isVerbose() {
+		triggerType := "File change"
+		if bypassRateLimit {
+			triggerType = "Startup trigger"
+		}
+		r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
+	}
 }
 
 // TriggerDebouncedWithOptions triggers execution after debounce period with options
