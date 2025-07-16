@@ -63,6 +63,13 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] **Emergency Cycle Breaking:** Rule disabling and cycle resolution suggestions
   - [x] **Configuration Parser Fix:** Fixed YAML-to-protobuf parsing for cycle_detection settings
   - [x] **Comprehensive Configuration:** Full cycle_detection settings block with all parameters
+- [x] **Startup Resilience & Retry Logic (Completed 2025-07-16):**
+  - [x] **Exponential Backoff Retries:** Configurable retry logic for failed rule startup with exponential backoff
+  - [x] **Graceful Failure Handling:** Rules fail independently without stopping devloop unless explicitly configured
+  - [x] **Configurable Exit Behavior:** `exit_on_failed_init` flag for critical rules that must succeed
+  - [x] **Retry Configuration:** `max_init_retries` and `init_retry_backoff_base` for fine-tuned retry behavior
+  - [x] **Comprehensive Logging:** Detailed retry attempt logging with next retry time and success notifications
+  - [x] **Backward Compatibility:** Default behavior allows devloop to continue running despite startup failures
 - [ ] **Web-based UI:**
   - [ ] A simple web interface, built on the Agent Service HTTP API, to visualize rule status, logs, and trigger commands manually.
 

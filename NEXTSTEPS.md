@@ -2,7 +2,29 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-07-08)
+## Recently Completed (2025-07-16)
+
+- ✅ **Startup Resilience & Exponential Backoff Retry Logic:**
+  - **Problem**: When devloop starts, if any rule fails the first time, devloop quits entirely - preventing development from continuing even during transient failures
+  - **Solution**: Comprehensive startup retry system with exponential backoff that allows devloop to continue running while retrying failed rules
+  - **Implementation**:
+    - **New Rule Configuration Fields**:
+      - `exit_on_failed_init: bool` (default: false) - Controls whether devloop exits when this rule fails startup
+      - `max_init_retries: uint32` (default: 10) - Maximum retry attempts for failed startup  
+      - `init_retry_backoff_base: uint64` (default: 3000ms) - Base backoff duration for exponential backoff
+    - **Enhanced RuleRunner.Start()**: Added `executeWithRetry()` method with configurable exponential backoff
+    - **Modified Orchestrator.Start()**: Collects startup failures instead of exiting immediately, only exits if critical rules fail
+    - **Comprehensive Logging**: Detailed retry attempt logging with next retry time and success notifications
+  - **Features Delivered**:
+    - Exponential backoff retry logic (3s, 6s, 12s, 24s, etc.) with configurable base duration
+    - Independent rule failure handling - rules fail independently without stopping devloop
+    - Configurable exit behavior for critical rules via `exit_on_failed_init: true`
+    - Graceful degradation - failed rules can still be triggered manually later
+    - Backward compatibility - default behavior allows devloop to continue running despite startup failures
+  - **Result**: Users can fix errors while devloop continues looping and watching for file changes
+  - **Impact**: Major usability improvement - eliminates the frustration of devloop quitting on transient startup failures
+
+## Previously Completed (2025-07-08)
 
 - ✅ **Complete Cycle Detection Implementation:**
   - **Problem**: Devloop rules could create infinite cycles by watching files they modify, causing runaway resource consumption

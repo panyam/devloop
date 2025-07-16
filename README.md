@@ -239,6 +239,9 @@ rules:                         # Required: Array of rules
 | `watch` | array | ✅ | File patterns to monitor |
 | `commands` | array | ✅ | Commands to execute when files change |
 | `run_on_init` | boolean | ❌ | Run commands on startup (default: `true`) |
+| `exit_on_failed_init` | boolean | ❌ | Exit devloop when this rule fails startup (default: `false`) |
+| `max_init_retries` | integer | ❌ | Maximum retry attempts for failed startup (default: `10`) |
+| `init_retry_backoff_base` | integer | ❌ | Base backoff duration in ms for startup retries (default: `3000`) |
 
 ### Watch Configuration
 
@@ -258,6 +261,51 @@ Each watch entry consists of:
 - `[a-z]` - Matches any character in the range
 - `{a,b}` - Matches either pattern a or b
 
+### Startup Behavior and Retry Logic
+
+devloop includes robust startup retry logic to handle transient failures during initialization:
+
+```yaml
+rules:
+  - name: "Database"
+    commands:
+      - "docker-compose up -d postgres"
+      - "wait-for-postgres.sh"
+    # Critical service - exit devloop if this fails after retries
+    exit_on_failed_init: true
+    max_init_retries: 5
+    init_retry_backoff_base: 5000  # 5s, 10s, 20s, 40s, 80s backoff
+    
+  - name: "API Server"  
+    commands:
+      - "go build -o bin/api ./cmd/api"
+      - "./bin/api"
+    # Default behavior: retry failures but don't exit devloop
+    # exit_on_failed_init: false (default)
+    # max_init_retries: 10 (default) 
+    # init_retry_backoff_base: 3000 (default - 3s, 6s, 12s, 24s...)
+```
+
+**Startup Retry Behavior:**
+- By default, failed rules retry up to 10 times with exponential backoff
+- Backoff starts at 3 seconds and doubles each attempt (3s, 6s, 12s, 24s, etc.)
+- devloop continues running and watching files even if some rules fail startup
+- Set `exit_on_failed_init: true` for critical rules that must succeed
+
+**Retry Configuration:**
+- `exit_on_failed_init`: Whether to exit devloop when this rule fails startup (default: `false`)
+- `max_init_retries`: Maximum retry attempts (default: `10`) 
+- `init_retry_backoff_base`: Base backoff duration in milliseconds (default: `3000`)
+
+**Example Log Output:**
+```
+[api] Rule "api" execution failed (attempt 1/11): exit status 1
+[api] Rule "api" failed, retrying in 3s (attempt 2/11) at 15:04:08
+[api] Rule "api" execution failed (attempt 2/11): exit status 1
+[api] Rule "api" failed, retrying in 6s (attempt 3/11) at 15:04:14
+[api] Rule "api" succeeded on attempt 3/11
+```
+
 ### Example with All Options
 
 ```yaml
@@ -269,6 +317,9 @@ rules:
   - name: "Backend API"
     prefix: "api"
     workdir: "./backend"
+    exit_on_failed_init: false
+    max_init_retries: 5
+    init_retry_backoff_base: 2000
     env:
       NODE_ENV: "development"
       PORT: "3000"
