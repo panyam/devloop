@@ -88,16 +88,16 @@ Settings Options:
 ┌─────────────────────┬─────────┬─────────────┬─────────────────────────────────────────────────────┐
 │ Option              │ Type    │ Default     │ Description                                         │
 ├─────────────────────┼─────────┼─────────────┼─────────────────────────────────────────────────────┤
-│ prefix_logs         │ boolean │ true        │ Prepend rule name/prefix to each output line       │
-│ prefix_max_length   │ integer │ unlimited   │ Truncate/pad prefixes to this length for alignment │
-│ color_logs          │ boolean │ true        │ Enable colored output to distinguish different     │
+│ prefix_logs         │ boolean │ true        │ Prepend rule name/prefix to each output line        │
+│ prefix_max_length   │ integer │ unlimited   │ Truncate/pad prefixes to this length for alignment  │
+│ color_logs          │ boolean │ true        │ Enable colored output to distinguish different      │
 │                     │         │             │ rules                                               │
-│ color_scheme        │ string  │ "auto"      │ Color palette: "auto" (detect), "dark", "light",   │
+│ color_scheme        │ string  │ "auto"      │ Color palette: "auto" (detect), "dark", "light",    │
 │                     │         │             │ or "custom"                                         │
 │ custom_colors       │ map     │ {}          │ Map rule names to specific colors                   │
-│                     │         │             │ (e.g., rule_name: "blue")                          │
+│                     │         │             │ (e.g., rule_name: "blue")                           │
 │ verbose             │ boolean │ false       │ Enable verbose logging globally                     │
-│ default_debounce_   │ duration│ "500ms"     │ Default delay before executing commands after      │
+│ default_debounce_   │ duration│ "500ms"     │ Default delay before executing commands after       │
 │ delay               │         │             │ file changes                                        │
 └─────────────────────┴─────────┴─────────────┴─────────────────────────────────────────────────────┘
 
@@ -106,25 +106,25 @@ Rule Options:
 ┌─────────────────────┬─────────┬──────────┬─────────────────────────────────────────────────────────┐
 │ Option              │ Type    │ Required │ Description                                             │
 ├─────────────────────┼─────────┼──────────┼─────────────────────────────────────────────────────────┤
-│ name                │ string  │ ✅       │ Unique identifier for the rule                         │
-│ prefix              │ string  │ ❌       │ Custom prefix for log output (overrides name)         │
-│ color               │ string  │ ❌       │ Custom color for this rule's output                    │
-│                     │         │          │ (e.g., "blue", "red", "bold-green")                   │
-│ workdir             │ string  │ ❌       │ Working directory for command execution                │
-│                     │         │          │ (defaults to config file directory)                   │
-│ verbose             │ boolean │ ❌       │ Enable verbose logging for this rule only             │
-│ debounce_delay      │ duration│ ❌       │ Delay before executing after file changes             │
-│                     │         │          │ (e.g., "200ms")                                       │
-│ env                 │ map     │ ❌       │ Additional environment variables                       │
-│ watch               │ array   │ ✅       │ File patterns to monitor                               │
-│ commands            │ array   │ ✅       │ Commands to execute when files change                  │
-│ run_on_init         │ boolean │ ❌       │ Run commands on startup (default: true)               │
-│ exit_on_failed_init │ boolean │ ❌       │ Exit devloop when this rule fails startup             │
-│                     │         │          │ (default: false)                                       │
-│ max_init_retries    │ integer │ ❌       │ Maximum retry attempts for failed startup             │
-│                     │         │          │ (default: 10)                                          │
-│ init_retry_backoff_ │ integer │ ❌       │ Base backoff duration in ms for startup retries       │
-│ base                │         │          │ (default: 3000)                                        │
+│ name                │ string  │ ✅       │ Unique identifier for the rule                          │
+│ prefix              │ string  │ ❌       │ Custom prefix for log output (overrides name)           │
+│ color               │ string  │ ❌       │ Custom color for this rule's output                     │
+│                     │         │          │ (e.g., "blue", "red", "bold-green")                     │
+│ workdir             │ string  │ ❌       │ Working directory for command execution                 │
+│                     │         │          │ (defaults to config file directory)                     │
+│ verbose             │ boolean │ ❌       │ Enable verbose logging for this rule only               │
+│ debounce_delay      │ duration│ ❌       │ Delay before executing after file changes               │
+│                     │         │          │ (e.g., "200ms")                                         │
+│ env                 │ map     │ ❌       │ Additional environment variables                        │
+│ watch               │ array   │ ✅       │ File patterns to monitor                                │
+│ commands            │ array   │ ✅       │ Commands to execute when files change                   │
+│ run_on_init         │ boolean │ ❌       │ Run commands on startup (default: true)                 │
+│ exit_on_failed_init │ boolean │ ❌       │ Exit devloop when this rule fails startup               │
+│                     │         │          │ (default: false)                                        │
+│ max_init_retries    │ integer │ ❌       │ Maximum retry attempts for failed startup               │
+│                     │         │          │ (default: 10)                                           │
+│ init_retry_backoff_ │ integer │ ❌       │ Base backoff duration in ms for startup retries         │
+│ base                │         │          │ (default: 3000)                                         │
 └─────────────────────┴─────────┴──────────┴─────────────────────────────────────────────────────────┘
 
 Watch Configuration:
@@ -134,8 +134,8 @@ Watch Configuration:
 ┌─────────┬─────────┬─────────────────────┬─────────────────────────────────────────────────────────┐
 │ Field   │ Type    │ Values              │ Description                                             │
 ├─────────┼─────────┼─────────────────────┼─────────────────────────────────────────────────────────┤
-│ action  │ string  │ include, exclude    │ Whether to trigger on or ignore matches                │
-│ patterns│ array   │ glob patterns       │ File patterns using doublestar syntax                  │
+│ action  │ string  │ include, exclude    │ Whether to trigger on or ignore matches                 │
+│ patterns│ array   │ glob patterns       │ File patterns using doublestar syntax                   │
 └─────────┴─────────┴─────────────────────┴─────────────────────────────────────────────────────────┘
 
 Glob Pattern Syntax:
