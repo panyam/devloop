@@ -127,6 +127,26 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				config.Settings.PrefixLogs = prefixLogsBool
 			}
 		}
+		if colorLogs, exists := settings["color_logs"]; exists {
+			if colorLogsBool, ok := colorLogs.(bool); ok {
+				config.Settings.ColorLogs = colorLogsBool
+			}
+		}
+		if colorScheme, exists := settings["color_scheme"]; exists {
+			if colorSchemeStr, ok := colorScheme.(string); ok {
+				config.Settings.ColorScheme = colorSchemeStr
+			}
+		}
+		if customColors, exists := settings["custom_colors"]; exists {
+			if customColorsMap, ok := customColors.(map[string]interface{}); ok {
+				config.Settings.CustomColors = make(map[string]string)
+				for key, value := range customColorsMap {
+					if valueStr, ok := value.(string); ok {
+						config.Settings.CustomColors[key] = valueStr
+					}
+				}
+			}
+		}
 
 		// Fix cycle_detection field
 		if cycleDetection, exists := settings["cycle_detection"]; exists {

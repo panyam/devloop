@@ -57,13 +57,16 @@ func NewColorManager(settings ColorSettings) *ColorManager {
 	cm.initializePalettes()
 
 	// Check if colors should be enabled based on settings and terminal capability
-	if !cm.enabled || !cm.isTerminalColorCapable() {
+	// We check if devloop itself is running in a TTY, not subprocesses
+	colorCapable := cm.isTerminalColorCapable()
+	
+	if !cm.enabled || !colorCapable {
 		cm.enabled = false
+		// Force disable colors globally so fatih/color doesn't check TTY in subprocesses
+		color.NoColor = true
 	} else {
-		// If we want colors enabled, override the global NoColor setting
-		// This is necessary because fatih/color sets NoColor=true by default
-		// when it detects non-terminal output, but we want to enable colors
-		// when the user explicitly requests them and the terminal supports them
+		// Force enable colors globally - devloop controls color decision, not fatih/color
+		// This prevents fatih/color from checking TTY in subprocesses
 		color.NoColor = false
 	}
 
@@ -310,6 +313,7 @@ func (cm *ColorManager) FormatPrefix(prefix string, rule interface{}) string {
 		return prefix
 	}
 
+	// Color decision is controlled globally by devloop, not per-call
 	return ruleColor.Sprint(prefix)
 }
 
@@ -345,5 +349,6 @@ func (cm *ColorManager) GetColoredString(text string, rule ColorRule) string {
 		return text
 	}
 
+	// Color decision is controlled globally by devloop, not per-call
 	return ruleColor.Sprint(text)
 }

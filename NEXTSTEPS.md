@@ -2,6 +2,26 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed (2025-07-18)
+
+- ✅ **Color Scheme Prefix Fix:**
+  - **Problem**: Color schemes were not working on rule prefixes despite `color_logs: true` configuration
+  - **Root Cause**: Two issues prevented color functionality:
+    1. **YAML Parsing Issue**: `color_logs`, `color_scheme`, and `custom_colors` fields were not being parsed correctly from YAML to protobuf structs
+    2. **TTY Detection Issue**: `fatih/color` library was checking TTY status in subprocesses instead of letting devloop control color decisions globally
+  - **Solution**: Fixed both configuration parsing and TTY management
+  - **Implementation**:
+    - **Enhanced LoadConfig()**: Added proper YAML-to-protobuf parsing for color configuration fields in `agent/common.go`
+    - **Fixed ColorManager**: Modified TTY detection to let devloop control `color.NoColor` globally instead of per-subprocess checks
+    - **Global Color Control**: Set `color.NoColor` once at startup based on devloop's TTY status and user configuration
+  - **Features Delivered**:
+    - Rule prefixes now display in configured colors (red, blue, etc.)
+    - Auto-assigned colors from palette for rules without explicit color configuration
+    - Proper TTY detection respects NO_COLOR environment variable and terminal capabilities
+    - Colors work correctly in interactive terminals while being disabled in non-TTY environments (CI, logs, pipes)
+  - **Result**: `[test-red]` displays in red, `[test-blue]` in blue, with proper ANSI color codes
+  - **Impact**: Enhanced developer experience with color-coded rule output for better visual distinction
+
 ## Recently Completed (2025-07-16)
 
 - ✅ **Non-Blocking Auto-Restart Fix:**
