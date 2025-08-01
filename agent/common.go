@@ -127,6 +127,11 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				config.Settings.PrefixLogs = prefixLogsBool
 			}
 		}
+		if prefixMaxLength, exists := settings["prefix_max_length"]; exists {
+			if prefixMaxLengthInt, ok := prefixMaxLength.(int); ok {
+				config.Settings.PrefixMaxLength = uint32(prefixMaxLengthInt)
+			}
+		}
 		if colorLogs, exists := settings["color_logs"]; exists {
 			if colorLogsBool, ok := colorLogs.(bool); ok {
 				config.Settings.ColorLogs = colorLogsBool

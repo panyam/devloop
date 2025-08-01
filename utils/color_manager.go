@@ -59,11 +59,11 @@ func NewColorManager(settings ColorSettings) *ColorManager {
 	// Check if colors should be enabled based on settings and terminal capability
 	// We check if devloop itself is running in a TTY, not subprocesses
 	colorCapable := cm.isTerminalColorCapable()
-	
+
 	if !cm.enabled || !colorCapable {
 		cm.enabled = false
 	}
-	
+
 	// Do NOT set color.NoColor globally - this would suppress colors from subprocesses
 	// like npm, go test, etc. Let subprocesses control their own color decisions.
 	// Devloop will control its own prefix colors through the ColorManager methods.

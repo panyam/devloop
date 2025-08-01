@@ -153,6 +153,10 @@ type RuleRunner struct {
 	debounceMutex    sync.Mutex
 	debounceDuration time.Duration
 
+	// Pending execution management - prevents queuing builds during execution
+	pendingExecution      bool
+	pendingExecutionMutex sync.Mutex
+
 	// Configuration
 	verbose     bool
 	configMutex sync.RWMutex
@@ -435,19 +439,40 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 		r.debounceTimer.Stop()
 	}
 
-	// Set new timer
-	r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
-		if err := r.Execute(); err != nil {
-			r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
-		}
-	})
+	// Check if rule is currently running
+	isRunning := r.isCurrentlyRunning()
 
-	if r.isVerbose() {
-		triggerType := "File change"
-		if bypassRateLimit {
-			triggerType = "Manual trigger"
+	if isRunning {
+		// Rule is currently executing - mark for pending execution after completion
+		wasPending := r.hasPendingExecution()
+		r.setPendingExecution(true)
+
+		if r.isVerbose() {
+			triggerType := "File change"
+			if bypassRateLimit {
+				triggerType = "Manual trigger"
+			}
+			if wasPending {
+				r.logDevloop("[%s] %s detected while running, replacing previous pending execution", r.rule.Name, triggerType)
+			} else {
+				r.logDevloop("[%s] %s detected while running, scheduling execution after completion", r.rule.Name, triggerType)
+			}
 		}
-		r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
+	} else {
+		// Rule is not running - use normal debouncing
+		r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
+			if err := r.Execute(); err != nil {
+				r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
+			}
+		})
+
+		if r.isVerbose() {
+			triggerType := "File change"
+			if bypassRateLimit {
+				triggerType = "Manual trigger"
+			}
+			r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
+		}
 	}
 }
 
@@ -518,6 +543,53 @@ func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
 			}
 		}
 	*/
+}
+
+// setPendingExecution marks that an execution should happen after the current one completes
+func (r *RuleRunner) setPendingExecution(pending bool) {
+	r.pendingExecutionMutex.Lock()
+	defer r.pendingExecutionMutex.Unlock()
+	r.pendingExecution = pending
+}
+
+// hasPendingExecution returns whether there's a pending execution scheduled
+func (r *RuleRunner) hasPendingExecution() bool {
+	r.pendingExecutionMutex.Lock()
+	defer r.pendingExecutionMutex.Unlock()
+	return r.pendingExecution
+}
+
+// isCurrentlyRunning checks if the rule is currently executing
+func (r *RuleRunner) isCurrentlyRunning() bool {
+	r.statusMutex.RLock()
+	defer r.statusMutex.RUnlock()
+	return r.status.IsRunning
+}
+
+// handleExecutionCompletion handles post-execution logic including pending executions
+func (r *RuleRunner) handleExecutionCompletion() {
+	// Check if there's a pending execution that should be scheduled
+	if r.hasPendingExecution() {
+		// Clear the pending flag first
+		r.setPendingExecution(false)
+
+		// Schedule the pending execution with debounce delay
+		r.debounceMutex.Lock()
+		if r.debounceTimer != nil {
+			r.debounceTimer.Stop()
+		}
+
+		r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
+			if err := r.Execute(); err != nil {
+				r.logDevloop("[%s] Error executing pending rule %q: %v", r.rule.Name, r.rule.Name, err)
+			}
+		})
+		r.debounceMutex.Unlock()
+
+		if r.isVerbose() {
+			r.logDevloop("[%s] Pending execution scheduled in %v", r.rule.Name, r.debounceDuration)
+		}
+	}
 }
 
 // SetDebounceDelay sets the debounce delay for this rule
@@ -594,17 +666,17 @@ func (r *RuleRunner) Execute() error {
 
 		// Set environment variables
 		cmd.Env = os.Environ() // Inherit parent environment
-		
+
 		// Add environment variables to help subprocesses detect color support
 		// Only if suppress_subprocess_colors is disabled (default: false, so colors are preserved)
 		suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
 		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
 			// Force color output for common tools
-			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")        // npm, chalk (Node.js)
-			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")     // many CLI tools
-			cmd.Env = append(cmd.Env, "COLORTERM=truecolor")  // general color support indicator
+			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")       // npm, chalk (Node.js)
+			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")    // many CLI tools
+			cmd.Env = append(cmd.Env, "COLORTERM=truecolor") // general color support indicator
 		}
-		
+
 		// Add rule-specific environment variables
 		for key, value := range r.rule.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
@@ -644,6 +716,9 @@ func (r *RuleRunner) Execute() error {
 		r.updateStatus(false, "SUCCESS")
 		r.orchestrator.LogManager.SignalFinished(r.rule.Name)
 		utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
+
+		// Handle any pending executions
+		r.handleExecutionCompletion()
 	}
 
 	return nil
@@ -705,6 +780,9 @@ func (r *RuleRunner) monitorLastCommand(cmd *exec.Cmd) {
 
 	r.orchestrator.LogManager.SignalFinished(r.rule.Name)
 	utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
+
+	// Handle any pending executions
+	r.handleExecutionCompletion()
 }
 
 // TerminateProcesses terminates all running processes for this rule

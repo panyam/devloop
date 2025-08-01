@@ -55,7 +55,7 @@ func TestStripColorCodes(t *testing.T) {
 func TestStripANSIFromBytes(t *testing.T) {
 	input := []byte("\x1b[31mError: Something went wrong\x1b[0m")
 	expected := []byte("Error: Something went wrong")
-	
+
 	result := stripANSIFromBytes(input)
 	if !bytes.Equal(result, expected) {
 		t.Errorf("stripANSIFromBytes() = %q, want %q", result, expected)
@@ -77,12 +77,12 @@ func (r *mockRule) GetColor() string  { return r.color }
 func TestColoredPrefixWriter_PreservesColorsForTerminal(t *testing.T) {
 	var terminalBuf bytes.Buffer
 	var fileBuf bytes.Buffer
-	
+
 	rule := &mockRule{name: "test", prefix: "test", color: "red"}
-	
+
 	// Create a simple color manager that's disabled (no colors for prefixes)
 	colorManager := &ColorManager{enabled: false}
-	
+
 	// Create the writer manually to specify which writers are terminals vs files
 	cpw := &ColoredPrefixWriter{
 		terminalWriters: []io.Writer{&terminalBuf}, // This should preserve colors
@@ -92,24 +92,24 @@ func TestColoredPrefixWriter_PreservesColorsForTerminal(t *testing.T) {
 		colorManager:    colorManager,
 		rule:            rule,
 	}
-	
+
 	// Write some colored content (simulating npm output)
 	coloredContent := "\x1b[32mnpm\x1b[0m install completed \x1b[31mwith errors\x1b[0m"
 	cpw.Write([]byte(coloredContent))
-	
+
 	terminalOutput := terminalBuf.String()
 	fileOutput := fileBuf.String()
-	
+
 	// Terminal output should preserve colors
 	if !strings.Contains(terminalOutput, "\x1b[32mnpm\x1b[0m") || !strings.Contains(terminalOutput, "\x1b[31mwith errors\x1b[0m") {
 		t.Errorf("Terminal output should preserve ANSI colors, got: %q", terminalOutput)
 	}
-	
+
 	// File output should strip colors
 	if strings.Contains(fileOutput, "\x1b[") {
 		t.Errorf("File output should not contain ANSI codes, got: %q", fileOutput)
 	}
-	
+
 	// File output should contain the clean text
 	expectedCleanText := "npm install completed with errors"
 	if !strings.Contains(fileOutput, expectedCleanText) {

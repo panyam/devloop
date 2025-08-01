@@ -62,7 +62,7 @@ rules:
 		assert.NoError(t, err)
 
 		// 4. Run devloop as a subprocess from within the temp directory.
-		cmd := exec.Command("./devloop", "-c", ".devloop.yaml", "--mode", "standalone", "--http-port", httpPort, "--grpc-port", grpcPort, "-v")
+		cmd := exec.Command("./devloop", "-c", ".devloop.yaml", "--http-port", httpPort, "--grpc-port", grpcPort, "-v")
 		var stdout, stderr strings.Builder
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
