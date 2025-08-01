@@ -176,7 +176,7 @@ Each example builds upon the concepts from previous ones, so we recommend explor
 -   **Intelligent Change Detection**: Uses glob patterns to precisely match file changes, triggering only the necessary commands.
 -   **Robust Process Management**: Automatically terminates old processes before starting new ones, preventing zombie processes and ensuring a clean state.
 -   **Cross-Platform Support**: Commands execute natively on Windows (`cmd /c`), macOS, and Linux (`bash -c` with `sh -c` fallback).
--   **Color-Coded Output**: Automatically assigns consistent colors to each rule's output, making it easy to distinguish logs in busy development environments.
+-   **Color-Coded Output**: Automatically assigns consistent colors to each rule's output, making it easy to distinguish logs in busy development environments. Preserves native colors from subprocess tools like npm, go test, etc.
 -   **Debounced Execution**: Rapid file changes trigger commands only once, preventing unnecessary builds and restarts.
 -   **Command Log Prefixing**: Prepends a customizable prefix to each line of your command's output, with optional color coding for enhanced readability.
 -   **.air.toml Converter**: Includes a built-in tool to convert your existing `.air.toml` configuration into a `devloop` rule.
@@ -224,6 +224,7 @@ rules:                         # Required: Array of rules
 | `custom_colors` | map | `{}` | Map rule names to specific colors (e.g., `rule_name: "blue"`) |
 | `verbose` | boolean | `false` | Enable verbose logging globally |
 | `default_debounce_delay` | duration | `"500ms"` | Default delay before executing commands after file changes |
+| `suppress_subprocess_colors` | boolean | `false` | Suppress colors from subprocess output (npm, go test, etc.) |
 
 ### Rule Options
 
@@ -312,6 +313,8 @@ rules:
 settings:
   prefix_logs: true
   prefix_max_length: 12
+  color_logs: true
+  suppress_subprocess_colors: false  # Preserve colors from npm, go test, etc.
 
 rules:
   - name: "Backend API"

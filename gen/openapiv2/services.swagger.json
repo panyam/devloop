@@ -499,6 +499,10 @@
         "cycleDetection": {
           "$ref": "#/definitions/v1CycleDetectionSettings",
           "title": "Cycle detection configuration"
+        },
+        "suppressSubprocessColors": {
+          "type": "boolean",
+          "title": "Whether to suppress colors from subprocess output (default: false)\nWhen true, all subprocess output appears in plain text\nWhen false, subprocess tools like npm, go test, etc. can output their native colors"
         }
       },
       "description": "Settings defines global settings for devloop."

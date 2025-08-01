@@ -2,6 +2,27 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed (2025-08-01)
+
+- ✅ **Subprocess Color Preservation Fix:**
+  - **Problem**: Devloop was suppressing colors from subprocess output (like `npm build`, `go test`, etc.) while correctly coloring its own prefixes
+  - **Root Cause**: Devloop was globally controlling `color.NoColor = true/false` which affected all subprocesses using the same color detection logic
+  - **Solution**: Decoupled devloop's color control from subprocess color control
+  - **Implementation**:
+    - **ColorManager Enhancement**: Removed global `color.NoColor` control, let subprocesses decide their own color support
+    - **ColoredPrefixWriter Update**: Enhanced ANSI stripping with proper regex, preserve colors for terminal output while stripping for file logs
+    - **Environment Variables**: Added `FORCE_COLOR=1`, `CLICOLOR_FORCE=1`, `COLORTERM=truecolor` for subprocess color detection
+    - **Configuration Option**: Added `suppress_subprocess_colors: bool` setting (defaults to `false`)
+    - **Comprehensive Testing**: Added tests for ANSI color preservation and stripping functionality
+  - **Features Delivered**:
+    - Subprocess tools (npm, go test, etc.) now output their native colors in terminal
+    - Devloop prefixes remain properly colored (`[frontend]` in blue, `[backend]` in red)
+    - Log files receive clean output without ANSI codes
+    - User can disable subprocess colors via `suppress_subprocess_colors: true` if needed
+    - Backwards compatible - existing configs continue working unchanged
+  - **Result**: `npm build` errors show in red, success messages in green, while devloop prefixes maintain their assigned colors
+  - **Impact**: Significantly improved developer experience with full color preservation from all tools while maintaining clean log files
+
 ## Recently Completed (2025-07-18)
 
 - ✅ **Color Scheme Prefix Fix:**

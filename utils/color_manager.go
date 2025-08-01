@@ -62,13 +62,11 @@ func NewColorManager(settings ColorSettings) *ColorManager {
 	
 	if !cm.enabled || !colorCapable {
 		cm.enabled = false
-		// Force disable colors globally so fatih/color doesn't check TTY in subprocesses
-		color.NoColor = true
-	} else {
-		// Force enable colors globally - devloop controls color decision, not fatih/color
-		// This prevents fatih/color from checking TTY in subprocesses
-		color.NoColor = false
 	}
+	
+	// Do NOT set color.NoColor globally - this would suppress colors from subprocesses
+	// like npm, go test, etc. Let subprocesses control their own color decisions.
+	// Devloop will control its own prefix colors through the ColorManager methods.
 
 	return cm
 }
@@ -313,8 +311,12 @@ func (cm *ColorManager) FormatPrefix(prefix string, rule interface{}) string {
 		return prefix
 	}
 
-	// Color decision is controlled globally by devloop, not per-call
-	return ruleColor.Sprint(prefix)
+	// Use the color only if this ColorManager is enabled
+	// Don't rely on global color.NoColor as that affects subprocesses
+	if cm.enabled {
+		return ruleColor.Sprint(prefix)
+	}
+	return prefix
 }
 
 // SimpleColorRule is a basic implementation of ColorRule for simple cases
@@ -349,6 +351,10 @@ func (cm *ColorManager) GetColoredString(text string, rule ColorRule) string {
 		return text
 	}
 
-	// Color decision is controlled globally by devloop, not per-call
-	return ruleColor.Sprint(text)
+	// Use the color only if this ColorManager is enabled
+	// Don't rely on global color.NoColor as that affects subprocesses
+	if cm.enabled {
+		return ruleColor.Sprint(text)
+	}
+	return text
 }

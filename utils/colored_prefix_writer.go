@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
-
-	"github.com/fatih/color"
+	"regexp"
 )
 
 // Nameable represents anything that has a name (used for color generation)
@@ -78,13 +77,16 @@ func (cpw *ColoredPrefixWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	// Write plain output to file writers
+	// Write plain output to file writers (strip ANSI codes for clean logs)
 	if len(cpw.fileWriters) > 0 {
 		var plainOutput []byte
 		for i, line := range lines {
 			if len(line) > 0 {
+				// Add the plain prefix (without colors)
 				plainOutput = append(plainOutput, []byte(cpw.prefix)...)
-				plainOutput = append(plainOutput, line...)
+				// Strip ANSI codes from the subprocess output for clean file logs
+				cleanLine := stripANSIFromBytes(line)
+				plainOutput = append(plainOutput, cleanLine...)
 				if i < len(lines)-1 {
 					plainOutput = append(plainOutput, '\n')
 				}
@@ -112,17 +114,17 @@ func (cpw *ColoredPrefixWriter) UpdatePrefix(newPrefix string) {
 	}
 }
 
-// StripColorCodes removes ANSI color codes from a string
+// ANSI escape sequence regex pattern - matches color codes, cursor movements, etc.
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// StripColorCodes removes ANSI color codes from a string using regex
 func StripColorCodes(input string) string {
-	// Save the original NoColor setting
-	originalNoColor := color.NoColor
-	// Temporarily enable NoColor to strip colors
-	color.NoColor = true
-	// Create a temporary color instance and format the input
-	result := color.New().Sprint(input)
-	// Restore the original setting
-	color.NoColor = originalNoColor
-	return result
+	return ansiRegex.ReplaceAllString(input, "")
+}
+
+// stripANSIFromBytes removes ANSI escape sequences from byte slice
+func stripANSIFromBytes(input []byte) []byte {
+	return ansiRegex.ReplaceAll(input, []byte{})
 }
 
 // WriteToFileOnly writes output only to file writers (without colors)
@@ -137,7 +139,9 @@ func (cpw *ColoredPrefixWriter) WriteToFileOnly(p []byte) (n int, err error) {
 	for i, line := range lines {
 		if len(line) > 0 {
 			plainOutput = append(plainOutput, []byte(cpw.prefix)...)
-			plainOutput = append(plainOutput, line...)
+			// Strip ANSI codes from subprocess output for clean file logs
+			cleanLine := stripANSIFromBytes(line)
+			plainOutput = append(plainOutput, cleanLine...)
 			if i < len(lines)-1 {
 				plainOutput = append(plainOutput, '\n')
 			}

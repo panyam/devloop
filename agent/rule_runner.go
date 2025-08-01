@@ -594,6 +594,18 @@ func (r *RuleRunner) Execute() error {
 
 		// Set environment variables
 		cmd.Env = os.Environ() // Inherit parent environment
+		
+		// Add environment variables to help subprocesses detect color support
+		// Only if suppress_subprocess_colors is disabled (default: false, so colors are preserved)
+		suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
+		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
+			// Force color output for common tools
+			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")        // npm, chalk (Node.js)
+			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")     // many CLI tools
+			cmd.Env = append(cmd.Env, "COLORTERM=truecolor")  // general color support indicator
+		}
+		
+		// Add rule-specific environment variables
 		for key, value := range r.rule.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 		}

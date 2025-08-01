@@ -228,6 +228,9 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 		config.Settings.DefaultWatchAction = "exclude"
 	}
 
+	// suppress_subprocess_colors defaults to false (preserve colors by default)
+	// No special handling needed - protobuf bool defaults work perfectly for this
+
 	// Resolve all patterns in all rules to be absolute paths.
 	for i := range config.Rules {
 		rule := config.Rules[i]

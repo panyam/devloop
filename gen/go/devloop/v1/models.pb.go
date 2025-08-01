@@ -164,8 +164,12 @@ type Settings struct {
 	DefaultWatchAction string            `protobuf:"bytes,9,opt,name=default_watch_action,json=defaultWatchAction,proto3" json:"default_watch_action,omitempty"`
 	// Cycle detection configuration
 	CycleDetection *CycleDetectionSettings `protobuf:"bytes,10,opt,name=cycle_detection,json=cycleDetection,proto3" json:"cycle_detection,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Whether to suppress colors from subprocess output (default: false)
+	// When true, all subprocess output appears in plain text
+	// When false, subprocess tools like npm, go test, etc. can output their native colors
+	SuppressSubprocessColors bool `protobuf:"varint,11,opt,name=suppress_subprocess_colors,json=suppressSubprocessColors,proto3" json:"suppress_subprocess_colors,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *Settings) Reset() {
@@ -266,6 +270,13 @@ func (x *Settings) GetCycleDetection() *CycleDetectionSettings {
 		return x.CycleDetection
 	}
 	return nil
+}
+
+func (x *Settings) GetSuppressSubprocessColors() bool {
+	if x != nil {
+		return x.SuppressSubprocessColors
+	}
+	return false
 }
 
 // Settings for cycle detection and prevention
@@ -803,7 +814,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
 	"\bsettings\x18\x02 \x01(\v2\x14.devloop.v1.SettingsR\bsettings\x12&\n" +
-	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xb5\x04\n" +
+	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xf3\x04\n" +
 	"\bSettings\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
@@ -818,7 +829,8 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\rcustom_colors\x18\b \x03(\v2&.devloop.v1.Settings.CustomColorsEntryR\fcustomColors\x120\n" +
 	"\x14default_watch_action\x18\t \x01(\tR\x12defaultWatchAction\x12K\n" +
 	"\x0fcycle_detection\x18\n" +
-	" \x01(\v2\".devloop.v1.CycleDetectionSettingsR\x0ecycleDetection\x1a?\n" +
+	" \x01(\v2\".devloop.v1.CycleDetectionSettingsR\x0ecycleDetection\x12<\n" +
+	"\x1asuppress_subprocess_colors\x18\v \x01(\bR\x18suppressSubprocessColors\x1a?\n" +
 	"\x11CustomColorsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x19\n" +

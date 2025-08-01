@@ -57,6 +57,11 @@ message Settings {
 
   // Cycle detection configuration
   CycleDetectionSettings cycle_detection = 10;
+
+  // Whether to suppress colors from subprocess output (default: false)
+  // When true, all subprocess output appears in plain text
+  // When false, subprocess tools like npm, go test, etc. can output their native colors
+  bool suppress_subprocess_colors = 11;
 }
 
 // Settings for cycle detection and prevention
