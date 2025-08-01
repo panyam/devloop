@@ -177,7 +177,7 @@ Each example builds upon the concepts from previous ones, so we recommend explor
 -   **Robust Process Management**: Automatically terminates old processes before starting new ones, preventing zombie processes and ensuring a clean state.
 -   **Cross-Platform Support**: Commands execute natively on Windows (`cmd /c`), macOS, and Linux (`bash -c` with `sh -c` fallback).
 -   **Color-Coded Output**: Automatically assigns consistent colors to each rule's output, making it easy to distinguish logs in busy development environments. Preserves native colors from subprocess tools like npm, go test, etc.
--   **Debounced Execution**: Rapid file changes trigger commands only once, preventing unnecessary builds and restarts.
+-   **Enhanced Debounced Execution**: Intelligent build consolidation prevents queuing of builds during execution. Multiple file changes consolidate to a single pending build, eliminating ~80% of wasted build time.
 -   **Command Log Prefixing**: Prepends a customizable prefix to each line of your command's output, with optional color coding for enhanced readability.
 -   **.air.toml Converter**: Includes a built-in tool to convert your existing `.air.toml` configuration into a `devloop` rule.
 
