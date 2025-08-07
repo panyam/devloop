@@ -63,7 +63,19 @@ Before installing devloop, ensure you have:
     ```bash
     go install github.com/panyam/devloop@latest
     ```
-2.  **Create a `.devloop.yaml` file in your project's root directory**:
+
+2.  **Initialize a new configuration**:
+    ```bash
+    # Create basic configuration
+    devloop init
+    
+    # Or create with specific project profiles
+    devloop init golang           # Go project
+    devloop init ts python        # TypeScript + Python projects
+    devloop init go ts py         # Multiple projects with aliases
+    ```
+
+3.  **Or manually create a `.devloop.yaml` file in your project's root directory**:
     ```yaml
     rules:
       - name: "Go Backend Build and Run"
@@ -78,12 +90,31 @@ Before installing devloop, ensure you have:
           - "go build -o ./bin/server ./cmd/server"
           - "./bin/server"    # This starts the server and is long running
     ```
-3.  **Run `devloop`**:
+
+4.  **Run `devloop`**:
     ```bash
     devloop -c .devloop.yaml
     ```
 
 `devloop` will now watch your files and automatically rebuild and restart your backend server whenever you make changes to your Go code.
+
+### Quick Configuration with `devloop init`
+
+The `init` command provides pre-configured templates for common project types:
+
+**Available profiles:**
+- `golang` (alias: `go`) - Go project with build and run commands
+- `typescript` (aliases: `ts`, `node`, `nodejs`) - TypeScript/Node.js project with build and serve
+- `python` (aliases: `py`, `flask`) - Python Flask project with development server
+
+**Usage examples:**
+```bash
+devloop init                    # Basic "Hello World" configuration
+devloop init golang             # Go project configuration  
+devloop init ts python          # TypeScript and Python configurations
+devloop init --output custom.yaml golang  # Custom output location
+devloop init --force golang     # Overwrite existing configuration
+```
 
 ## 📚 Examples
 
@@ -992,6 +1023,32 @@ The gateway will accept connections from agents and provide a unified interface 
 ### Subcommands
 
 `devloop` also supports subcommands for specific utilities:
+
+#### `init`
+
+Initialize a new `.devloop.yaml` configuration file with predefined project profiles.
+
+```bash
+devloop init [profiles...]
+```
+
+**Available profiles:**
+- `golang` (alias: `go`) - Go project with build and run commands
+- `typescript` (aliases: `ts`, `node`, `nodejs`) - TypeScript/Node.js project  
+- `python` (aliases: `py`, `flask`) - Python Flask development server
+
+**Examples:**
+```bash
+devloop init                    # Basic "Hello World" configuration
+devloop init golang             # Go project configuration
+devloop init ts python          # Multiple profiles
+devloop init -o config.yaml go  # Custom output file
+devloop init --force golang     # Overwrite existing file
+```
+
+**Flags:**
+- `-o, --output` - Output file path (default: `.devloop.yaml`)
+- `-f, --force` - Overwrite existing configuration file
 
 #### `convert`
 

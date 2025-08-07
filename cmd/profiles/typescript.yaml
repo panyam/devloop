@@ -1,0 +1,26 @@
+name: "TypeScript Frontend"
+prefix: "ts"
+color: "cyan"
+watch:
+  - action: "exclude"
+    patterns:
+      - "node_modules/**"
+      - "dist/**"
+      - "build/**"
+      - "**/.*"
+      - "**/*.log"
+  - action: "include"
+    patterns:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "package.json"
+      - "tsconfig.json"
+commands:
+  - "echo 'Installing dependencies...'"
+  - "npm install"
+  - "echo 'Building TypeScript project...'"
+  - "npm run build"
+  - "echo 'Starting development server...'"
+  - "npm run dev"

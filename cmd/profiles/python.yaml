@@ -1,0 +1,25 @@
+name: "Python Flask App"
+prefix: "flask"
+color: "green"
+env:
+  FLASK_ENV: "development"
+  FLASK_DEBUG: "1"
+watch:
+  - action: "exclude"
+    patterns:
+      - "__pycache__/**"
+      - "*.pyc"
+      - ".venv/**"
+      - "venv/**"
+      - "*.egg-info/**"
+      - "**/.*"
+  - action: "include"
+    patterns:
+      - "**/*.py"
+      - "requirements.txt"
+      - "setup.py"
+commands:
+  - "echo 'Installing Python dependencies...'"
+  - "pip install -r requirements.txt"
+  - "echo 'Starting Flask development server...'"
+  - "python app.py"

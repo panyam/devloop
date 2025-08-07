@@ -1,0 +1,15 @@
+settings:
+  prefix_logs: true
+  color_logs: true
+  color_scheme: "auto"
+  default_debounce_delay: "500ms"
+
+rules:
+  - name: "Hello World"
+    watch:
+      - action: "include"
+        patterns:
+          - "**/*"
+    commands:
+      - "echo 'File changed: $DEVLOOP_TRIGGER_FILE'"
+      - "echo 'Hello from devloop!'"

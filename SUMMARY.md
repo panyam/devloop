@@ -214,6 +214,13 @@ settings:
   - **Default Behavior:** `devloop` starts server, subcommands act as client
   - **Signal Handling Fix:** Resolved Ctrl-C interrupt issues in server mode
   - **Code Organization:** Modular structure with `cmd/`, `server/`, `client/` packages
+- ✅ **Project Initialization Command (2025-08-07):** Added `devloop init` for quick project bootstrapping
+  - **Profile-Based Configuration:** Embedded YAML templates for common project types (Go, TypeScript, Python Flask)
+  - **Multiple Profile Support:** Create multi-service configurations with single command (`devloop init go ts py`)
+  - **Smart Aliases:** Convenient shortcuts (`go` for `golang`, `ts` for `typescript`, `py` for `python`)
+  - **Flexible Output:** Customizable file location and force overwrite options
+  - **Zero Dependencies:** All profiles embedded in binary using `//go:embed`
+  - **Extensible Architecture:** Easy addition of new profiles by creating YAML files in `cmd/profiles/`
 - ✅ **Watcher Robustness & Pattern Resolution Fix (2025-07-08):** Fixed critical pattern resolution and watcher reliability issues
   - **Workdir-Relative Patterns:** Patterns now resolve relative to rule's working directory instead of project root
   - **Dynamic Directory Watching:** Added support for directories created/deleted after startup

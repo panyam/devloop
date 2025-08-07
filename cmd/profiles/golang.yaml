@@ -1,0 +1,21 @@
+name: "Go Backend"
+prefix: "go"
+color: "blue"
+watch:
+  - action: "exclude"
+    patterns:
+      - "vendor/**"
+      - "**/*_test.go"
+      - "**/.*"
+      - "bin/**"
+      - "dist/**"
+  - action: "include"
+    patterns:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+commands:
+  - "echo 'Building Go application...'"
+  - "go build -o bin/app ."
+  - "echo 'Starting Go application...'"
+  - "./bin/app"

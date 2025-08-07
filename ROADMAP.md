@@ -55,6 +55,10 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] **Signal Handling:** Fixed Ctrl-C interrupt handling for proper server shutdown
   - [x] **Code Organization:** Modular structure with `cmd/`, `server/`, `client/` packages
   - [x] **Professional UX:** Help system, usage examples, and consistent flag handling
+  - [x] **Project Initialization (Completed 2025-08-07):** Added `devloop init` command with embedded profile templates
+    - [x] **Profile-Based Bootstrapping:** Pre-configured templates for Go, TypeScript, and Python Flask projects
+    - [x] **Multiple Profile Support:** Single command multi-service setup (`devloop init go ts py`)
+    - [x] **Extensible Architecture:** Easy addition of new profiles via `cmd/profiles/` YAML files
 - [x] **Cycle Detection & Prevention (Completed 2025-07-08):**
   - [x] **Static Validation:** Startup detection of self-referential patterns in rule configurations
   - [x] **Dynamic Rate Limiting:** TriggerTracker with frequency monitoring and exponential backoff
