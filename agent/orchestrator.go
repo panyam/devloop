@@ -532,11 +532,12 @@ func (o *Orchestrator) Start() error {
 		}
 		if info.IsDir() {
 			// Use pattern-based logic to determine if directory should be watched
-			if o.shouldWatchDirectory(path) {
+			shouldWatch, includingRule := o.shouldWatchDirectory(path)
+			if shouldWatch {
 				if err := o.Watcher.Add(path); err != nil {
 					utils.LogDevloop("Error watching %s: %v", path, err)
 				} else if o.Verbose {
-					utils.LogDevloop("Watching directory: %s", path)
+					utils.LogDevloop("Watching directory [%s]: %s", includingRule.Name, path)
 				}
 			} else {
 				// Skip this directory and its subdirectories
@@ -585,12 +586,12 @@ func (o *Orchestrator) watchFiles() {
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
 					// Check if this directory should be watched based on user patterns
-					shouldWatch := o.shouldWatchDirectory(event.Name)
+					shouldWatch, includingRule := o.shouldWatchDirectory(event.Name)
 					if shouldWatch {
 						if err := o.Watcher.Add(event.Name); err != nil {
 							utils.LogDevloop("Error watching new directory %s: %v", event.Name, err)
 						} else if o.Verbose {
-							o.logDevloop("Started watching new directory: %s", event.Name)
+							o.logDevloop("[%s] Started watching new directory: %s", includingRule.Name, event.Name)
 						}
 					}
 				}
@@ -733,71 +734,113 @@ func (o *Orchestrator) shouldTriggerByDefault(rule *pb.Rule) bool {
 }
 
 // shouldWatchDirectory determines if a directory should be watched based on user patterns
-func (o *Orchestrator) shouldWatchDirectory(dirPath string) bool {
-	// Default exclusion patterns (can be overridden by user patterns)
+// Uses FIFO order within each rule and union policy across rules
+func (o *Orchestrator) shouldWatchDirectory(dirPath string) (bool, *pb.Rule) {
+	// Default exclusion patterns (applied only if no user rules have opinions)
 	defaultExclusions := []string{
 		"**/node_modules/**",
 		"**/vendor/**",
 		"**/.*/**", // hidden directories
 	}
 
-	// Check if any user pattern would potentially match files in this directory
 	o.runnersMutex.RLock()
 	defer o.runnersMutex.RUnlock()
 
-	for _, rule := range o.Config.Rules {
-		for _, matcher := range rule.Watch {
-			for _, pattern := range matcher.Patterns {
-				// Resolve pattern relative to rule's work_dir
-				resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
+	// For each rule, determine its FIFO decision about this directory
+	hasAnyInclude := false
+	hasAnyDecision := false
 
-				// Check if this pattern could match files in the directory
-				if o.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
-					return true
-				}
+	var includingRule *pb.Rule
+	for _, rule := range o.Config.Rules {
+		ruleDecision := o.getRuleFIFODecisionForDirectory(rule, dirPath)
+		if ruleDecision != nil {
+			hasAnyDecision = true
+			if *ruleDecision == "include" {
+				hasAnyInclude = true
+				includingRule = rule
 			}
 		}
 	}
 
-	// If no user patterns would match, check against default exclusions
+	// Union policy: If ANY rule wants to include, watch the directory
+	if hasAnyInclude {
+		return true, includingRule
+	}
+
+	// If rules have opinions but none want to include, don't watch
+	if hasAnyDecision {
+		return false, nil
+	}
+
+	// If no user rules have opinions, check default exclusions
 	for _, exclusion := range defaultExclusions {
 		if matched, _ := doublestar.Match(exclusion, dirPath); matched {
-			return false
+			return false, nil
 		}
 	}
 
 	// Default to watching if no exclusions match
-	return true
+	return true, nil
+}
+
+// getRuleFIFODecisionForDirectory applies FIFO logic for a single rule
+// Returns the action ("include" or "exclude") of the first matching pattern, or nil if no match
+func (o *Orchestrator) getRuleFIFODecisionForDirectory(rule *pb.Rule, dirPath string) *string {
+	// Iterate matchers in FIFO order - first match wins
+	for _, matcher := range rule.Watch {
+		for _, pattern := range matcher.Patterns {
+			resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
+
+			if o.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
+				// First match wins (FIFO)
+				return &matcher.Action
+			}
+		}
+	}
+	return nil // No patterns match this directory
 }
 
 // patternCouldMatchInDirectory checks if a pattern could potentially match files in a directory
 func (o *Orchestrator) patternCouldMatchInDirectory(pattern, dirPath string) bool {
+	// Clean paths for consistent comparison
+	pattern = filepath.Clean(pattern)
+	dirPath = filepath.Clean(dirPath)
+	
 	// If pattern is exact match to directory, it should be watched
 	if pattern == dirPath {
 		return true
 	}
 
 	// If pattern contains the directory as a prefix, it could match files inside
+	// Example: pattern="/path/to/dir/subdir/file.txt", dirPath="/path/to/dir" -> true
 	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
 		return true
 	}
 
-	// If directory is a prefix of pattern, it could match files inside
-	if strings.HasPrefix(dirPath, filepath.Dir(pattern)) {
-		return true
-	}
-
-	// Use glob matching to check if pattern could match files in directory
-	testFile := filepath.Join(dirPath, "test.txt")
-	if matched, _ := doublestar.Match(pattern, testFile); matched {
-		return true
-	}
-
-	// Check with a few common file extensions
-	extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h"}
-	for _, ext := range extensions {
-		testFile := filepath.Join(dirPath, "test"+ext)
+	// Check if this is a glob pattern (contains wildcards)
+	isGlob := strings.ContainsAny(pattern, "*?[]")
+	
+	if isGlob {
+		// For glob patterns, use proper glob matching to check if it could match files in directory
+		testFile := filepath.Join(dirPath, "test.txt")
 		if matched, _ := doublestar.Match(pattern, testFile); matched {
+			return true
+		}
+
+		// Check with common file extensions for glob patterns
+		extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".md"}
+		for _, ext := range extensions {
+			testFile := filepath.Join(dirPath, "test"+ext)
+			if matched, _ := doublestar.Match(pattern, testFile); matched {
+				return true
+			}
+		}
+	} else {
+		// For specific file patterns (no wildcards), only match if the file is directly in this directory
+		// Example: pattern="/path/to/buf.yaml", dirPath="/path/to" -> true
+		// Example: pattern="/path/to/buf.yaml", dirPath="/path/to/web" -> false
+		patternDir := filepath.Dir(pattern)
+		if patternDir == dirPath {
 			return true
 		}
 	}

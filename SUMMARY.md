@@ -153,6 +153,11 @@ settings:
   - **Backward Compatibility:** Default behavior allows devloop to continue running despite startup failures
 
 **Major Bug Fixes:**
+- **Directory Watching Logic (Critical):** Fixed shouldWatchDirectory ignoring FIFO order and exclude patterns (2025-08-18)
+  - Before: Directory watching ignored pattern order and action types, causing massive over-watching of excluded directories
+  - Root Cause: `patternCouldMatchInDirectory` was too permissive - specific files like `buf.yaml` incorrectly matched unrelated directories like `web/node_modules`
+  - After: Respects FIFO order within each rule (first pattern match wins), distinguishes specific files from glob patterns, implements union policy across rules
+  - Impact: Exclude patterns like `node_modules/**` now work correctly, reducing watched directories from ~8,000 to ~50 and dramatically improving performance
 - **Rule Matching Logic (Critical):** Fixed orchestrator ignoring `Action` field in matchers
   - Before: Exclude patterns matched but still triggered rules
   - After: Exclude patterns properly skip rule execution

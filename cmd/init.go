@@ -17,6 +17,7 @@ var (
 )
 
 // Embed profile files
+//
 //go:embed profiles/default.yaml
 var defaultProfile []byte
 
@@ -77,16 +78,16 @@ type Settings struct {
 }
 
 type Rule struct {
-	Name           string            `yaml:"name"`
-	Prefix         string            `yaml:"prefix,omitempty"`
-	Color          string            `yaml:"color,omitempty"`
-	Workdir        string            `yaml:"workdir,omitempty"`
-	RunOnInit      *bool             `yaml:"run_on_init,omitempty"`
-	Verbose        bool              `yaml:"verbose,omitempty"`
-	DebounceDelay  string            `yaml:"debounce_delay,omitempty"`
-	Env            map[string]string `yaml:"env,omitempty"`
-	Watch          []WatchPattern    `yaml:"watch"`
-	Commands       []string          `yaml:"commands"`
+	Name          string            `yaml:"name"`
+	Prefix        string            `yaml:"prefix,omitempty"`
+	Color         string            `yaml:"color,omitempty"`
+	Workdir       string            `yaml:"workdir,omitempty"`
+	RunOnInit     *bool             `yaml:"run_on_init,omitempty"`
+	Verbose       bool              `yaml:"verbose,omitempty"`
+	DebounceDelay string            `yaml:"debounce_delay,omitempty"`
+	Env           map[string]string `yaml:"env,omitempty"`
+	Watch         []WatchPattern    `yaml:"watch"`
+	Commands      []string          `yaml:"commands"`
 }
 
 type WatchPattern struct {
@@ -160,7 +161,7 @@ func loadDefaultConfig() (*DevLoopConfig, error) {
 
 func loadProfileRule(profileName string) (*Rule, error) {
 	var profileData []byte
-	
+
 	switch strings.ToLower(profileName) {
 	case "golang", "go":
 		profileData = golangProfile

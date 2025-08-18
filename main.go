@@ -51,6 +51,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/panyam/devloop/cmd"
 	"github.com/spf13/cobra"
@@ -59,13 +60,16 @@ import (
 //go:embed VERSION
 var version string
 
+//go:embed .LAST_BUILT_AT
+var lastBuiltAt string
+
 func main() {
 	// Add version command
 	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Show version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("devloop version %s\n", version)
+			fmt.Printf("devloop version %s (Built: %s)\n", strings.TrimSpace(version), strings.TrimSpace(lastBuiltAt))
 		},
 	}
 
