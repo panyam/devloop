@@ -620,6 +620,17 @@ func (r *RuleRunner) logDevloop(format string, args ...interface{}) {
 
 // Execute runs the commands for this rule
 func (r *RuleRunner) Execute() error {
+	// Acquire semaphore slot if parallel execution is limited
+	if r.orchestrator.ruleSemaphore != nil {
+		r.orchestrator.ruleSemaphore <- struct{}{}
+		defer func() { <-r.orchestrator.ruleSemaphore }()
+		
+		if r.isVerbose() {
+			r.logDevloop("[%s] Acquired execution slot (%d/%d)", r.rule.Name, 
+				len(r.orchestrator.ruleSemaphore), cap(r.orchestrator.ruleSemaphore))
+		}
+	}
+	
 	r.updateStatus(true, "RUNNING")
 
 	// Set current executing rule for trigger chain tracking

@@ -62,6 +62,10 @@ message Settings {
   // When true, all subprocess output appears in plain text
   // When false, subprocess tools like npm, go test, etc. can output their native colors
   bool suppress_subprocess_colors = 11;
+
+  // Maximum number of rules that can run in parallel (default: 0 = unlimited)
+  // Set to 1 for sequential execution, useful for debugging rule chains
+  uint32 max_parallel_rules = 12;
 }
 
 // Settings for cycle detection and prevention

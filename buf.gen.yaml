@@ -5,15 +5,9 @@ plugins:
   - local: protoc-gen-go
     out: gen/go
     opt: paths=source_relative
-  - local: protoc-gen-connect-go
-    out: gen/go
-    opt: paths=source_relative
   - local: protoc-gen-go-grpc
     out: gen/go
     opt: paths=source_relative,require_unimplemented_servers=false
-  - local: protoc-gen-grpc-gateway
-    out: gen/go
-    opt: paths=source_relative
   - local: locallinks/protoc-gen-go-mcp/bin/protoc-gen-go-mcp
     out: gen/go
     opt: paths=source_relative

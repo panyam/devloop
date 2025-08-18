@@ -400,6 +400,9 @@ type Orchestrator struct {
 	done            chan bool
 	doneOnce        sync.Once
 	criticalFailure chan string // Channel for critical rule failures
+	
+	// Rule execution semaphore for controlling parallelism
+	ruleSemaphore chan struct{} // Buffered channel acting as semaphore
 
 	// Debounce settings
 	debounceDuration time.Duration
@@ -467,6 +470,17 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		fileModTracker:   NewFileModificationTracker(),
 		cycleBreaker:     NewCycleBreaker(),
 		debounceDuration: 500 * time.Millisecond,
+	}
+	
+	// Initialize rule execution semaphore based on max_parallel_rules setting
+	maxParallel := orchestrator.getMaxParallelRules()
+	if maxParallel > 0 {
+		orchestrator.ruleSemaphore = make(chan struct{}, maxParallel)
+		utils.LogDevloop("Initialized rule execution semaphore with max parallel rules: %d", maxParallel)
+	} else {
+		// No limit - semaphore will be nil and won't be used
+		orchestrator.ruleSemaphore = nil
+		utils.LogDevloop("Rule execution semaphore disabled (unlimited parallel rules)")
 	}
 
 	// Validate configuration for potential cycles
@@ -846,6 +860,22 @@ func (o *Orchestrator) patternCouldMatchInDirectory(pattern, dirPath string) boo
 	}
 
 	return false
+}
+
+// getMaxParallelRules returns the effective max parallel rules setting
+func (o *Orchestrator) getMaxParallelRules() uint32 {
+	if o.Config.Settings.MaxParallelRules != 0 {
+		return o.Config.Settings.MaxParallelRules
+	}
+	return 0 // Default: no limit
+}
+
+// getSemaphoreStatus returns information about the current semaphore state
+func (o *Orchestrator) getSemaphoreStatus() (active int, capacity int, unlimited bool) {
+	if o.ruleSemaphore == nil {
+		return 0, 0, true
+	}
+	return len(o.ruleSemaphore), cap(o.ruleSemaphore), false
 }
 
 // getDebounceDelayForRule returns the effective debounce delay for a rule

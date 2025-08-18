@@ -1,0 +1,26 @@
+settings:
+  max_parallel_rules: 1  # Sequential execution for testing
+  verbose: true
+  prefix_logs: true
+
+rules:
+  - name: "rule1"
+    watch:
+      - action: "include"
+        patterns: ["*.txt"]
+    commands:
+      - "echo 'Rule 1 starting' && sleep 2 && echo 'Rule 1 done'"
+      
+  - name: "rule2" 
+    watch:
+      - action: "include"
+        patterns: ["*.txt"]
+    commands:
+      - "echo 'Rule 2 starting' && sleep 2 && echo 'Rule 2 done'"
+      
+  - name: "rule3"
+    watch:
+      - action: "include"
+        patterns: ["*.txt"]  
+    commands:
+      - "echo 'Rule 3 starting' && sleep 2 && echo 'Rule 3 done'"

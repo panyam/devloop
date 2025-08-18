@@ -67,6 +67,7 @@ Complete Configuration Structure:
       rule_name: "color"         # Map rule names to specific colors
     verbose: boolean             # Global verbose logging (default: false)
     default_debounce_delay: duration  # Global debounce delay (default: 500ms)
+    max_parallel_rules: integer  # Maximum concurrent rules (default: 0 = unlimited)
 
   rules:                         # Required: Array of rules
     - name: string              # Required: Unique rule identifier
@@ -99,6 +100,7 @@ Settings Options:
 │ verbose             │ boolean │ false       │ Enable verbose logging globally                     │
 │ default_debounce_   │ duration│ "500ms"     │ Default delay before executing commands after       │
 │ delay               │         │             │ file changes                                        │
+│ max_parallel_rules  │ integer │ 0           │ Maximum concurrent rules (0 = unlimited)            │
 └─────────────────────┴─────────┴─────────────┴─────────────────────────────────────────────────────┘
 
 Rule Options:
@@ -162,6 +164,7 @@ Example Configuration:
   settings:
     prefix_logs: true
     prefix_max_length: 12
+    max_parallel_rules: 1  # Sequential execution for debugging
 
   rules:
     - name: "Backend API"

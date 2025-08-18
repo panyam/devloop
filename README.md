@@ -227,6 +227,7 @@ settings:                      # Optional: Global settings
     rule_name: "color"         # Map rule names to specific colors
   verbose: boolean             # Global verbose logging (default: false)
   default_debounce_delay: duration  # Global debounce delay (default: 500ms)
+  max_parallel_rules: number   # Maximum concurrent rules (default: 0 = unlimited)
 
 rules:                         # Required: Array of rules
   - name: string              # Required: Unique rule identifier
@@ -1540,6 +1541,23 @@ go func() {
 
 #### 5. Configure Debouncing
 devloop has built-in debouncing to prevent command storms during rapid file changes.
+
+#### 6. Control Rule Parallelism
+Use `max_parallel_rules` to control concurrent rule execution for debugging or resource management:
+
+```yaml
+settings:
+  max_parallel_rules: 1  # Sequential execution for debugging
+  
+# Or unlimited (default)
+settings:
+  max_parallel_rules: 0  # All rules can run concurrently
+```
+
+**Use Cases:**
+- **Sequential debugging** (`1`): Isolate rule chains and prevent overlapping output
+- **Resource limited** (`N`): Prevent overwhelming system resources
+- **Default** (`0`): Maximum performance with unlimited concurrency
 
 ### Project Organization Tips
 
