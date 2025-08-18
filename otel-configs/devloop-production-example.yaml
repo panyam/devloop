@@ -1,0 +1,86 @@
+# Production-ready OpenTelemetry Collector configuration example
+# Includes exporters for Jaeger, Prometheus, and OTLP backends
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      load:
+      disk:
+      filesystem:
+      network:
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+  resource:
+    attributes:
+      - key: service.name
+        value: "devloop-managed"
+        action: upsert
+      - key: deployment.environment
+        value: "production"
+        action: upsert
+
+  memory_limiter:
+    limit_mib: 512
+
+exporters:
+  # Jaeger for distributed tracing
+  jaeger:
+    endpoint: http://jaeger-collector:14250
+    tls:
+      insecure: true
+
+  # Prometheus for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      environment: production
+
+  # OTLP to external observability platform
+  otlp/external:
+    endpoint: https://api.honeycomb.io:443
+    headers:
+      "x-honeycomb-team": "${HONEYCOMB_API_KEY}"
+
+  # Console for debugging
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+service:
+  extensions: [health_check, pprof]
+  
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [jaeger, otlp/external, debug]
+    
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, otlp/external, debug]
+    
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/external, debug]

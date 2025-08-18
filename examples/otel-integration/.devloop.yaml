@@ -1,0 +1,67 @@
+settings:
+  color_logs: true
+  prefix_logs: true
+
+rules:
+  # OpenTelemetry Collector - runs first to collect telemetry from other services
+  - name: "otel-agent"
+    watch:
+      - action: "include"
+        patterns:
+          - ".devloop.yaml"
+          - "../../otel-configs/*.yaml"
+    commands:
+      - "otelcol --config=../../otel-configs/devloop-default.yaml"
+    skip_run_on_init: false
+    color: "purple"
+
+  # Backend service with OTel instrumentation
+  - name: "backend"
+    watch:
+      - action: "include"
+        patterns:
+          - "backend/**/*.go"
+          - "backend/go.mod"
+          - "backend/go.sum"
+    commands:
+      - "cd backend && go build -o main ."
+      - "cd backend && ./main"
+    env:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4317"
+      OTEL_SERVICE_NAME: "backend-service"
+      OTEL_RESOURCE_ATTRIBUTES: "service.version=1.0.0,deployment.environment=development"
+    color: "blue"
+    
+  # Frontend service with OTel instrumentation  
+  - name: "frontend"
+    watch:
+      - action: "include"
+        patterns:
+          - "frontend/**/*.js"
+          - "frontend/**/*.html"
+          - "frontend/**/*.css"
+          - "frontend/package.json"
+    commands:
+      - "cd frontend && npm install"
+      - "cd frontend && npm start"
+    env:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
+      OTEL_SERVICE_NAME: "frontend-service"
+      OTEL_RESOURCE_ATTRIBUTES: "service.version=1.0.0,deployment.environment=development"
+    color: "green"
+
+  # Worker service with OTel instrumentation
+  - name: "worker"
+    watch:
+      - action: "include"
+        patterns:
+          - "worker/**/*.py"
+          - "worker/requirements.txt"
+    commands:
+      - "cd worker && pip install -r requirements.txt"
+      - "cd worker && python app.py"
+    env:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318"
+      OTEL_SERVICE_NAME: "worker-service"
+      OTEL_RESOURCE_ATTRIBUTES: "service.version=1.0.0,deployment.environment=development"
+    color: "yellow"

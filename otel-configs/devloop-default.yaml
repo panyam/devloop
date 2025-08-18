@@ -1,0 +1,138 @@
+# Default OpenTelemetry Collector configuration for devloop
+# This configuration sets up basic telemetry collection for development environments
+
+receivers:
+  # OTLP receiver for applications to send telemetry data
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:*"
+            - "http://127.0.0.1:*"
+
+  # Host metrics for system monitoring (optional)
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      load:
+      disk:
+      filesystem:
+        exclude_fs_types:
+          fs_types:
+            - autofs
+            - binfmt_misc
+            - bpf
+            - cgroup2
+            - configfs
+            - debugfs
+            - devpts
+            - devtmpfs
+            - fusectl
+            - hugetlbfs
+            - iso9660
+            - mqueue
+            - nsfs
+            - overlay
+            - proc
+            - procfs
+            - pstore
+            - rpc_pipefs
+            - securityfs
+            - selinuxfs
+            - squashfs
+            - sysfs
+            - tracefs
+      network:
+
+processors:
+  # Batch processor for performance
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Resource processor to add common attributes
+  resource:
+    attributes:
+      - key: service.name
+        value: "devloop-managed"
+        action: upsert
+      - key: deployment.environment
+        value: "development"
+        action: upsert
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    limit_mib: 256
+
+exporters:
+  # Console/debug exporter for development
+  debug:
+    verbosity: normal
+    sampling_initial: 2
+    sampling_thereafter: 500
+
+  # File exporter for persistent logs (optional)
+  file:
+    path: ./otel-logs/telemetry.jsonl
+    rotation:
+      max_megabytes: 100
+      max_days: 3
+      max_backups: 3
+
+  # Example: Jaeger exporter (uncomment to use)
+  # jaeger:
+  #   endpoint: http://localhost:14250
+  #   tls:
+  #     insecure: true
+
+  # Example: Prometheus exporter (uncomment to use)
+  # prometheus:
+  #   endpoint: "0.0.0.0:8889"
+  #   const_labels:
+  #     environment: development
+
+extensions:
+  # Health check endpoint
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiler (optional)
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # Memory ballast for stability
+  memory_ballast:
+    size_mib: 64
+
+service:
+  extensions: [health_check, pprof, memory_ballast]
+  
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, file]
+    
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, file]
+    
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, file]
+
+  telemetry:
+    logs:
+      level: "info"
+    metrics:
+      level: "basic"
+      address: 0.0.0.0:8888

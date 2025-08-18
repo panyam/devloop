@@ -1,0 +1,20 @@
+# Build artifacts
+backend/main
+backend/go.sum
+
+# Node.js
+frontend/node_modules/
+frontend/package-lock.json
+
+# Python
+worker/__pycache__/
+worker/*.pyc
+
+# Logs
+logs/
+otel-logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
