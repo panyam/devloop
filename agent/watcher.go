@@ -155,33 +155,32 @@ func (w *Watcher) getBaseDirectory() string {
 
 // shouldWatchDirectory determines if a directory should be watched based on this rule's patterns
 func (w *Watcher) shouldWatchDirectory(dirPath string) bool {
-	// Apply FIFO logic for this rule
+	// Directory watching logic: We should watch a directory if ANY include pattern
+	// could match files in it. Exclude patterns only affect individual files, not directories.
+	
+	hasIncludeMatch := false
+	
+	// Check all patterns to see if directory should be watched
 	for _, matcher := range w.rule.Watch {
 		for _, pattern := range matcher.Patterns {
 			resolvedPattern := resolvePattern(pattern, w.rule, w.configPath)
 
 			if w.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
-				// First match wins (FIFO)
-				return matcher.Action == "include"
+				if matcher.Action == "include" {
+					hasIncludeMatch = true
+				}
 			}
 		}
 	}
-
-	// Default exclusion patterns if no user patterns match
-	defaultExclusions := []string{
-		"**/node_modules/**",
-		"**/vendor/**",
-		"**/.*/**", // hidden directories
+	
+	// Watch directory only if there's an include pattern that could match files in it
+	if hasIncludeMatch {
+		return true
 	}
 
-	for _, exclusion := range defaultExclusions {
-		if matched, _ := doublestar.Match(exclusion, dirPath); matched {
-			return false
-		}
-	}
-
-	// Default to watching if no exclusions match
-	return true
+	// If no include patterns could match, don't watch the directory
+	// (This prevents watching directories just because exclude patterns could match)
+	return false
 }
 
 // patternCouldMatchInDirectory checks if a pattern could potentially match files in a directory
