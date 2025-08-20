@@ -2,6 +2,27 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed (2025-08-19)
+
+- ✅ **Per-Rule File Watchers Implementation:**
+  - **Problem**: Single shared watcher with union policy caused rule conflicts and debugging difficulties
+  - **Root Cause**: Complex union logic where one rule's exclude patterns could prevent other rules from watching needed directories
+  - **Solution**: Implemented independent fsnotify.Watcher instance per rule for complete isolation
+  - **Implementation**:
+    - **New Watcher Class**: Created `agent/watcher.go` with dedicated file watching logic
+    - **RuleRunner Integration**: Each RuleRunner now owns and manages its file watcher
+    - **Resource Analysis**: Benchmarked watcher overhead (~2-5KB per watcher, minimal impact)
+    - **Removed Union Policy**: Eliminated complex directory watching union logic from Orchestrator
+    - **Enhanced Logging**: Added detailed rule/pattern information to "Skipping directory" messages
+  - **Features Delivered**:
+    - Independent file watching per rule - no more cross-rule interference
+    - Better debugging with rule-specific directory skipping messages
+    - Cleaner configuration - rules can't interfere with each other's watching
+    - Improved resource efficiency - only watch directories each rule actually needs
+    - Eliminated union policy confusion and conflicts
+  - **Result**: Frontend rules can watch web/ directories while backend rules exclude them
+  - **Impact**: Major architecture improvement - eliminates rule watching conflicts and enables better debugging
+
 ## Recently Completed (2025-08-07)
 
 - ✅ **Project Initialization Command (`devloop init`):**

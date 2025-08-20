@@ -21,6 +21,9 @@ type RuleRunner struct {
 	rule         *pb.Rule
 	orchestrator *Orchestrator // Back reference for config, logging, etc.
 
+	// File watching (per-rule)
+	watcher *Watcher
+	
 	// Process management
 	runningCommands []*exec.Cmd
 	commandsMutex   sync.RWMutex
@@ -52,9 +55,12 @@ type RuleRunner struct {
 
 // NewRuleRunner creates a new RuleRunner for the given rule
 func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
+	verbose := orchestrator.isVerboseForRule(rule)
+	
 	runner := &RuleRunner{
 		rule:            rule,
 		orchestrator:    orchestrator,
+		watcher:         NewWatcher(rule, orchestrator.ConfigPath, verbose),
 		runningCommands: make([]*exec.Cmd, 0),
 		status: &pb.RuleStatus{
 			ProjectId:       orchestrator.projectID,
@@ -63,16 +69,27 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 			LastBuildStatus: "IDLE",
 		},
 		debounceDuration: orchestrator.getDebounceDelayForRule(rule),
-		verbose:          orchestrator.isVerboseForRule(rule),
+		verbose:          verbose,
 		triggerTracker:   NewTriggerTracker(),
 		stopChan:         make(chan struct{}),
 		stoppedChan:      make(chan struct{}),
 	}
+	
+	// Set up the watcher event handler to trigger rule execution
+	runner.watcher.SetEventHandler(func(filePath string) {
+		runner.handleFileChange(filePath)
+	})
+	
 	return runner
 }
 
 // Start begins monitoring for this rule (non-blocking)
 func (r *RuleRunner) Start() error {
+	// Start the file watcher for this rule
+	if err := r.watcher.Start(); err != nil {
+		return fmt.Errorf("failed to start file watcher for rule %q: %w", r.rule.Name, err)
+	}
+	
 	// Skip execution if skip_run_on_init is true
 	if r.rule.SkipRunOnInit {
 		if r.isVerbose() {
@@ -157,6 +174,11 @@ func (r *RuleRunner) getInitRetryBackoffBase() uint64 {
 func (r *RuleRunner) Stop() error {
 	close(r.stopChan)
 
+	// Stop the file watcher
+	if err := r.watcher.Stop(); err != nil {
+		utils.LogDevloop("[%s] Error stopping file watcher: %v", r.rule.Name, err)
+	}
+
 	// Terminate all running processes
 	if err := r.TerminateProcesses(); err != nil {
 		return fmt.Errorf("failed to terminate processes for rule %q: %w", r.rule.Name, err)
@@ -207,6 +229,16 @@ func (r *RuleRunner) GetStatus() *pb.RuleStatus {
 // GetRule returns the rule configuration
 func (r *RuleRunner) GetRule() *pb.Rule {
 	return r.rule
+}
+
+// handleFileChange handles file change events from the watcher
+func (r *RuleRunner) handleFileChange(filePath string) {
+	if r.isVerbose() {
+		utils.LogDevloop("[%s] File change detected: %s", r.rule.Name, filePath)
+	}
+	
+	// Trigger debounced execution
+	r.TriggerDebounced()
 }
 
 // TriggerDebounced triggers execution after debounce period

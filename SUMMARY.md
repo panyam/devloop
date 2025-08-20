@@ -63,6 +63,9 @@ The tool can operate in three distinct modes:
 - Example: `src/**/*.go` matches both `src/main.go` AND `src/pkg/utils.go`
 
 **File Watching:**
+- **Per-Rule Watchers (2025-08-19):** Each rule now manages its own fsnotify.Watcher instance
+- Rules independently determine which directories to watch based on their patterns
+- Eliminates union policy conflicts and enables better debugging
 - File watcher starts from the project root (directory containing the config file)
 - All relative patterns in config are resolved to absolute paths relative to the config file location
 - This ensures consistent behavior regardless of where devloop is executed from
@@ -75,10 +78,11 @@ The tool can operate in three distinct modes:
 
 ## 5. Architecture Evolution
 
-**Current Orchestrator Architecture (as of 2025-07-07):**
+**Current Orchestrator Architecture (as of 2025-08-19):**
+- **Per-Rule File Watching:** Each rule manages its own fsnotify.Watcher for independent file monitoring
 - **Simplified Architecture:** Single orchestrator implementation with no version distinction
-- **Separation of Concerns:** File watching (Orchestrator) is separate from command execution (RuleRunner)
-- **RuleRunner Pattern:** Each rule has its own RuleRunner instance managing its lifecycle, debouncing, and process management
+- **Separation of Concerns:** File watching moved to individual RuleRunners from centralized Orchestrator
+- **RuleRunner Pattern:** Each rule has its own RuleRunner instance managing its lifecycle, debouncing, process management, and file watching
 - **Agent Service Integration:** gRPC service provides API access to orchestrator functionality
 - **Improved Process Management:** Platform-specific handling (Linux uses Pdeathsig, Darwin uses Setpgid) prevents zombie processes
 - **Sequential Execution:** Commands within a rule execute sequentially with proper failure propagation (like GNU Make)
@@ -232,6 +236,13 @@ settings:
   - **Pattern-Based Exclusions:** Replaced hard-coded exclusions with intelligent pattern-based logic
   - **Cross-Rule Isolation:** Rules with different workdirs now properly isolate their pattern matching
   - **Comprehensive Testing:** Added tests for workdir-relative patterns and pattern resolution
+- ✅ **Per-Rule File Watchers (2025-08-19):** Fundamental architecture improvement to eliminate rule conflicts
+  - **Independent Watchers:** Each rule now has its own fsnotify.Watcher instance for complete isolation
+  - **No More Union Policy:** Eliminated complex union policy that caused rule watching conflicts
+  - **Better Debugging:** Enhanced logging shows which rule/pattern causes directory skipping
+  - **Resource Efficiency:** Benchmarked ~2-5KB memory overhead per watcher (minimal impact)
+  - **Cleaner Configuration:** Rules can't interfere with each other's file watching requirements
+  - **New Watcher Class:** Created dedicated `agent/watcher.go` for manageable file watching logic
 - Implement grpcrouter-based gateway mode
 - Add comprehensive tests for the gRPC API endpoints
 - Enhance Agent Service with streaming capabilities

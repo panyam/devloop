@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/fsnotify/fsnotify"
 	"github.com/panyam/gocurrent"
 
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
@@ -375,7 +374,6 @@ type Orchestrator struct {
 	ConfigPath   string
 	Config       *pb.Config
 	Verbose      bool
-	Watcher      *fsnotify.Watcher
 	LogManager   *utils.LogManager
 	ColorManager *utils.ColorManager
 
@@ -441,11 +439,6 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file watcher: %w", err)
-	}
-
 	// Determine project ID - use config value if provided, otherwise generate from path
 	var projectID string
 	if config.Settings.ProjectId != "" {
@@ -461,7 +454,6 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 	orchestrator := &Orchestrator{
 		ConfigPath:       absConfigPath,
 		Config:           config,
-		Watcher:          watcher,
 		projectID:        projectID,
 		done:             make(chan bool),
 		criticalFailure:  make(chan string, 10), // Buffered channel for critical failures
@@ -534,43 +526,6 @@ func (o *Orchestrator) Start() error {
 
 	utils.LogDevloop("All rules started - initialization retry logic running in background")
 
-	// Setup file watching
-	projectRoot := o.ProjectRoot()
-	if o.Verbose {
-		o.logDevloop("Starting file watcher from project root: %s", projectRoot)
-	}
-
-	err := filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			// Use pattern-based logic to determine if directory should be watched
-			shouldWatch, includingRule := o.shouldWatchDirectory(path)
-			if shouldWatch {
-				if err := o.Watcher.Add(path); err != nil {
-					utils.LogDevloop("Error watching %s: %v", path, err)
-				} else if o.Verbose {
-					utils.LogDevloop("Watching directory [%s]: %s", includingRule.Name, path)
-				}
-			} else {
-				// Skip this directory and its subdirectories
-				if o.Verbose {
-					utils.LogDevloop("Skipping directory: %s", path)
-				}
-				return filepath.SkipDir
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to setup file watcher: %w", err)
-	}
-
-	// Start file watching goroutine
-	go o.watchFiles()
-
 	// Start trigger history cleanup goroutine
 	go o.cleanupTriggerHistory()
 
@@ -580,160 +535,6 @@ func (o *Orchestrator) Start() error {
 		return nil
 	case failedRule := <-o.criticalFailure:
 		return fmt.Errorf("devloop exiting due to critical failure in rule %q", failedRule)
-	}
-}
-
-// watchFiles monitors for file changes and triggers appropriate RuleRunners
-func (o *Orchestrator) watchFiles() {
-	for {
-		select {
-		case event, ok := <-o.Watcher.Events:
-			if !ok {
-				return
-			}
-
-			if o.Verbose {
-				o.logDevloop("File event: %s on %s", event.Op, event.Name)
-			}
-
-			// Handle directory creation - add new directories to watcher
-			if event.Op&fsnotify.Create == fsnotify.Create {
-				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					// Check if this directory should be watched based on user patterns
-					shouldWatch, includingRule := o.shouldWatchDirectory(event.Name)
-					if shouldWatch {
-						if err := o.Watcher.Add(event.Name); err != nil {
-							utils.LogDevloop("Error watching new directory %s: %v", event.Name, err)
-						} else if o.Verbose {
-							o.logDevloop("[%s] Started watching new directory: %s", includingRule.Name, event.Name)
-						}
-					}
-				}
-			}
-
-			// Handle directory removal - remove from watcher
-			if event.Op&fsnotify.Remove == fsnotify.Remove {
-				// Try to remove from watcher (will silently fail if not being watched)
-				o.Watcher.Remove(event.Name)
-				if o.Verbose {
-					o.logDevloop("Stopped watching removed path: %s", event.Name)
-				}
-			}
-
-			// Record file modification for thrashing detection
-			o.fileModTracker.RecordModification(event.Name)
-
-			// Check for file thrashing
-			if o.isDynamicProtectionEnabled() {
-				settings := o.getCycleDetectionSettings()
-				if o.fileModTracker.IsFileThrashing(event.Name, settings.FileThrashWindowSeconds, settings.FileThrashThreshold) {
-					if o.Verbose {
-						count := o.fileModTracker.GetModificationCount(event.Name, settings.FileThrashWindowSeconds)
-						o.logDevloop("File thrashing detected: %s (%d modifications in %ds), skipping rules", event.Name, count, settings.FileThrashWindowSeconds)
-
-						// Provide suggestions for file thrashing resolution
-						suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions("", "file-thrashing")
-						for _, suggestion := range suggestions {
-							o.logDevloop("Suggestion: %s", suggestion)
-						}
-					}
-					continue
-				}
-			}
-
-			// Check which rules match this file
-			o.runnersMutex.RLock()
-			currentExecutingRule := o.getCurrentExecutingRule()
-
-			for _, runner := range o.ruleRunners {
-				rule := runner.GetRule()
-
-				// Check if rule is disabled by cycle breaker
-				if o.cycleBreaker.IsRuleDisabled(rule.Name) {
-					if o.Verbose {
-						o.logDevloop("Rule %q is disabled by cycle breaker, skipping execution", rule.Name)
-					}
-					continue
-				}
-
-				if matcher := RuleMatches(rule, event.Name, o.ConfigPath); matcher != nil {
-					// Pattern matched - check action
-					if matcher.Action == "include" {
-						if o.Verbose {
-							o.logDevloop("Rule %q matched (included) for file %s", rule.Name, event.Name)
-						}
-
-						// Check for cross-rule cycle detection
-						if o.isDynamicProtectionEnabled() && currentExecutingRule != "" && currentExecutingRule != rule.Name {
-							settings := o.getCycleDetectionSettings()
-							if o.triggerChain.DetectCycle(currentExecutingRule, rule.Name, settings.MaxChainDepth) {
-								if o.Verbose {
-									suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions(rule.Name, "cross-rule")
-									o.logDevloop("Cross-rule cycle detected: %s -> %s, skipping execution", currentExecutingRule, rule.Name)
-									for _, suggestion := range suggestions {
-										o.logDevloop("Suggestion: %s", suggestion)
-									}
-								}
-
-								// Trigger emergency break for repeated cycles
-								o.cycleBreaker.TriggerEmergencyBreak(rule.Name)
-								continue
-							}
-
-							// Record the trigger chain
-							o.triggerChain.RecordTrigger(currentExecutingRule, rule.Name)
-						}
-
-						runner.TriggerDebouncedWithOptions(false)
-					} else if matcher.Action == "exclude" {
-						if o.Verbose {
-							o.logDevloop("Rule %q matched (excluded) for file %s", rule.Name, event.Name)
-						}
-						// Don't trigger for excluded files
-					}
-				} else {
-					// No patterns matched - check default behavior
-					if o.shouldTriggerByDefault(rule) {
-						if o.Verbose {
-							o.logDevloop("Rule %q matched (default) for file %s", rule.Name, event.Name)
-						}
-
-						// Check for cross-rule cycle detection
-						if o.isDynamicProtectionEnabled() && currentExecutingRule != "" && currentExecutingRule != rule.Name {
-							settings := o.getCycleDetectionSettings()
-							if o.triggerChain.DetectCycle(currentExecutingRule, rule.Name, settings.MaxChainDepth) {
-								if o.Verbose {
-									suggestions := o.cycleBreaker.GenerateCycleResolutionSuggestions(rule.Name, "cross-rule")
-									o.logDevloop("Cross-rule cycle detected: %s -> %s, skipping execution", currentExecutingRule, rule.Name)
-									for _, suggestion := range suggestions {
-										o.logDevloop("Suggestion: %s", suggestion)
-									}
-								}
-
-								// Trigger emergency break for repeated cycles
-								o.cycleBreaker.TriggerEmergencyBreak(rule.Name)
-								continue
-							}
-
-							// Record the trigger chain
-							o.triggerChain.RecordTrigger(currentExecutingRule, rule.Name)
-						}
-
-						runner.TriggerDebouncedWithOptions(false)
-					}
-				}
-			}
-			o.runnersMutex.RUnlock()
-
-		case err, ok := <-o.Watcher.Errors:
-			if !ok {
-				return
-			}
-			utils.LogDevloop("Watcher error: %v", err)
-
-		case <-o.done:
-			return
-		}
 	}
 }
 
@@ -747,120 +548,7 @@ func (o *Orchestrator) shouldTriggerByDefault(rule *pb.Rule) bool {
 	return o.Config.Settings.DefaultWatchAction == "include"
 }
 
-// shouldWatchDirectory determines if a directory should be watched based on user patterns
-// Uses FIFO order within each rule and union policy across rules
-func (o *Orchestrator) shouldWatchDirectory(dirPath string) (bool, *pb.Rule) {
-	// Default exclusion patterns (applied only if no user rules have opinions)
-	defaultExclusions := []string{
-		"**/node_modules/**",
-		"**/vendor/**",
-		"**/.*/**", // hidden directories
-	}
 
-	o.runnersMutex.RLock()
-	defer o.runnersMutex.RUnlock()
-
-	// For each rule, determine its FIFO decision about this directory
-	hasAnyInclude := false
-	hasAnyDecision := false
-
-	var includingRule *pb.Rule
-	for _, rule := range o.Config.Rules {
-		ruleDecision := o.getRuleFIFODecisionForDirectory(rule, dirPath)
-		if ruleDecision != nil {
-			hasAnyDecision = true
-			if *ruleDecision == "include" {
-				hasAnyInclude = true
-				includingRule = rule
-			}
-		}
-	}
-
-	// Union policy: If ANY rule wants to include, watch the directory
-	if hasAnyInclude {
-		return true, includingRule
-	}
-
-	// If rules have opinions but none want to include, don't watch
-	if hasAnyDecision {
-		return false, nil
-	}
-
-	// If no user rules have opinions, check default exclusions
-	for _, exclusion := range defaultExclusions {
-		if matched, _ := doublestar.Match(exclusion, dirPath); matched {
-			return false, nil
-		}
-	}
-
-	// Default to watching if no exclusions match
-	return true, nil
-}
-
-// getRuleFIFODecisionForDirectory applies FIFO logic for a single rule
-// Returns the action ("include" or "exclude") of the first matching pattern, or nil if no match
-func (o *Orchestrator) getRuleFIFODecisionForDirectory(rule *pb.Rule, dirPath string) *string {
-	// Iterate matchers in FIFO order - first match wins
-	for _, matcher := range rule.Watch {
-		for _, pattern := range matcher.Patterns {
-			resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
-
-			if o.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
-				// First match wins (FIFO)
-				return &matcher.Action
-			}
-		}
-	}
-	return nil // No patterns match this directory
-}
-
-// patternCouldMatchInDirectory checks if a pattern could potentially match files in a directory
-func (o *Orchestrator) patternCouldMatchInDirectory(pattern, dirPath string) bool {
-	// Clean paths for consistent comparison
-	pattern = filepath.Clean(pattern)
-	dirPath = filepath.Clean(dirPath)
-	
-	// If pattern is exact match to directory, it should be watched
-	if pattern == dirPath {
-		return true
-	}
-
-	// If pattern contains the directory as a prefix, it could match files inside
-	// Example: pattern="/path/to/dir/subdir/file.txt", dirPath="/path/to/dir" -> true
-	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
-		return true
-	}
-
-	// Check if this is a glob pattern (contains wildcards)
-	isGlob := strings.ContainsAny(pattern, "*?[]")
-	
-	if isGlob {
-		// For glob patterns, use proper glob matching to check if it could match files in directory
-		testFile := filepath.Join(dirPath, "test.txt")
-		if matched, _ := doublestar.Match(pattern, testFile); matched {
-			return true
-		}
-
-		// Check with common file extensions for glob patterns
-		extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".md"}
-		for _, ext := range extensions {
-			testFile := filepath.Join(dirPath, "test"+ext)
-			if matched, _ := doublestar.Match(pattern, testFile); matched {
-				return true
-			}
-		}
-	} else {
-		// For specific file patterns (no wildcards), only match if the file is directly in this directory
-		// Example: pattern="/path/to/buf.yaml", dirPath="/path/to" -> true
-		// Example: pattern="/path/to/buf.yaml", dirPath="/path/to/web" -> false
-		patternDir := filepath.Dir(pattern)
-		if patternDir == dirPath {
-			return true
-		}
-	}
-
-	return false
-}
 
 // getMaxParallelRules returns the effective max parallel rules setting
 func (o *Orchestrator) getMaxParallelRules() uint32 {
@@ -939,7 +627,7 @@ func (o *Orchestrator) Stop() error {
 		utils.LogDevloop("Error closing log manager: %v", err)
 	}
 
-	return o.Watcher.Close()
+	return nil
 }
 
 // GetRuleStatus returns the status of a specific rule
