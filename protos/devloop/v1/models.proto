@@ -166,6 +166,15 @@ message Rule {
   // Base backoff duration in milliseconds for startup retries (default: 3000ms)
   // Grows exponentially: 3s, 6s, 12s, 24s, etc.
   uint64 init_retry_backoff_base = 17;
+
+  // Whether this rule represents a long-running operation (default: false)
+  // Long-running operations (LRO) like dev servers run indefinitely and are managed differently:
+  // - They don't consume worker semaphore slots (unlimited concurrency)
+  // - When file changes trigger them, existing processes are killed and restarted
+  // - They're marked as RUNNING immediately and never COMPLETED
+  // - Examples: "./bin/server", "npm run dev", database containers
+  // Set to true for processes that run indefinitely, false for build/test commands
+  bool lro = 18;
 }
 
 message RuleMatcher {

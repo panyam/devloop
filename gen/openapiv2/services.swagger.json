@@ -408,6 +408,10 @@
           "type": "string",
           "format": "uint64",
           "description": "Base backoff duration in milliseconds for startup retries (default: 3000ms)\nGrows exponentially: 3s, 6s, 12s, 24s, etc."
+        },
+        "lro": {
+          "type": "boolean",
+          "title": "Whether this rule represents a long-running operation (default: false)\nLong-running operations (LRO) like dev servers run indefinitely and are managed differently:\n- They don't consume worker semaphore slots (unlimited concurrency)\n- When file changes trigger them, existing processes are killed and restarted\n- They're marked as RUNNING immediately and never COMPLETED\n- Examples: \"./bin/server\", \"npm run dev\", database containers\nSet to true for processes that run indefinitely, false for build/test commands"
         }
       }
     },
