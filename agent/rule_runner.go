@@ -1,11 +1,10 @@
 package agent
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
+
 	"strings"
 	"sync"
 	"syscall"
@@ -23,7 +22,7 @@ type RuleRunner struct {
 
 	// File watching (per-rule)
 	watcher *Watcher
-	
+
 	// Process management
 	runningCommands []*exec.Cmd
 	commandsMutex   sync.RWMutex
@@ -56,7 +55,7 @@ type RuleRunner struct {
 // NewRuleRunner creates a new RuleRunner for the given rule
 func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 	verbose := orchestrator.isVerboseForRule(rule)
-	
+
 	runner := &RuleRunner{
 		rule:            rule,
 		orchestrator:    orchestrator,
@@ -74,12 +73,12 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 		stopChan:         make(chan struct{}),
 		stoppedChan:      make(chan struct{}),
 	}
-	
+
 	// Set up the watcher event handler to trigger rule execution
 	runner.watcher.SetEventHandler(func(filePath string) {
 		runner.handleFileChange(filePath)
 	})
-	
+
 	return runner
 }
 
@@ -89,7 +88,7 @@ func (r *RuleRunner) Start() error {
 	if err := r.watcher.Start(); err != nil {
 		return fmt.Errorf("failed to start file watcher for rule %q: %w", r.rule.Name, err)
 	}
-	
+
 	// Skip execution if skip_run_on_init is true
 	if r.rule.SkipRunOnInit {
 		if r.isVerbose() {
@@ -236,7 +235,7 @@ func (r *RuleRunner) handleFileChange(filePath string) {
 	if r.isVerbose() {
 		utils.LogDevloop("[%s] File change detected: %s", r.rule.Name, filePath)
 	}
-	
+
 	// Trigger debounced execution
 	r.TriggerDebounced()
 }
@@ -422,11 +421,11 @@ func (r *RuleRunner) CleanupTriggerHistory() {
 func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
 	r.statusMutex.Lock()
 	r.status.IsRunning = isRunning
+	r.status.LastBuildStatus = buildStatus
 	if isRunning {
 		r.status.StartTime = tspb.New(time.Now())
 	} else {
 		r.status.LastBuildTime = tspb.New(time.Now())
-		r.status.LastBuildStatus = buildStatus
 	}
 	r.statusMutex.Unlock()
 
@@ -479,32 +478,6 @@ func (r *RuleRunner) isCurrentlyRunning() bool {
 	return r.status.IsRunning
 }
 
-// handleExecutionCompletion handles post-execution logic including pending executions
-func (r *RuleRunner) handleExecutionCompletion() {
-	// Check if there's a pending execution that should be scheduled
-	if r.hasPendingExecution() {
-		// Clear the pending flag first
-		r.setPendingExecution(false)
-
-		// Schedule the pending execution with debounce delay
-		r.debounceMutex.Lock()
-		if r.debounceTimer != nil {
-			r.debounceTimer.Stop()
-		}
-
-		r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
-			if err := r.Execute(); err != nil {
-				r.logDevloop("[%s] Error executing pending rule %q: %v", r.rule.Name, r.rule.Name, err)
-			}
-		})
-		r.debounceMutex.Unlock()
-
-		if r.isVerbose() {
-			r.logDevloop("[%s] Pending execution scheduled in %v", r.rule.Name, r.debounceDuration)
-		}
-	}
-}
-
 // SetDebounceDelay sets the debounce delay for this rule
 func (r *RuleRunner) SetDebounceDelay(duration time.Duration) {
 	r.debounceMutex.Lock()
@@ -527,186 +500,31 @@ func (r *RuleRunner) isVerbose() bool {
 }
 
 // logDevloop logs a message using the orchestrator's logging mechanism
-func (r *RuleRunner) logDevloop(format string, args ...interface{}) {
+func (r *RuleRunner) logDevloop(format string, args ...any) {
 	r.orchestrator.logDevloop(format, args...)
 }
 
-// Execute runs the commands for this rule
+// Execute sends a trigger event to the scheduler for execution
 func (r *RuleRunner) Execute() error {
-	// Acquire semaphore slot if parallel execution is limited
-	if r.orchestrator.ruleSemaphore != nil {
-		r.orchestrator.ruleSemaphore <- struct{}{}
-		defer func() { <-r.orchestrator.ruleSemaphore }()
-
-		if r.isVerbose() {
-			r.logDevloop("[%s] Acquired execution slot (%d/%d)", r.rule.Name,
-				len(r.orchestrator.ruleSemaphore), cap(r.orchestrator.ruleSemaphore))
-		}
+	// Create trigger event
+	event := &TriggerEvent{
+		Rule:        r.rule,
+		TriggerType: "file_change", // TODO: Could be made more specific
+		Context:     context.Background(),
 	}
-
-	r.updateStatus(true, "RUNNING")
-
-	// Set current executing rule for trigger chain tracking
-	r.orchestrator.setCurrentExecutingRule(r.rule.Name)
-	defer r.orchestrator.clearCurrentExecutingRule()
 
 	if r.isVerbose() {
-		utils.LogDevloop("Executing commands for rule %q", r.rule.Name)
+		r.logDevloop("[%s] Sending trigger event to scheduler", r.rule.Name)
 	}
 
-	// Terminate any previously running commands
-	if err := r.TerminateProcesses(); err != nil {
-		utils.LogDevloop("Error terminating previous processes for rule %q: %v", r.rule.Name, err)
-	}
-
-	// Get log writer for this rule
-	logWriter, err := r.orchestrator.LogManager.GetWriter(r.rule.Name)
-	if err != nil {
-		return fmt.Errorf("error getting log writer: %w", err)
-	}
-
-	// Execute commands sequentially
-	var currentCmds []*exec.Cmd
-	var lastCmd *exec.Cmd
-
-	for i, cmdStr := range r.rule.Commands {
-		r.orchestrator.logDevloop("Running command: %s", cmdStr)
-		cmd := createCrossPlatformCommand(cmdStr)
-
-		// Setup output handling
-		if err := r.setupCommandOutput(cmd, logWriter); err != nil {
-			return fmt.Errorf("failed to setup command output: %w", err)
-		}
-
-		// Set platform-specific process attributes
-		setSysProcAttr(cmd)
-
-		// Set working directory - default to config file directory if not specified
-		workDir := r.rule.WorkDir
-		if workDir == "" {
-			workDir = filepath.Dir(r.orchestrator.ConfigPath)
-		}
-		cmd.Dir = workDir
-
-		// Set environment variables
-		cmd.Env = os.Environ() // Inherit parent environment
-
-		// Add environment variables to help subprocesses detect color support
-		// Only if suppress_subprocess_colors is disabled (default: false, so colors are preserved)
-		suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
-		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
-			// Force color output for common tools
-			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")       // npm, chalk (Node.js)
-			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")    // many CLI tools
-			cmd.Env = append(cmd.Env, "COLORTERM=truecolor") // general color support indicator
-		}
-
-		// Add rule-specific environment variables
-		for key, value := range r.rule.Env {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
-		}
-
-		if err := cmd.Start(); err != nil {
-			utils.LogDevloop("Command %q failed to start for rule %q: %v", cmdStr, r.rule.Name, err)
-			r.updateStatus(false, "FAILED")
-			return fmt.Errorf("failed to start command: %w", err)
-		}
-
-		currentCmds = append(currentCmds, cmd)
-
-		// For non-last commands, wait for completion before proceeding
-		if i < len(r.rule.Commands)-1 {
-			if err := cmd.Wait(); err != nil {
-				utils.LogDevloop("Command failed for rule %q: %v", r.rule.Name, err)
-				r.updateStatus(false, "FAILED")
-				return fmt.Errorf("command failed: %w", err)
-			}
-		} else {
-			// This is the last command - let it run in background
-			lastCmd = cmd
-		}
-	}
-
-	// Update running commands
-	r.commandsMutex.Lock()
-	r.runningCommands = currentCmds
-	r.commandsMutex.Unlock()
-
-	// Monitor the last command
-	if lastCmd != nil {
-		go r.monitorLastCommand(lastCmd)
-	} else {
-		// No long-running command, mark as successful
-		r.updateStatus(false, "SUCCESS")
-		r.orchestrator.LogManager.SignalFinished(r.rule.Name)
-		utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
-
-		// Handle any pending executions
-		r.handleExecutionCompletion()
-	}
-
-	return nil
+	// Send to scheduler for routing
+	return r.orchestrator.scheduler.ScheduleRule(event)
 }
 
-// setupCommandOutput configures stdout/stderr for a command
-func (r *RuleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) error {
-	writers := []io.Writer{os.Stdout, logWriter}
-
-	if r.orchestrator.Config.Settings.PrefixLogs {
-		prefix := r.rule.Name
-		if r.rule.Prefix != "" {
-			prefix = r.rule.Prefix
-		}
-
-		// Apply prefix length constraints and left-align the text
-		if r.orchestrator.Config.Settings.PrefixMaxLength > 0 {
-			if uint32(len(prefix)) > r.orchestrator.Config.Settings.PrefixMaxLength {
-				prefix = prefix[:r.orchestrator.Config.Settings.PrefixMaxLength]
-			} else {
-				// Left-align the prefix within the max length
-				totalPadding := int(r.orchestrator.Config.Settings.PrefixMaxLength - uint32(len(prefix)))
-				prefix = prefix + strings.Repeat(" ", totalPadding)
-			}
-		}
-
-		// Use ColoredPrefixWriter for enhanced output with color support
-		prefixStr := "[" + prefix + "] "
-		coloredWriter := utils.NewColoredPrefixWriter(writers, prefixStr, r.orchestrator.ColorManager, r.rule)
-		cmd.Stdout = coloredWriter
-		cmd.Stderr = coloredWriter
-	} else {
-		// For non-prefixed output, still use ColoredPrefixWriter but with empty prefix
-		// This ensures consistent color handling even without prefixes
-		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() {
-			coloredWriter := utils.NewColoredPrefixWriter(writers, "", r.orchestrator.ColorManager, r.rule)
-			cmd.Stdout = coloredWriter
-			cmd.Stderr = coloredWriter
-		} else {
-			multiWriter := io.MultiWriter(writers...)
-			cmd.Stdout = multiWriter
-			cmd.Stderr = multiWriter
-		}
-	}
-
-	return nil
-}
-
-// monitorLastCommand monitors the last (long-running) command
-func (r *RuleRunner) monitorLastCommand(cmd *exec.Cmd) {
-	err := cmd.Wait()
-
-	if err != nil {
-		utils.LogDevloop("Command for rule %q failed: %v", r.rule.Name, err)
-		r.updateStatus(false, "FAILED")
-	} else {
-		r.updateStatus(false, "SUCCESS")
-	}
-
-	r.orchestrator.LogManager.SignalFinished(r.rule.Name)
-	utils.LogDevloop("Rule %q commands finished.", r.rule.Name)
-
-	// Handle any pending executions
-	r.handleExecutionCompletion()
+// UpdateStatus allows external systems to update this rule's execution status
+// This is called by execution engines (WorkerPool, LROManager) to keep RuleRunner in sync
+func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string) {
+	r.updateStatus(isRunning, buildStatus)
 }
 
 // TerminateProcesses terminates all running processes for this rule

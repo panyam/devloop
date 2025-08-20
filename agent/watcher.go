@@ -15,15 +15,15 @@ import (
 
 // Watcher manages file system watching for a single rule
 type Watcher struct {
-	rule         *pb.Rule
-	configPath   string
-	verbose      bool
-	
+	rule       *pb.Rule
+	configPath string
+	verbose    bool
+
 	// File watching
-	fsWatcher    *fsnotify.Watcher
-	watchedDirs  map[string]bool
-	mutex        sync.RWMutex
-	
+	fsWatcher   *fsnotify.Watcher
+	watchedDirs map[string]bool
+	mutex       sync.RWMutex
+
 	// Event handling
 	eventHandler func(string) // Called when a relevant file changes
 	stopChan     chan struct{}
@@ -51,27 +51,27 @@ func (w *Watcher) SetEventHandler(handler func(string)) {
 func (w *Watcher) Start() error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	
+
 	// Create the fsnotify watcher
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher for rule %q: %w", w.rule.Name, err)
 	}
 	w.fsWatcher = fsWatcher
-	
+
 	// Setup file watching based on rule patterns
 	if err := w.setupFileWatching(); err != nil {
 		w.fsWatcher.Close()
 		return fmt.Errorf("failed to setup file watching for rule %q: %w", w.rule.Name, err)
 	}
-	
+
 	// Start the event processing goroutine
 	go w.watchFiles()
-	
+
 	if w.verbose {
 		utils.LogDevloop("[%s] File watcher started", w.rule.Name)
 	}
-	
+
 	return nil
 }
 
@@ -79,24 +79,24 @@ func (w *Watcher) Start() error {
 func (w *Watcher) Stop() error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	
+
 	if w.fsWatcher == nil {
 		return nil // Already stopped
 	}
-	
+
 	// Signal stop and wait for goroutine to finish
 	close(w.stopChan)
 	<-w.stoppedChan
-	
+
 	// Close the fsnotify watcher
 	err := w.fsWatcher.Close()
 	w.fsWatcher = nil
 	w.watchedDirs = make(map[string]bool)
-	
+
 	if w.verbose {
 		utils.LogDevloop("[%s] File watcher stopped", w.rule.Name)
 	}
-	
+
 	return err
 }
 
@@ -104,17 +104,17 @@ func (w *Watcher) Stop() error {
 func (w *Watcher) setupFileWatching() error {
 	// Get the base directory for this rule
 	baseDir := w.getBaseDirectory()
-	
+
 	if w.verbose {
 		utils.LogDevloop("[%s] Setting up file watching from base directory: %s", w.rule.Name, baseDir)
 	}
-	
+
 	// Walk the directory tree and determine what to watch
 	return filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if info.IsDir() {
 			shouldWatch := w.shouldWatchDirectory(path)
 			if shouldWatch {
@@ -148,7 +148,7 @@ func (w *Watcher) getBaseDirectory() string {
 			return filepath.Join(filepath.Dir(w.configPath), w.rule.WorkDir)
 		}
 	}
-	
+
 	// No work_dir specified, use config file directory
 	return filepath.Dir(w.configPath)
 }
@@ -159,27 +159,27 @@ func (w *Watcher) shouldWatchDirectory(dirPath string) bool {
 	for _, matcher := range w.rule.Watch {
 		for _, pattern := range matcher.Patterns {
 			resolvedPattern := resolvePattern(pattern, w.rule, w.configPath)
-			
+
 			if w.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
 				// First match wins (FIFO)
 				return matcher.Action == "include"
 			}
 		}
 	}
-	
+
 	// Default exclusion patterns if no user patterns match
 	defaultExclusions := []string{
 		"**/node_modules/**",
 		"**/vendor/**",
 		"**/.*/**", // hidden directories
 	}
-	
+
 	for _, exclusion := range defaultExclusions {
 		if matched, _ := doublestar.Match(exclusion, dirPath); matched {
 			return false
 		}
 	}
-	
+
 	// Default to watching if no exclusions match
 	return true
 }
@@ -189,27 +189,27 @@ func (w *Watcher) patternCouldMatchInDirectory(pattern, dirPath string) bool {
 	// Clean paths for consistent comparison
 	pattern = filepath.Clean(pattern)
 	dirPath = filepath.Clean(dirPath)
-	
+
 	// If pattern is exact match to directory, it should be watched
 	if pattern == dirPath {
 		return true
 	}
-	
+
 	// If pattern contains the directory as a prefix, it could match files inside
 	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
 		return true
 	}
-	
+
 	// Check if this is a glob pattern (contains wildcards)
 	isGlob := strings.ContainsAny(pattern, "*?[]")
-	
+
 	if isGlob {
 		// For glob patterns, use proper glob matching to check if it could match files in directory
 		testFile := filepath.Join(dirPath, "test.txt")
 		if matched, _ := doublestar.Match(pattern, testFile); matched {
 			return true
 		}
-		
+
 		// Check with common file extensions for glob patterns
 		extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".md"}
 		for _, ext := range extensions {
@@ -219,26 +219,26 @@ func (w *Watcher) patternCouldMatchInDirectory(pattern, dirPath string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
 // watchFiles processes file system events
 func (w *Watcher) watchFiles() {
 	defer close(w.stoppedChan)
-	
+
 	for {
 		select {
 		case <-w.stopChan:
 			return
-			
+
 		case event, ok := <-w.fsWatcher.Events:
 			if !ok {
 				return
 			}
-			
+
 			w.handleFileEvent(event)
-			
+
 		case err, ok := <-w.fsWatcher.Errors:
 			if !ok {
 				return
@@ -254,11 +254,11 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 	if !w.fileMatchesRule(event.Name) {
 		return // File doesn't match this rule
 	}
-	
+
 	if w.verbose {
 		utils.LogDevloop("[%s] File change detected: %s", w.rule.Name, event.Name)
 	}
-	
+
 	// Handle directory creation/deletion
 	if event.Op&fsnotify.Create == fsnotify.Create {
 		if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
@@ -277,7 +277,7 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 			}
 		}
 	}
-	
+
 	if event.Op&fsnotify.Remove == fsnotify.Remove {
 		// Directory/file removed, clean up if it was a watched directory
 		w.mutex.Lock()
@@ -289,7 +289,7 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 		}
 		w.mutex.Unlock()
 	}
-	
+
 	// Call the event handler if one is set
 	if w.eventHandler != nil {
 		w.eventHandler(event.Name)
@@ -306,7 +306,7 @@ func (w *Watcher) fileMatchesRule(filePath string) bool {
 func (w *Watcher) GetWatchedDirectories() []string {
 	w.mutex.RLock()
 	defer w.mutex.RUnlock()
-	
+
 	dirs := make([]string, 0, len(w.watchedDirs))
 	for dir := range w.watchedDirs {
 		dirs = append(dirs, dir)

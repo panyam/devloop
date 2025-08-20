@@ -203,7 +203,7 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				config.Settings.CycleDetection = cycleSettings
 			}
 		}
-		
+
 		// Fix max_parallel_rules field
 		if maxParallelRules, exists := settings["max_parallel_rules"]; exists {
 			if maxParallelRulesInt, ok := maxParallelRules.(int); ok {

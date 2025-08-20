@@ -217,7 +217,7 @@ func TestWatcherResourceUsage(t *testing.T) {
 		runtime.GC()
 		runtime.ReadMemStats(&m2)
 		current := m2.HeapAlloc
-		
+
 		var mem uint64
 		if current > baseline {
 			mem = current - baseline
@@ -225,7 +225,7 @@ func TestWatcherResourceUsage(t *testing.T) {
 			// Handle case where GC freed more than we allocated
 			mem = 0
 		}
-		
+
 		t.Logf("Single watcher watching %d directories:", numDirs)
 		t.Logf("  Memory usage: %d bytes (%d KB)", mem, mem/1024)
 		if mem > 0 {
@@ -257,14 +257,14 @@ func TestWatcherResourceUsage(t *testing.T) {
 		runtime.GC()
 		runtime.ReadMemStats(&m2)
 		current := m2.HeapAlloc
-		
+
 		var mem uint64
 		if current > baseline {
 			mem = current - baseline
 		} else {
 			mem = 0
 		}
-		
+
 		t.Logf("Multiple watchers (%d watchers, %d directories):", numDirs, numDirs)
 		t.Logf("  Total memory usage: %d bytes (%d KB)", mem, mem/1024)
 		if mem > 0 {
@@ -279,11 +279,11 @@ func TestWatcherResourceUsage(t *testing.T) {
 			name       string
 			watchCount int
 		}{
-			{"backend", 3},    // watches: lib/, cmd/, services/
-			{"frontend", 4},   // watches: src/, static/, templates/, dist/
-			{"tests", 6},      // watches: test/, spec/, lib/, cmd/, src/, integration/
-			{"docs", 2},       // watches: docs/, README.md
-			{"protobuf", 1},   // watches: protos/
+			{"backend", 3},  // watches: lib/, cmd/, services/
+			{"frontend", 4}, // watches: src/, static/, templates/, dist/
+			{"tests", 6},    // watches: test/, spec/, lib/, cmd/, src/, integration/
+			{"docs", 2},     // watches: docs/, README.md
+			{"protobuf", 1}, // watches: protos/
 		}
 
 		var m1, m2 runtime.MemStats
@@ -313,14 +313,14 @@ func TestWatcherResourceUsage(t *testing.T) {
 		runtime.GC()
 		runtime.ReadMemStats(&m2)
 		current := m2.HeapAlloc
-		
+
 		var mem uint64
 		if current > baseline {
 			mem = current - baseline
 		} else {
 			mem = 0
 		}
-		
+
 		t.Logf("Realistic devloop scenario (%d rules, %d watchers, %d directories):", len(rules), totalWatchers, totalDirs)
 		t.Logf("  Total memory usage: %d bytes (%d KB)", mem, mem/1024)
 		if mem > 0 {

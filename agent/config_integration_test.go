@@ -54,7 +54,7 @@ func withConfigTest(t *testing.T, configFile string, testFunc func(t *testing.T,
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	
+
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestMaxParallelRules(t *testing.T) {
 		},
 		{
 			Name:       "Unlimited parallel execution (max_parallel_rules: 0)",
-			ConfigFile: "unlimited_parallel.yaml", 
+			ConfigFile: "unlimited_parallel.yaml",
 			TestFunc:   testUnlimitedExecution,
 		},
 	}
@@ -157,7 +157,7 @@ func testUnlimitedExecution(t *testing.T, tmpDir string, orchestrator *Orchestra
 	time.Sleep(2 * time.Second)
 
 	// Semaphore should still be disabled
-	active, capacity, unlimited = orchestrator.getSemaphoreStatus()
+	_, _, unlimited = orchestrator.getSemaphoreStatus()
 	if !unlimited {
 		t.Error("Semaphore should remain disabled")
 	}

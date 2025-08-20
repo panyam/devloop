@@ -2,3 +2,6 @@ bin
 .claude 
 logs
 locallinks
+
+# Test reports and coverage files
+reports/

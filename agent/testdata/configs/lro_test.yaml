@@ -1,0 +1,21 @@
+settings:
+  project_id: "lro-test"
+  
+rules:
+  - name: "build"
+    lro: false
+    commands:
+      - "go build"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"
+          
+  - name: "server"
+    lro: true
+    commands:
+      - "./bin/server"
+    watch:
+      - action: include
+        patterns:
+          - "**/*.go"

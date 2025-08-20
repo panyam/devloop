@@ -18,8 +18,17 @@ This document outlines the high-level roadmap for the `devloop` project.
 - [x] **Test Suite:** Comprehensive test coverage with all tests passing.
 - [x] **Code Organization:** Restructured into `agent/`, `gateway/`, and `utils/` directories.
 
-## Phase 2: Multi-Instance Architecture & Usability (In Progress)
+## Phase 2: Multi-Instance Architecture & Usability (Complete)
 
+- [x] **Event-Driven LRO Architecture (2025-08-20):**
+  - [x] **Dual-Execution System:** Implemented separate execution paths for long-running (LRO) vs short-running operations
+  - [x] **Scheduler Component:** Created event-driven routing system using TriggerEvents for clean separation of concerns
+  - [x] **LROManager:** Dedicated process lifecycle manager with proper process replacement and graceful termination
+  - [x] **WorkerPool Integration:** Connected existing WorkerPool for semaphore-controlled short-running job execution
+  - [x] **Status Callback Architecture:** Unified status management via RuleRunner callbacks from execution engines
+  - [x] **Configuration Enhancement:** Added `lro: true/false` field to protobuf and YAML with proper parsing
+  - [x] **Comprehensive Testing:** 57% test coverage with dedicated LRO and integration tests
+  - [x] **Process Safety:** Proper SIGTERM → SIGKILL termination with port/socket cleanup verification
 - [x] **Architecture Refactoring:**
   - [x] Separated concerns: Orchestrator (file watching) and RuleRunner (command execution)
   - [x] Simplified to single orchestrator implementation with Agent Service integration
@@ -93,3 +102,19 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [ ] Optimize file watching and command execution for large projects.
 - [ ] **Community & Documentation:**
   - [ ] Build a community around `devloop` and create comprehensive documentation and tutorials for the new architecture.
+
+
+## Phase 2.5: LRO Architecture (Completed 2025-08-20)
+
+- ✅ **Event-Driven LRO Architecture Implementation:**
+  - ✅ **Dual-Execution System:** Implemented separate execution paths for long-running (LRO) vs short-running operations
+  - ✅ **Scheduler Component:** Created event-driven routing using TriggerEvents for clean separation of concerns  
+  - ✅ **LROManager:** Dedicated process lifecycle manager with proper process replacement and graceful termination
+  - ✅ **WorkerPool Integration:** Connected existing WorkerPool for semaphore-controlled short-running job execution
+  - ✅ **Status Callback Architecture:** Unified status management via RuleRunner callbacks from execution engines
+  - ✅ **Configuration Support:** Added `lro: true/false` field to protobuf and YAML with proper parsing
+  - ✅ **Comprehensive Testing:** 57% test coverage with LRO lifecycle and integration tests
+  - ✅ **Process Safety:** Proper SIGTERM → SIGKILL termination with port/socket cleanup verification
+  - ✅ **Developer Experience:** Added Makefile coverage targets with HTML output in organized `reports/` folder
+  - ✅ **Backward Compatibility:** Default `lro: false` maintains existing behavior for all rules
+

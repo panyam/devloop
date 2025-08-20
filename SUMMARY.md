@@ -196,6 +196,11 @@ settings:
   - Impact: Full color preservation - npm errors show in red, success in green, while devloop prefixes maintain their colors
 
 **Current Architecture Strengths:**
+- **Event-Driven LRO Architecture (2025-08-20):** Revolutionary dual-execution system for long-running vs short-running operations
+- **Clean Separation of Concerns:** RuleRunner (watching/debouncing), Scheduler (routing), WorkerPool (short jobs), LROManager (long processes)
+- **Intelligent Job Routing:** Automatic routing based on `lro: true/false` flag - no semaphore blocking for dev servers
+- **Process Lifecycle Management:** Proper LRO process replacement with graceful termination and port cleanup
+- **Status Callback Architecture:** Execution engines update RuleRunner status via clean callback interface
 - **Simplified Single Implementation:** Single orchestrator implementation with no version complexity
 - **Correct Pattern Matching:** First-match semantics with proper action-based filtering
 - **Agent Service Integration:** Clean gRPC service layer providing API access to orchestrator
@@ -207,7 +212,7 @@ settings:
 - **User-Friendly Defaults:** Non-conflicting default ports (9999/5555) for seamless operation
 - **Modular Design:** Clear separation between file watching (Orchestrator) and API access (Agent Service)
 - **Gateway Ready:** Architecture prepared for future grpcrouter-based gateway implementation
-- **Comprehensive Testing:** All core functionality covered with automated tests
+- **Comprehensive Testing:** 57% test coverage with dedicated LRO and integration tests
 - **Cross-Platform Support:** Works reliably on Windows, macOS, and Linux
 - **Flexible Configuration:** Rule-level and global configuration options
 
@@ -236,6 +241,22 @@ settings:
   - **Pattern-Based Exclusions:** Replaced hard-coded exclusions with intelligent pattern-based logic
   - **Cross-Rule Isolation:** Rules with different workdirs now properly isolate their pattern matching
   - **Comprehensive Testing:** Added tests for workdir-relative patterns and pattern resolution
+- ✅ **Event-Driven LRO Architecture (2025-08-20):** Revolutionary dual-execution system implementation
+  - **Problem Solved:** Long-running processes (dev servers) were blocking semaphore slots, preventing short-running jobs (builds/tests)
+  - **Solution Implemented:** Dual-execution architecture with intelligent job routing based on `lro: true/false` flag
+  - **New Components Created:**
+    - **Scheduler:** Event-driven routing component that receives TriggerEvents and routes to appropriate execution engine
+    - **LROManager:** Dedicated manager for long-running processes with proper process replacement and lifecycle management
+    - **TriggerEvent:** Clean messaging system between RuleRunner and Scheduler
+    - **Status Callbacks:** Execution engines update RuleRunner status via clean callback interface
+  - **Architecture Benefits:**
+    - **No Semaphore Blocking:** LRO processes run unlimited concurrency, don't consume worker semaphore slots
+    - **Clean Separation:** RuleRunner focuses on file watching/debouncing, Scheduler handles execution routing
+    - **Process Replacement:** LRO processes are properly killed and restarted on file changes with port cleanup
+    - **Graceful Termination:** Proper SIGTERM → SIGKILL progression with 5-second grace period
+    - **Status Consistency:** Single source of truth for rule execution state in RuleRunner
+  - **Testing Achievement:** Added comprehensive test suite with 57% coverage including LRO lifecycle and integration tests
+  - **Configuration Enhancement:** Added `lro: true/false` field to protobuf and YAML with proper parsing
 - ✅ **Per-Rule File Watchers (2025-08-19):** Fundamental architecture improvement to eliminate rule conflicts
   - **Independent Watchers:** Each rule now has its own fsnotify.Watcher instance for complete isolation
   - **No More Union Policy:** Eliminated complex union policy that caused rule watching conflicts

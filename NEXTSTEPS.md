@@ -2,6 +2,30 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed (2025-08-20)
+
+- ✅ **Event-Driven LRO Architecture Implementation:**
+  - **Problem**: Long-running processes (dev servers, databases) were consuming worker semaphore slots indefinitely, blocking short-running jobs (builds, tests) from executing
+  - **Solution**: Implemented revolutionary dual-execution architecture with intelligent job routing
+  - **Components Delivered**:
+    - **Scheduler**: Event-driven routing component receiving TriggerEvents from RuleRunner and routing to appropriate execution engine
+    - **LROManager**: Dedicated process lifecycle manager for long-running operations with proper process replacement
+    - **TriggerEvent**: Clean messaging system decoupling RuleRunner from execution concerns
+    - **Status Callbacks**: Unified status management where execution engines update RuleRunner via clean callback interface
+  - **Configuration Enhancement**: Added `lro: true/false` field to protobuf Rule message with YAML parsing support
+  - **Architecture Benefits**:
+    - **No Resource Starvation**: LRO processes run with unlimited concurrency, don't consume semaphore slots
+    - **Proper Process Replacement**: File changes trigger LRO process kill → restart cycle with graceful termination
+    - **Clean Separation of Concerns**: RuleRunner = watching/debouncing, Scheduler = routing, Execution engines = running
+    - **Backward Compatible**: Default `lro: false` maintains existing behavior for all rules
+  - **Testing Achievement**: Comprehensive test suite added with 57% coverage including:
+    - LRO Manager unit tests (lifecycle, termination, multiple processes, failure handling)
+    - Scheduler integration tests (routing verification, mixed workload scenarios)
+    - Status callback flow testing
+  - **Developer Experience**: Added Makefile targets for coverage reports with HTML output organized in `reports/` folder
+  - **Result**: Dev servers can run indefinitely while builds/tests execute in parallel without blocking
+  - **Impact**: Major architectural improvement enabling proper multi-service development workflows
+
 ## Recently Completed (2025-08-19)
 
 - ✅ **Per-Rule File Watchers Implementation:**

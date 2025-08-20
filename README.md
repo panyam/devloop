@@ -275,6 +275,7 @@ rules:                         # Required: Array of rules
 | `exit_on_failed_init` | boolean | ❌ | Exit devloop when this rule fails startup (default: `false`) |
 | `max_init_retries` | integer | ❌ | Maximum retry attempts for failed startup (default: `10`) |
 | `init_retry_backoff_base` | integer | ❌ | Base backoff duration in ms for startup retries (default: `3000`) |
+| `lro` | boolean | ❌ | Long-running operation flag (default: `false`) - see LRO section below |
 
 ### Watch Configuration
 
@@ -1228,6 +1229,65 @@ rules:
 `devloop` will start watching your files. When changes occur that match your defined rules, it will execute the corresponding commands. You will see log output indicating which rules are triggered and which commands are being run.
 
 To stop `devloop` gracefully, press `Ctrl+C` (SIGINT). `devloop` will attempt to terminate any running child processes before exiting, ensuring a clean shutdown of your development environment.
+
+## Development & Testing
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make coverage-agent
+
+# Generate HTML coverage report
+make coverage-agent-html
+
+# Open coverage report in browser
+make coverage-agent-open
+```
+
+### Test Coverage
+
+The project maintains 57% test coverage with testing for:
+
+- **LRO Manager**: Process lifecycle, termination, multiple processes, failure handling
+- **Scheduler Integration**: Event-driven routing, mixed workload scenarios  
+- **WorkerPool**: Job execution, semaphore management, parallel processing
+- **File Watching**: Per-rule watchers, pattern matching, dynamic directories
+- **Configuration**: YAML parsing, validation, rule loading
+
+### Coverage Reports
+
+All test artifacts are organized in the `reports/` directory:
+
+- `reports/agent_coverage.out` - Coverage data
+- `reports/agent_coverage.html` - Interactive HTML report
+- Use `make coverage-help` to see all available coverage targets
+
+### Long-Running Operations (LRO)
+
+Devloop supports intelligent handling of long-running vs short-running operations:
+
+```yaml
+rules:
+  - name: "build"
+    lro: false  # Short-running - completes quickly
+    commands:
+      - "go build -o bin/server"
+      
+  - name: "dev-server"
+    lro: true   # Long-running - runs indefinitely  
+    commands:
+      - "./bin/server --dev"
+```
+
+LRO Benefits:
+- No Semaphore Blocking: LRO processes don't consume worker slots
+- Process Replacement: File changes trigger proper kill and restart cycle
+- Unlimited Concurrency: Run multiple dev servers, databases, watchers simultaneously
+- Graceful Termination: SIGTERM to SIGKILL progression with cleanup verification
 
 ## 🔧 Troubleshooting
 

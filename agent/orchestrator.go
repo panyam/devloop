@@ -381,6 +381,15 @@ type Orchestrator struct {
 	ruleRunners  map[string]*RuleRunner
 	runnersMutex sync.RWMutex
 
+	// Long-running operation management
+	lroManager *LROManager
+
+	// Worker pool for short-running jobs
+	workerPool *WorkerPool
+
+	// Scheduler for routing rule execution
+	scheduler Scheduler
+
 	// Trigger chain tracking for cross-rule cycle detection
 	triggerChain *TriggerChain
 
@@ -398,7 +407,7 @@ type Orchestrator struct {
 	done            chan bool
 	doneOnce        sync.Once
 	criticalFailure chan string // Channel for critical rule failures
-	
+
 	// Rule execution semaphore for controlling parallelism
 	ruleSemaphore chan struct{} // Buffered channel acting as semaphore
 
@@ -463,7 +472,7 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		cycleBreaker:     NewCycleBreaker(),
 		debounceDuration: 500 * time.Millisecond,
 	}
-	
+
 	// Initialize rule execution semaphore based on max_parallel_rules setting
 	maxParallel := orchestrator.getMaxParallelRules()
 	if maxParallel > 0 {
@@ -489,6 +498,16 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 
 	// Initialize ColorManager
 	orchestrator.ColorManager = utils.NewColorManager(config.Settings)
+
+	// Initialize LROManager
+	orchestrator.lroManager = NewLROManager(orchestrator)
+
+	// Initialize WorkerPool for short-running jobs
+	maxWorkers := int(orchestrator.getMaxParallelRules())
+	orchestrator.workerPool = NewWorkerPool(orchestrator, maxWorkers)
+
+	// Initialize Scheduler
+	orchestrator.scheduler = NewDefaultScheduler(orchestrator, orchestrator.workerPool, orchestrator.lroManager)
 
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {
@@ -526,6 +545,16 @@ func (o *Orchestrator) Start() error {
 
 	utils.LogDevloop("All rules started - initialization retry logic running in background")
 
+	// Start WorkerPool for short-running jobs
+	if err := o.workerPool.Start(); err != nil {
+		return fmt.Errorf("failed to start worker pool: %w", err)
+	}
+
+	// Start Scheduler
+	if err := o.scheduler.Start(); err != nil {
+		return fmt.Errorf("failed to start scheduler: %w", err)
+	}
+
 	// Start trigger history cleanup goroutine
 	go o.cleanupTriggerHistory()
 
@@ -537,18 +566,6 @@ func (o *Orchestrator) Start() error {
 		return fmt.Errorf("devloop exiting due to critical failure in rule %q", failedRule)
 	}
 }
-
-// shouldTriggerByDefault determines if a rule should trigger when no patterns match
-func (o *Orchestrator) shouldTriggerByDefault(rule *pb.Rule) bool {
-	// Check rule-specific default first
-	if rule.DefaultAction != "" {
-		return rule.DefaultAction == "include"
-	}
-	// Fall back to global default
-	return o.Config.Settings.DefaultWatchAction == "include"
-}
-
-
 
 // getMaxParallelRules returns the effective max parallel rules setting
 func (o *Orchestrator) getMaxParallelRules() uint32 {
@@ -618,6 +635,27 @@ func (o *Orchestrator) Stop() error {
 
 	wg.Wait()
 	utils.LogDevloop("All rules stopped")
+
+	// Stop Scheduler
+	if o.scheduler != nil {
+		if err := o.scheduler.Stop(); err != nil {
+			utils.LogDevloop("Error stopping scheduler: %v", err)
+		}
+	}
+
+	// Stop WorkerPool
+	if o.workerPool != nil {
+		if err := o.workerPool.Stop(); err != nil {
+			utils.LogDevloop("Error stopping worker pool: %v", err)
+		}
+	}
+
+	// Stop LRO Manager
+	if o.lroManager != nil {
+		if err := o.lroManager.Stop(); err != nil {
+			utils.LogDevloop("Error stopping LRO manager: %v", err)
+		}
+	}
 
 	// Disconnect from gateway
 	// if o.gatewayStream != nil { o.disconnectFromGateway() }
@@ -1034,13 +1072,6 @@ func (o *Orchestrator) setCurrentExecutingRule(ruleName string) {
 	o.currentExecutingRule = ruleName
 }
 
-// getCurrentExecutingRule returns the currently executing rule
-func (o *Orchestrator) getCurrentExecutingRule() string {
-	o.executionMutex.RLock()
-	defer o.executionMutex.RUnlock()
-	return o.currentExecutingRule
-}
-
 // clearCurrentExecutingRule clears the currently executing rule
 func (o *Orchestrator) clearCurrentExecutingRule() {
 	o.executionMutex.Lock()
@@ -1219,3 +1250,11 @@ func (o *Orchestrator) handleGatewayStreamRecv() {
 
 // handleGatewayStreamSend sends outgoing messages to gateway
 */
+
+// GetRuleRunner returns the RuleRunner for a given rule name
+// This is used by execution engines to update rule status
+func (o *Orchestrator) GetRuleRunner(ruleName string) *RuleRunner {
+	o.runnersMutex.RLock()
+	defer o.runnersMutex.RUnlock()
+	return o.ruleRunners[ruleName]
+}

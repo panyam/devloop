@@ -1,5 +1,61 @@
 # Devloop Release Notes
 
+## v0.0.70 (2025-08-20)
+
+### LRO (Long-Running Operations) Architecture
+
+**Architectural Changes**
+- **Problem**: Long-running processes (dev servers, databases) were consuming worker semaphore slots indefinitely, blocking short-running jobs (builds, tests)
+- **Solution**: Implemented dual-execution architecture with job routing based on `lro: true/false` flag
+- **Result**: Dev servers can run indefinitely while builds/tests execute in parallel without resource starvation
+
+**New Components**
+- **Scheduler**: Event-driven routing component that receives TriggerEvents and routes to appropriate execution engines
+- **LROManager**: Process lifecycle manager with process replacement and graceful termination
+- **ProcessManager**: Process tree cleanup with SIGTERM to SIGKILL progression and process group verification
+- **TriggerEvent**: Messaging system decoupling RuleRunner from execution concerns
+
+**Configuration Changes**
+```yaml
+rules:
+  - name: "build"
+    lro: false  # Short-running - uses WorkerPool with semaphore
+    commands:
+      - "go build -o bin/server"
+      
+  - name: "dev-server"
+    lro: true   # Long-running - uses LROManager, unlimited concurrency
+    commands:
+      - "./bin/server --dev"
+```
+
+**Implementation Details**
+- LRO processes run with unlimited concurrency
+- File changes trigger process kill and restart cycle with process tree cleanup
+- RuleRunner handles watching/debouncing, Scheduler handles routing, Execution engines handle running
+- Single source of truth for rule execution state via callback architecture
+- Default `lro: false` maintains existing behavior
+
+### Testing Infrastructure
+
+**Test Coverage**
+- 57% test coverage with LRO lifecycle and integration tests
+- Process cleanup tests for process tree termination and race conditions
+- Integration tests for scheduler routing and mixed workload scenarios
+
+**Developer Tools**
+- Makefile coverage targets: `make coverage-agent-html`, `make coverage-open`
+- Test artifacts organized in `reports/` directory with HTML output
+- Test categories: LRO tests, scheduler tests, stress tests
+
+### Process Management
+
+**Process Cleanup**
+- Process group termination with proper SIGTERM to SIGKILL progression
+- Mutex protection preventing multiple processes for same rule
+- 5-second grace period before force termination
+- Process verification ensuring complete process tree cleanup
+
 ## v0.0.60 (2025-08-01)
 
 ### 🚀 Enhanced Debouncing System
