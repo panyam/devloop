@@ -26,15 +26,13 @@ type Scheduler interface {
 type DefaultScheduler struct {
 	orchestrator *Orchestrator
 	workerPool   *WorkerPool
-	lroManager   *LROManager
 }
 
 // NewDefaultScheduler creates a new scheduler
-func NewDefaultScheduler(orchestrator *Orchestrator, workerPool *WorkerPool, lroManager *LROManager) *DefaultScheduler {
+func NewDefaultScheduler(orchestrator *Orchestrator, workerPool *WorkerPool) *DefaultScheduler {
 	return &DefaultScheduler{
 		orchestrator: orchestrator,
 		workerPool:   workerPool,
-		lroManager:   lroManager,
 	}
 }
 
@@ -74,22 +72,14 @@ func (s *DefaultScheduler) ScheduleRule(event *TriggerEvent) error {
 	// Record that this rule is about to execute (for cycle detection)
 	s.orchestrator.RecordExecution(rule.Name)
 
-	if rule.Lro {
-		// Route to LRO Manager for long-running processes
-		if verbose {
-			utils.LogDevloop("[%s] Scheduler: Routing to LRO manager (trigger: %s)", rule.Name, event.TriggerType)
-		}
-		return s.lroManager.RestartProcess(rule, event.TriggerType)
-	} else {
-		// Route to WorkerPool for short-running jobs
-		if verbose {
-			utils.LogDevloop("[%s] Scheduler: Enqueueing to worker pool (trigger: %s)", rule.Name, event.TriggerType)
-		}
-
-		job := NewRuleJob(rule, event.TriggerType, event.Context)
-		s.workerPool.EnqueueJob(job)
-		return nil // Enqueuing is non-blocking
+	// Route all rules to WorkerPool (no more LRO vs non-LRO distinction)
+	if verbose {
+		utils.LogDevloop("[%s] Scheduler: Enqueueing to worker pool (trigger: %s)", rule.Name, event.TriggerType)
 	}
+
+	job := NewRuleJob(rule, event.TriggerType, event.Context)
+	s.workerPool.EnqueueJob(job)
+	return nil // Enqueuing is non-blocking
 }
 
 // Start starts the scheduler (currently no background processes needed)

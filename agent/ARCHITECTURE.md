@@ -4,7 +4,7 @@ This document describes the internal architecture of the devloop agent package.
 
 ## Overview
 
-The agent package implements an event-driven, dual-execution architecture that intelligently handles both long-running operations (LRO) and short-running jobs through clean separation of concerns.
+The agent package implements an event-driven, unified execution architecture that handles all types of jobs (short and long-running) through a single WorkerPool with intelligent process management.
 
 ## Core Components
 
@@ -18,7 +18,7 @@ The agent package implements an event-driven, dual-execution architecture that i
 - Project-level settings and defaults
 
 **Key Features**:
-- Manages RuleRunners, Scheduler, WorkerPool, and LROManager
+- Manages RuleRunners, Scheduler, and WorkerPool
 - Advanced cycle detection with TriggerChain and FileModificationTracker
 - Startup resilience with exponential backoff retry logic
 
@@ -43,7 +43,7 @@ The agent package implements an event-driven, dual-execution architecture that i
 
 **Responsibilities**:
 - Receive TriggerEvents from RuleRunners
-- Route jobs based on `rule.lro` flag
+- Route all jobs to WorkerPool (unified execution)
 - Stateless routing logic
 
 **Key Features**:
@@ -52,36 +52,22 @@ The agent package implements an event-driven, dual-execution architecture that i
 - Zero state management (pure routing)
 
 ### 4. WorkerPool (`workers.go`)
-**Role**: Semaphore-controlled execution of short-running jobs
+**Role**: Unified execution engine for all jobs (short and long-running)
 
 **Responsibilities**:
-- Job queuing with deduplication
-- Semaphore-based parallelism control
-- Sequential command execution
+- Job queuing with deduplication and process killing
+- Global parallelism control via worker pool
+- Process lifecycle management (start, monitor, terminate)
 - Status callbacks to RuleRunner
 
 **Key Features**:
 - Configurable worker count via `max_parallel_rules`
-- Job deduplication (replace pending jobs for same rule)
-- Proper process termination with SIGTERM → SIGKILL progression
+- Job uniqueness (one instance per rule) with debounce-aware killing
+- Process termination with SIGTERM → SIGKILL progression
 - Cross-platform command execution
+- Manual triggers bypass debounce for immediate restart
 
-### 5. LROManager (`lro_manager.go`)
-**Role**: Long-running operation process lifecycle management
-
-**Responsibilities**:
-- Process replacement (kill old → start new)
-- Graceful process termination
-- Background process monitoring
-- Status callbacks to RuleRunner
-
-**Key Features**:
-- Unlimited concurrency (no semaphore limits)
-- Process replacement on file changes with proper cleanup
-- 5-second graceful termination window
-- Background monitoring for unexpected process exits
-
-### 6. Watcher (`watcher.go`)
+### 5. Watcher (`watcher.go`)
 **Role**: Per-rule file system monitoring
 
 **Responsibilities**:
@@ -101,74 +87,73 @@ The agent package implements an event-driven, dual-execution architecture that i
 ```
 File Change → Watcher → RuleRunner → [Debounce] → TriggerEvent → Scheduler
                                                                     ↓
-Short-Running (lro: false) → WorkerPool → Worker → Status Callback ↗
-Long-Running (lro: true)   → LROManager → Process → Status Callback ↗
+All Rules → WorkerPool → Worker → Process Management → Status Callback ↗
 ```
+
+### Process Management Logic
+
+1. **Job Enqueueing**: Check if rule already running
+2. **Debounce Check**: Manual triggers or time > debounce window → kill existing
+3. **Process Termination**: SIGTERM (5s) → SIGKILL with process group handling  
+4. **Job Execution**: Start new process with proper monitoring
+5. **Status Updates**: Running → Success/Failed via callbacks
 
 ## Key Design Principles
 
 ### 1. Single Responsibility
 Each component has one clear purpose:
-- **RuleRunner**: "When to execute?"
-- **Scheduler**: "How to route?"  
-- **WorkerPool**: "Execute short jobs"
-- **LROManager**: "Manage long processes"
+- **RuleRunner**: "When to execute?" (file watching, debouncing)
+- **Scheduler**: "How to route?" (simple WorkerPool routing)
+- **WorkerPool**: "Execute all jobs" (process management, killing, status)
 
 ### 2. Event-Driven Communication
 Components communicate via events, not direct method calls:
 - RuleRunner → Scheduler: TriggerEvent
-- Execution Engines → RuleRunner: Status callbacks
+- WorkerPool → RuleRunner: Status callbacks
 
 ### 3. Process Safety
-- **LRO Process Replacement**: Proper kill → wait → verify → start cycle
+- **Process Replacement**: Proper kill → wait → verify → start cycle for all jobs
 - **Graceful Termination**: SIGTERM (5s) → SIGKILL with process group handling
-- **Resource Cleanup**: Port/socket release verification (planned)
+- **Debounce-Aware Killing**: Respects debounce window unless manual trigger
 
 ### 4. Status Consistency
 - **Single Source of Truth**: RuleRunner maintains authoritative rule status
-- **Callback Pattern**: Execution engines update status via clean interface
+- **Callback Pattern**: WorkerPool updates status via clean interface
 - **Thread Safety**: All status operations protected by mutexes
 
 ## Configuration
 
-### LRO Flag Usage
+### Simplified Configuration
 
 ```yaml
+settings:
+  max_parallel_rules: 5  # Global worker pool size for all jobs
+
 rules:
-  # Short-running jobs (builds, tests, linting)
+  # All rules use the same unified execution model
   - name: "backend-build"
-    lro: false  # Default - uses WorkerPool with semaphore control
     commands:
       - "go build -o bin/server"
       - "go test ./..."
       
-  # Long-running services (servers, databases, watchers)  
-  - name: "dev-server"
-    lro: true   # Uses LROManager with unlimited concurrency
+  - name: "dev-server"  # Long-running - will be killed/restarted on changes
     commands:
       - "./bin/server --dev --port 8080"
       
   - name: "frontend-dev"
-    lro: true
     commands:
       - "npm run dev"  # Webpack dev server
 ```
 
-### Process Management
+### Process Management (All Rules)
 
-**Short-Running Rules**:
-- Acquire semaphore slot
-- Execute commands sequentially
-- Wait for completion
-- Release semaphore slot
-- Mark as COMPLETED
-
-**Long-Running Rules**:
-- Start process immediately (no semaphore)
-- Mark as RUNNING
-- Monitor process in background
-- On file change: kill existing → start new
-- Never marked as COMPLETED (only RUNNING/FAILED)
+**Unified Behavior**:
+- Acquire worker from global pool
+- Check if rule already running → kill if outside debounce window
+- Execute commands sequentially  
+- Monitor process and handle termination
+- Release worker back to pool
+- Mark as SUCCESS/FAILED (short jobs) or keep RUNNING (long jobs)
 
 ## Testing
 
@@ -183,30 +168,29 @@ rules:
 ```bash
 make coverage-agent      # Quick coverage summary
 make coverage-agent-html # Generate HTML report
-make test-lro           # Test LRO Manager specifically
+make test-worker-pool   # Test WorkerPool process management
 make test-scheduler     # Test Scheduler integration
-make test-new-architecture # Test all new architecture components
 ```
 
 ### Key Test Scenarios
 
-1. **LRO Lifecycle**: Process start, replacement, termination
+1. **Process Lifecycle**: Job start, killing, replacement, termination
 2. **WorkerPool Execution**: Job queuing, parallel execution, status updates
-3. **Scheduler Routing**: Correct routing based on lro flag
-4. **Status Callbacks**: Execution engines updating RuleRunner status
-5. **Mixed Workloads**: LRO and short-running jobs executing simultaneously
+3. **Scheduler Routing**: Unified routing to WorkerPool
+4. **Status Callbacks**: WorkerPool updating RuleRunner status
+5. **Debounce Logic**: Process killing respects debounce windows
 
 ## Performance Characteristics
 
 - **Memory**: ~15-20MB base + ~2-5KB per rule watcher
 - **CPU**: <1% idle, scales with file system events
-- **Semaphore Efficiency**: Only short-running jobs consume semaphore slots
-- **LRO Concurrency**: Unlimited long-running processes
+- **Worker Efficiency**: Global pool shared across all job types
+- **Process Management**: Intelligent killing with debounce protection
 - **File Watch Latency**: <50ms from change to execution trigger
 
 ## Future Enhancements
 
 - **Port Detection**: Automatic port extraction and cleanup verification
-- **Health Monitoring**: LRO process health checks and automatic restart
+- **Health Monitoring**: Process health checks and automatic restart
 - **Gateway Integration**: grpcrouter-based distributed mode
 - **Advanced Routing**: Rule dependencies and conditional execution

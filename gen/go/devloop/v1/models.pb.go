@@ -169,6 +169,7 @@ type Settings struct {
 	// When false, subprocess tools like npm, go test, etc. can output their native colors
 	SuppressSubprocessColors bool `protobuf:"varint,11,opt,name=suppress_subprocess_colors,json=suppressSubprocessColors,proto3" json:"suppress_subprocess_colors,omitempty"`
 	// Maximum number of rules that can run in parallel (default: 0 = unlimited)
+	// All rules (short and long-running) use the global worker pool
 	// Set to 1 for sequential execution, useful for debugging rule chains
 	MaxParallelRules uint32 `protobuf:"varint,12,opt,name=max_parallel_rules,json=maxParallelRules,proto3" json:"max_parallel_rules,omitempty"`
 	unknownFields    protoimpl.UnknownFields
@@ -506,16 +507,8 @@ type Rule struct {
 	// Base backoff duration in milliseconds for startup retries (default: 3000ms)
 	// Grows exponentially: 3s, 6s, 12s, 24s, etc.
 	InitRetryBackoffBase uint64 `protobuf:"varint,17,opt,name=init_retry_backoff_base,json=initRetryBackoffBase,proto3" json:"init_retry_backoff_base,omitempty"`
-	// Whether this rule represents a long-running operation (default: false)
-	// Long-running operations (LRO) like dev servers run indefinitely and are managed differently:
-	// - They don't consume worker semaphore slots (unlimited concurrency)
-	// - When file changes trigger them, existing processes are killed and restarted
-	// - They're marked as RUNNING immediately and never COMPLETED
-	// - Examples: "./bin/server", "npm run dev", database containers
-	// Set to true for processes that run indefinitely, false for build/test commands
-	Lro           bool `protobuf:"varint,18,opt,name=lro,proto3" json:"lro,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
@@ -665,13 +658,6 @@ func (x *Rule) GetInitRetryBackoffBase() uint64 {
 		return x.InitRetryBackoffBase
 	}
 	return 0
-}
-
-func (x *Rule) GetLro() bool {
-	if x != nil {
-		return x.Lro
-	}
-	return false
 }
 
 type RuleMatcher struct {
@@ -874,7 +860,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\trule_name\x18\x02 \x01(\tR\bruleName\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\x83\x06\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xf1\x05\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -894,8 +880,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x06status\x18\x0e \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x12-\n" +
 	"\x13exit_on_failed_init\x18\x0f \x01(\bR\x10exitOnFailedInit\x12(\n" +
 	"\x10max_init_retries\x18\x10 \x01(\rR\x0emaxInitRetries\x125\n" +
-	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x12\x10\n" +
-	"\x03lro\x18\x12 \x01(\bR\x03lro\x1a6\n" +
+	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +

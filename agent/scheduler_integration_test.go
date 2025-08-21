@@ -127,7 +127,7 @@ rules:
 		assert.Equal(t, "SUCCESS", buildStatus.LastBuildStatus)
 		assert.Equal(t, "SUCCESS", testStatus.LastBuildStatus)
 
-		// Test 2: Trigger LRO rules - should go to LROManager
+		// Test 2: Trigger long-running rules - should go to WorkerPool
 		devServerRule := orchestrator.Config.Rules[2] // "dev-server"
 		workerRule := orchestrator.Config.Rules[3]    // "worker-service"
 
@@ -165,11 +165,11 @@ rules:
 		assert.Equal(t, "RUNNING", devServerStatus.LastBuildStatus)
 		assert.Equal(t, "RUNNING", workerStatus.LastBuildStatus)
 
-		// Verify LRO processes are tracked
-		lroProcesses := orchestrator.lroManager.GetRunningProcesses()
-		assert.Len(t, lroProcesses, 2)
-		assert.Contains(t, lroProcesses, "dev-server")
-		assert.Contains(t, lroProcesses, "worker-service")
+		// Verify long-running jobs are tracked in worker pool
+		runningJobs := orchestrator.workerPool.GetExecutingRules()
+		assert.Len(t, runningJobs, 2)
+		assert.Contains(t, runningJobs, "dev-server")
+		assert.Contains(t, runningJobs, "worker-service")
 
 		// Test 3: Verify LRO processes don't block short-running jobs
 		// Even with max_parallel_rules: 2, LRO processes shouldn't consume semaphore slots
@@ -276,6 +276,7 @@ rules:
 		assert.Equal(t, "RUNNING", longRunner.GetStatus().LastBuildStatus)
 
 		// Verify it's tracked as LRO process
-		assert.True(t, orchestrator.lroManager.IsProcessRunning("long-service"))
+		runningJobs := orchestrator.workerPool.GetExecutingRules()
+		assert.Contains(t, runningJobs, "long-service")
 	})
 }

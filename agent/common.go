@@ -234,12 +234,7 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 					}
 				}
 
-				// Fix lro field parsing
-				if lro, exists := ruleMap["lro"]; exists {
-					if lroBool, ok := lro.(bool); ok && i < len(config.Rules) {
-						config.Rules[i].Lro = lroBool
-					}
-				}
+
 			}
 		}
 	}

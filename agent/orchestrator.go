@@ -380,10 +380,7 @@ type Orchestrator struct {
 	ruleRunners  map[string]*RuleRunner
 	runnersMutex sync.RWMutex
 
-	// Long-running operation management
-	lroManager *LROManager
-
-	// Worker pool for short-running jobs
+	// Worker pool for all jobs (short and long-running)
 	workerPool *WorkerPool
 
 	// Scheduler for routing rule execution
@@ -505,15 +502,12 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 	// Initialize ColorManager
 	orchestrator.ColorManager = utils.NewColorManager(config.Settings)
 
-	// Initialize LROManager
-	orchestrator.lroManager = NewLROManager(orchestrator)
-
-	// Initialize WorkerPool for short-running jobs
+	// Initialize WorkerPool for all jobs (short and long-running)
 	maxWorkers := int(orchestrator.getMaxParallelRules())
 	orchestrator.workerPool = NewWorkerPool(orchestrator, maxWorkers)
 
 	// Initialize Scheduler
-	orchestrator.scheduler = NewDefaultScheduler(orchestrator, orchestrator.workerPool, orchestrator.lroManager)
+	orchestrator.scheduler = NewDefaultScheduler(orchestrator, orchestrator.workerPool)
 
 	// Initialize Correlation Tracker for dynamic cycle detection
 	orchestrator.correlationTracker = NewCorrelationTracker(orchestrator.Verbose)
@@ -656,13 +650,6 @@ func (o *Orchestrator) Stop() error {
 	if o.workerPool != nil {
 		if err := o.workerPool.Stop(); err != nil {
 			utils.LogDevloop("Error stopping worker pool: %v", err)
-		}
-	}
-
-	// Stop LRO Manager
-	if o.lroManager != nil {
-		if err := o.lroManager.Stop(); err != nil {
-			utils.LogDevloop("Error stopping LRO manager: %v", err)
 		}
 	}
 

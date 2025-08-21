@@ -85,13 +85,13 @@ func TestScheduler_CleanAPI(t *testing.T) {
 			// Assert LRO states
 			helper.AssertRuleStatus(orchestrator.Orchestrator, "dev-server", true, "RUNNING")
 			helper.AssertRuleStatus(orchestrator.Orchestrator, "worker", true, "RUNNING")
-			helper.AssertLROProcessCount(orchestrator.lroManager, 2)
+			helper.AssertRunningJobCount(orchestrator.workerPool, 2)
 		})
 
 		// Test 3: Mixed workload (LRO processes don't block short jobs)
 		t.Run("MixedWorkload", func(t *testing.T) {
 			// LRO processes should already be running from previous test
-			helper.AssertLROProcessCount(orchestrator.lroManager, 2)
+			helper.AssertRunningJobCount(orchestrator.workerPool, 2)
 
 			// Trigger another build while LRO processes are running
 			buildEvent := &TriggerEvent{

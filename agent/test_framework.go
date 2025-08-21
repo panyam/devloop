@@ -166,7 +166,7 @@ func (tc *TestConfig) ToYAML() string {
 
 	for _, rule := range tc.Rules {
 		yaml += fmt.Sprintf("  - name: %q\n", rule.Name)
-		yaml += fmt.Sprintf("    lro: %t\n", rule.LRO)
+
 
 		if rule.SkipRunOnInit {
 			yaml += "    skip_run_on_init: true\n"
@@ -288,9 +288,9 @@ func (th *TestHelper) AssertRuleStatus(orchestrator *Orchestrator, ruleName stri
 		"Rule %q status", ruleName)
 }
 
-// AssertLROProcessCount asserts the expected number of LRO processes
-func (th *TestHelper) AssertLROProcessCount(lroManager *LROManager, expectedCount int) {
-	processes := lroManager.GetRunningProcesses()
-	require.Len(th.t, processes, expectedCount,
-		"Expected %d LRO processes, got %d: %v", expectedCount, len(processes), processes)
+// AssertRunningJobCount asserts the expected number of running jobs in worker pool
+func (th *TestHelper) AssertRunningJobCount(workerPool *WorkerPool, expectedCount int) {
+	runningRules := workerPool.GetExecutingRules()
+	require.Len(th.t, runningRules, expectedCount,
+		"Expected %d running jobs, got %d: %v", expectedCount, len(runningRules), runningRules)
 }

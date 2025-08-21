@@ -23,6 +23,7 @@ type RuleJob struct {
 	Context     context.Context
 	JobID       string // Unique job identifier
 	CreatedAt   time.Time
+	StartTime   time.Time // When the job actually started executing
 }
 
 // NewRuleJob creates a new rule job with unique ID
@@ -34,6 +35,23 @@ func NewRuleJob(rule *pb.Rule, triggerType string, ctx context.Context) *RuleJob
 		JobID:       fmt.Sprintf("%s-%d", rule.Name, time.Now().UnixNano()),
 		CreatedAt:   time.Now(),
 	}
+}
+
+// IsManualTrigger returns true if this job was triggered manually
+func (j *RuleJob) IsManualTrigger() bool {
+	return j.TriggerType == "manual"
+}
+
+// CanBeKilled checks if a job can be killed based on debounce rules
+func (j *RuleJob) CanBeKilled(newJob *RuleJob, orchestrator *Orchestrator) bool {
+	if newJob.IsManualTrigger() {
+		return true // Manual triggers always kill existing jobs
+	}
+	
+	// Check if job has been running long enough (debounce window)
+	debounceDuration := orchestrator.getDebounceDelayForRule(j.Rule)
+	
+	return time.Since(j.StartTime) >= debounceDuration
 }
 
 // Worker represents a single worker that executes rule jobs
@@ -395,7 +413,8 @@ type WorkerPool struct {
 	jobQueue     chan *RuleJob
 	maxWorkers   int
 
-	// Deduplication tracking
+	// Job tracking for uniqueness and process killing
+	runningJobs    map[string]*RuleJob // ruleName -> currently running job
 	executingRules map[string]*Worker  // ruleName -> worker executing it
 	pendingRules   map[string]*RuleJob // ruleName -> latest pending job
 	executionMutex sync.RWMutex
@@ -423,6 +442,7 @@ func NewWorkerPool(orchestrator *Orchestrator, maxWorkers int) *WorkerPool {
 		workers:        make([]*Worker, 0, maxWorkers),
 		jobQueue:       make(chan *RuleJob, bufferSize),
 		maxWorkers:     maxWorkers,
+		runningJobs:    make(map[string]*RuleJob),
 		executingRules: make(map[string]*Worker),
 		pendingRules:   make(map[string]*RuleJob),
 		stopChan:       make(chan struct{}),
@@ -463,31 +483,45 @@ func (wp *WorkerPool) Stop() error {
 	return nil
 }
 
-// EnqueueJob adds a job to the queue with deduplication logic
+// EnqueueJob adds a job to the queue with process killing and deduplication logic
 func (wp *WorkerPool) EnqueueJob(job *RuleJob) {
 	wp.executionMutex.Lock()
 	defer wp.executionMutex.Unlock()
 
 	ruleName := job.Rule.Name
 
-	// Check if rule is currently executing
-	if executingWorker, isExecuting := wp.executingRules[ruleName]; isExecuting {
-		// Rule is running - replace any existing pending job
-		wp.pendingRules[ruleName] = job
-		utils.LogDevloop("[%s] Rule executing on worker %d, job queued as pending (replacing previous)",
-			ruleName, executingWorker.id)
-		return
+	// 1. Check if rule is currently running
+	if runningJob, isRunning := wp.runningJobs[ruleName]; isRunning {
+		shouldKill := runningJob.CanBeKilled(job, wp.orchestrator)
+		
+		if shouldKill {
+			// Kill the running process
+			executingWorker := wp.executingRules[ruleName]
+			if executingWorker != nil {
+				triggerType := "File change"
+				if job.IsManualTrigger() {
+					triggerType = "Manual trigger"
+				}
+				utils.LogDevloop("[%s] %s detected while running, killing process and restarting", ruleName, triggerType)
+				
+				// Terminate the running job's processes
+				go executingWorker.TerminateProcesses()
+				
+				// Clear the running job (worker will handle cleanup via CompleteJob)
+				delete(wp.runningJobs, ruleName)
+			}
+		} else {
+			// Within debounce window - just replace any pending job
+			wp.pendingRules[ruleName] = job
+			utils.LogDevloop("[%s] Within debounce window, scheduling after current job completes", ruleName)
+			return
+		}
 	}
 
-	// Check if rule already has a pending job
-	if _, hasPending := wp.pendingRules[ruleName]; hasPending {
-		// Replace existing pending job with newer one
-		wp.pendingRules[ruleName] = job
-		utils.LogDevloop("[%s] Replacing pending job with newer one", ruleName)
-		return
-	}
+	// 2. Remove any existing pending jobs for same rule (job deduplication)
+	delete(wp.pendingRules, ruleName)
 
-	// Rule is free - ensure we have workers available and queue the job
+	// 3. Ensure we have workers available and queue the job
 	wp.ensureWorkerAvailable()
 
 	select {
@@ -505,7 +539,11 @@ func (wp *WorkerPool) recordJobStart(job *RuleJob, worker *Worker) {
 	wp.executionMutex.Lock()
 	defer wp.executionMutex.Unlock()
 
-	wp.executingRules[job.Rule.Name] = worker
+	ruleName := job.Rule.Name
+	job.StartTime = time.Now() // Record when job actually started executing
+	
+	wp.runningJobs[ruleName] = job
+	wp.executingRules[ruleName] = worker
 }
 
 // CompleteJob handles job completion and processes any pending jobs for the same rule
@@ -515,7 +553,8 @@ func (wp *WorkerPool) CompleteJob(job *RuleJob, worker *Worker) {
 
 	ruleName := job.Rule.Name
 
-	// Remove from executing
+	// Remove from executing and running maps
+	delete(wp.runningJobs, ruleName)
 	delete(wp.executingRules, ruleName)
 
 	// Check for pending job

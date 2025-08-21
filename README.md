@@ -275,7 +275,7 @@ rules:                         # Required: Array of rules
 | `exit_on_failed_init` | boolean | ❌ | Exit devloop when this rule fails startup (default: `false`) |
 | `max_init_retries` | integer | ❌ | Maximum retry attempts for failed startup (default: `10`) |
 | `init_retry_backoff_base` | integer | ❌ | Base backoff duration in ms for startup retries (default: `3000`) |
-| `lro` | boolean | ❌ | Long-running operation flag (default: `false`) - see LRO section below |
+
 
 ### Watch Configuration
 
@@ -1252,9 +1252,9 @@ make coverage-agent-open
 
 The project maintains 57% test coverage with testing for:
 
-- **LRO Manager**: Process lifecycle, termination, multiple processes, failure handling
+- **WorkerPool Process Management**: Process lifecycle, termination, job killing, debounce logic
 - **Scheduler Integration**: Event-driven routing, mixed workload scenarios  
-- **WorkerPool**: Job execution, semaphore management, parallel processing
+- **WorkerPool**: Unified job execution, global parallelism, process management
 - **File Watching**: Per-rule watchers, pattern matching, dynamic directories
 - **Configuration**: YAML parsing, validation, rule loading
 
@@ -1266,28 +1266,29 @@ All test artifacts are organized in the `reports/` directory:
 - `reports/agent_coverage.html` - Interactive HTML report
 - Use `make coverage-help` to see all available coverage targets
 
-### Long-Running Operations (LRO)
+### Process Management
 
-Devloop supports intelligent handling of long-running vs short-running operations:
+Devloop intelligently handles all types of processes with unified execution:
 
 ```yaml
+settings:
+  max_parallel_rules: 5  # Global worker pool size for all jobs
+
 rules:
-  - name: "build"
-    lro: false  # Short-running - completes quickly
+  - name: "build"      # Short-running - completes quickly
     commands:
       - "go build -o bin/server"
       
-  - name: "dev-server"
-    lro: true   # Long-running - runs indefinitely  
+  - name: "dev-server" # Long-running - will be killed/restarted on changes
     commands:
       - "./bin/server --dev"
 ```
 
-LRO Benefits:
-- No Semaphore Blocking: LRO processes don't consume worker slots
-- Process Replacement: File changes trigger proper kill and restart cycle
-- Unlimited Concurrency: Run multiple dev servers, databases, watchers simultaneously
-- Graceful Termination: SIGTERM to SIGKILL progression with cleanup verification
+Process Management Benefits:
+- **Unified Execution**: All jobs use the same worker pool and process management
+- **Smart Killing**: File changes respect debounce window; manual triggers restart immediately
+- **Global Concurrency**: Configure worker pool size once for all job types
+- **Graceful Termination**: SIGTERM to SIGKILL progression with process group handling
 
 ## 🔧 Troubleshooting
 

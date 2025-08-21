@@ -122,5 +122,8 @@ func (s *AgentService) TriggerRule(ctx context.Context, req *protos.TriggerRuleR
 	resp = &protos.TriggerRuleResponse{
 		Success: err == nil,
 	}
+	if err != nil {
+		utils.LogDevloop("Error Triggering Rule: %v", err)
+	}
 	return
 }

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 
 	"strings"
@@ -322,6 +323,8 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 	defer r.debounceMutex.Unlock()
 
 	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
+	log.Println("BypassRateLimit: ", bypassRateLimit)
+	log.Println("isDynProtEnabled: ", r.orchestrator.isDynamicProtectionEnabled())
 	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
 		// Check if we're in backoff period
 		if r.triggerTracker.IsInBackoff() {
@@ -353,10 +356,13 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 
 	// Check if rule is currently running
 	isRunning := r.isCurrentlyRunning()
+	log.Println("Is Currnetly Running: ", isRunning)
 
 	if isRunning {
 		// Rule is currently executing - mark for pending execution after completion
+		// (WorkerPool will now handle the killing/restarting logic)
 		wasPending := r.hasPendingExecution()
+		log.Println("wasPending: ", wasPending)
 		r.setPendingExecution(true)
 
 		if r.isVerbose() {

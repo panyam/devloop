@@ -2,29 +2,31 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## Recently Completed (2025-08-20)
+## Recently Completed (2025-08-21)
 
-- ✅ **Event-Driven LRO Architecture Implementation:**
-  - **Problem**: Long-running processes (dev servers, databases) were consuming worker semaphore slots indefinitely, blocking short-running jobs (builds, tests) from executing
-  - **Solution**: Implemented revolutionary dual-execution architecture with intelligent job routing
-  - **Components Delivered**:
-    - **Scheduler**: Event-driven routing component receiving TriggerEvents from RuleRunner and routing to appropriate execution engine
-    - **LROManager**: Dedicated process lifecycle manager for long-running operations with proper process replacement
-    - **TriggerEvent**: Clean messaging system decoupling RuleRunner from execution concerns
-    - **Status Callbacks**: Unified status management where execution engines update RuleRunner via clean callback interface
-  - **Configuration Enhancement**: Added `lro: true/false` field to protobuf Rule message with YAML parsing support
+- ✅ **Architecture Simplification - Unified WorkerPool:**
+  - **Problem**: Dual-execution (LROManager vs WorkerPool) overcomplicated the system for the target use case (< 10 tasks)
+  - **Solution**: Unified all job execution through single WorkerPool with intelligent process management
+  - **Simplifications Made**:
+    - **Removed LRO Components**: Deleted `lro_manager.go`, `lro_manager_test.go`, and LRO-specific logic (~500 lines removed)
+    - **Unified Job Routing**: All rules route through WorkerPool regardless of duration
+    - **Smart Process Killing**: WorkerPool handles process termination with debounce-aware logic
+    - **Removed Configuration Complexity**: No more `lro: true/false` flags needed
   - **Architecture Benefits**:
-    - **No Resource Starvation**: LRO processes run with unlimited concurrency, don't consume semaphore slots
-    - **Proper Process Replacement**: File changes trigger LRO process kill → restart cycle with graceful termination
-    - **Clean Separation of Concerns**: RuleRunner = watching/debouncing, Scheduler = routing, Execution engines = running
-    - **Backward Compatible**: Default `lro: false` maintains existing behavior for all rules
-  - **Testing Achievement**: Comprehensive test suite added with 57% coverage including:
-    - LRO Manager unit tests (lifecycle, termination, multiple processes, failure handling)
-    - Scheduler integration tests (routing verification, mixed workload scenarios)
-    - Status callback flow testing
-  - **Developer Experience**: Added Makefile targets for coverage reports with HTML output organized in `reports/` folder
-  - **Result**: Dev servers can run indefinitely while builds/tests execute in parallel without blocking
-  - **Impact**: Major architectural improvement enabling proper multi-service development workflows
+    - **Simpler Mental Model**: "DevLoop runs your tasks and restarts them when files change"
+    - **Unified Execution Path**: Single code path for all job types eliminates complexity
+    - **Global Worker Pool**: Users configure `max_parallel_rules` once for all jobs
+    - **Debounce-Aware Killing**: Manual triggers restart immediately; file changes respect debounce window
+  - **Developer Experience**: Much cleaner configuration without LRO concepts to understand
+  - **Result**: Same functionality with significantly reduced complexity
+  - **Impact**: Alignment with core philosophy - devloop as a simple, powerful live-reloader
+
+## Previously Completed (2025-08-20)
+
+- ✅ **Event-Driven Architecture Implementation** (now simplified):
+  - Original dual-execution architecture with LROManager and WorkerPool separation
+  - Clean TriggerEvent messaging and status callback system (retained)
+  - Comprehensive test suite with 57% coverage (updated for unified architecture)
 
 ## Recently Completed (2025-08-19)
 

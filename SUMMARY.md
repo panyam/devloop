@@ -196,10 +196,10 @@ settings:
   - Impact: Full color preservation - npm errors show in red, success in green, while devloop prefixes maintain their colors
 
 **Current Architecture Strengths:**
-- **Event-Driven LRO Architecture (2025-08-20):** Revolutionary dual-execution system for long-running vs short-running operations
-- **Clean Separation of Concerns:** RuleRunner (watching/debouncing), Scheduler (routing), WorkerPool (short jobs), LROManager (long processes)
-- **Intelligent Job Routing:** Automatic routing based on `lro: true/false` flag - no semaphore blocking for dev servers
-- **Process Lifecycle Management:** Proper LRO process replacement with graceful termination and port cleanup
+- **Unified WorkerPool Architecture (2025-08-21):** Simplified single-execution system for all job types
+- **Clean Separation of Concerns:** RuleRunner (watching/debouncing), Scheduler (routing), WorkerPool (all process management)
+- **Intelligent Process Management:** Debounce-aware killing with manual trigger bypass for immediate restart
+- **Global Concurrency Control:** Single `max_parallel_rules` setting applies to all jobs
 - **Status Callback Architecture:** Execution engines update RuleRunner status via clean callback interface
 - **Simplified Single Implementation:** Single orchestrator implementation with no version complexity
 - **Correct Pattern Matching:** First-match semantics with proper action-based filtering
