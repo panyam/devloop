@@ -406,7 +406,8 @@ func (w *Watcher) fileMatchesRule(filePath string) bool {
 	}
 
 	// Use the existing rule matching logic with relative path
-	return RuleMatches(w.rule, relativeFilePath, w.configPath) != nil
+	matcher := RuleMatches(w.rule, relativeFilePath, w.configPath)
+	return matcher != nil && matcher.Action == "include"
 }
 
 // GetWatchedDirectories returns a copy of currently watched directories
