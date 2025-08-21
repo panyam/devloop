@@ -21,7 +21,7 @@ checks:
 
 
 test: checks
-	go test ./...
+	go test ./... -v
 
 # Test coverage targets
 coverage:

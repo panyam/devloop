@@ -73,12 +73,19 @@ func createCrossPlatformCommand(cmdStr string) *exec.Cmd {
 		return exec.Command("cmd", "/c", cmdStr)
 	default:
 		// Unix-like systems (Linux, macOS, BSD, etc.)
-		shell := "bash"
-		// Check if bash exists, fallback to sh for better POSIX compatibility
-		if _, err := exec.LookPath("bash"); err != nil {
-			shell = "sh"
+		// Try multiple shell fallbacks for test environment compatibility
+		shells := []string{"sh", "/bin/sh", "bash", "/bin/bash"}
+		for _, shell := range shells {
+			if _, err := exec.LookPath(shell); err == nil {
+				cmd := exec.Command(shell, "-c", cmdStr)
+				cmd.Env = os.Environ()
+				return cmd
+			}
 		}
-		return exec.Command(shell, "-c", cmdStr)
+		// Last resort - try sh without checking
+		cmd := exec.Command("sh", "-c", cmdStr)
+		cmd.Env = os.Environ()
+		return cmd
 	}
 }
 

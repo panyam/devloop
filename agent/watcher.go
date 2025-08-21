@@ -223,8 +223,27 @@ func (w *Watcher) shouldWatchDirectoryForPattern(pattern, dirPath string) bool {
 
 	// For glob patterns, check if this directory could contain matching files
 	// For example: "**/*.go" should cause watching any directory because it could contain .go files
+	// But "src/**/*.go" should only watch src/ and its subdirectories, not lib/ or docs/
 	if strings.Contains(pattern, "**") {
-		return true // ** patterns can match at any directory level
+		// Extract the prefix before **
+		starIndex := strings.Index(pattern, "**")
+		if starIndex == 0 {
+			// Pattern starts with **, like "**/*.go" - can match any directory
+			return true
+		} else {
+			// Pattern has prefix before **, like "src/**/*.go"
+			prefix := pattern[:starIndex]
+			prefix = strings.TrimSuffix(prefix, "/")
+
+			// Directory should be watched if it's the prefix or under the prefix
+			if dirPath == prefix {
+				return true
+			}
+			if strings.HasPrefix(dirPath, prefix+"/") {
+				return true
+			}
+			return false
+		}
 	}
 
 	return false
