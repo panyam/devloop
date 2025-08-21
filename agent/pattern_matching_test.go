@@ -36,7 +36,7 @@ func TestDirectoryWatchingLogic(t *testing.T) {
 			description: "lib/ should NOT be watched - only exclude patterns, no includes",
 		},
 		{
-			name: "WeeWar scenario - include should win for directory watching",
+			name: "Medium scenario - include should win for directory watching",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"web/server/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
@@ -47,7 +47,7 @@ func TestDirectoryWatchingLogic(t *testing.T) {
 			description: "lib/ should be watched because lib/**/*.go (include) could match files",
 		},
 		{
-			name: "WeeWar scenario - web/server should be watched",
+			name: "Medium scenario - web/server should be watched",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"web/server/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
@@ -105,11 +105,11 @@ func TestDirectoryWatchingLogic(t *testing.T) {
 // File filtering should apply FIFO - first matching pattern wins
 func TestFileFilteringLogic(t *testing.T) {
 	tests := []struct {
-		name         string
-		patterns     []*pb.RuleMatcher
-		filePath     string
+		name          string
+		patterns      []*pb.RuleMatcher
+		filePath      string
 		shouldTrigger bool
-		description  string
+		description   string
 	}{
 		{
 			name: "First include pattern wins",
@@ -117,9 +117,9 @@ func TestFileFilteringLogic(t *testing.T) {
 				{Action: "include", Patterns: []string{"lib/**/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log"}},
 			},
-			filePath:     "lib/utils.go",
+			filePath:      "lib/utils.go",
 			shouldTrigger: true,
-			description:  "lib/utils.go should trigger - first pattern lib/**/*.go (include) matches",
+			description:   "lib/utils.go should trigger - first pattern lib/**/*.go (include) matches",
 		},
 		{
 			name: "First exclude pattern wins",
@@ -127,51 +127,51 @@ func TestFileFilteringLogic(t *testing.T) {
 				{Action: "exclude", Patterns: []string{"**/*.log"}},
 				{Action: "include", Patterns: []string{"lib/**/*"}},
 			},
-			filePath:     "lib/debug.log",
+			filePath:      "lib/debug.log",
 			shouldTrigger: false,
-			description:  "lib/debug.log should NOT trigger - first pattern **/*.log (exclude) matches",
+			description:   "lib/debug.log should NOT trigger - first pattern **/*.log (exclude) matches",
 		},
 		{
-			name: "WeeWar scenario - web/server/*.go wins over web/**/*",
+			name: "Medium scenario - web/server/*.go wins over web/**/*",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"web/server/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
 				{Action: "include", Patterns: []string{"lib/**/*.go"}},
 			},
-			filePath:     "web/server/main.go",
+			filePath:      "web/server/main.go",
 			shouldTrigger: true,
-			description:  "web/server/main.go should trigger - first pattern web/server/*.go (include) matches",
+			description:   "web/server/main.go should trigger - first pattern web/server/*.go (include) matches",
 		},
 		{
-			name: "WeeWar scenario - lib files should trigger",
+			name: "Medium scenario - lib files should trigger",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"web/server/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
 				{Action: "include", Patterns: []string{"lib/**/*.go"}},
 			},
-			filePath:     "lib/utils.go",
+			filePath:      "lib/utils.go",
 			shouldTrigger: true,
-			description:  "lib/utils.go should trigger - no earlier patterns match, lib/**/*.go (include) matches",
+			description:   "lib/utils.go should trigger - no earlier patterns match, lib/**/*.go (include) matches",
 		},
 		{
-			name: "WeeWar scenario - log files should be excluded",
+			name: "Medium scenario - log files should be excluded",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"web/server/*.go"}},
 				{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
 				{Action: "include", Patterns: []string{"lib/**/*.go"}},
 			},
-			filePath:     "lib/debug.log",
+			filePath:      "lib/debug.log",
 			shouldTrigger: false,
-			description:  "lib/debug.log should NOT trigger - **/*.log (exclude) matches first",
+			description:   "lib/debug.log should NOT trigger - **/*.log (exclude) matches first",
 		},
 		{
 			name: "No patterns match",
 			patterns: []*pb.RuleMatcher{
 				{Action: "include", Patterns: []string{"src/**/*.go"}},
 			},
-			filePath:     "lib/utils.go",
+			filePath:      "lib/utils.go",
 			shouldTrigger: false,
-			description:  "lib/utils.go should NOT trigger - no patterns match",
+			description:   "lib/utils.go should NOT trigger - no patterns match",
 		},
 	}
 
@@ -196,7 +196,7 @@ func TestFileFilteringLogic(t *testing.T) {
 
 // TestDirectoryVsFileLogic tests the integration of directory watching and file filtering
 func TestDirectoryVsFileLogic(t *testing.T) {
-	// WeeWar reproduction test case
+	// Medium reproduction test case
 	patterns := []*pb.RuleMatcher{
 		{Action: "include", Patterns: []string{"web/server/*.go"}},
 		{Action: "exclude", Patterns: []string{"**/*.log", "web/**/*", "web"}},
@@ -216,17 +216,17 @@ func TestDirectoryVsFileLogic(t *testing.T) {
 
 	t.Run("DirectoryWatchingDecisions", func(t *testing.T) {
 		// These directories should be watched (have include patterns)
-		assert.True(t, watcher.shouldWatchDirectory("/project/root/lib"), 
+		assert.True(t, watcher.shouldWatchDirectory("/project/root/lib"),
 			"lib/ should be watched - lib/**/*.go include pattern")
-		assert.True(t, watcher.shouldWatchDirectory("/project/root/cmd"), 
+		assert.True(t, watcher.shouldWatchDirectory("/project/root/cmd"),
 			"cmd/ should be watched - cmd/**/*.go include pattern")
-		assert.True(t, watcher.shouldWatchDirectory("/project/root/web/server"), 
+		assert.True(t, watcher.shouldWatchDirectory("/project/root/web/server"),
 			"web/server/ should be watched - web/server/*.go include pattern")
-		
+
 		// These directories should NOT be watched (no relevant include patterns)
-		assert.False(t, watcher.shouldWatchDirectory("/project/root/docs"), 
+		assert.False(t, watcher.shouldWatchDirectory("/project/root/docs"),
 			"docs/ should NOT be watched - no include patterns match")
-		assert.False(t, watcher.shouldWatchDirectory("/project/root/tmp"), 
+		assert.False(t, watcher.shouldWatchDirectory("/project/root/tmp"),
 			"tmp/ should NOT be watched - no include patterns match")
 	})
 
@@ -238,23 +238,23 @@ func TestDirectoryVsFileLogic(t *testing.T) {
 		}
 
 		// These files should trigger (include patterns win via FIFO)
-		assert.True(t, shouldTrigger("web/server/main.go"), 
+		assert.True(t, shouldTrigger("web/server/main.go"),
 			"web/server/main.go should trigger - web/server/*.go include pattern wins")
-		assert.True(t, shouldTrigger("lib/utils.go"), 
+		assert.True(t, shouldTrigger("lib/utils.go"),
 			"lib/utils.go should trigger - lib/**/*.go include pattern matches")
-		assert.True(t, shouldTrigger("cmd/server/main.go"), 
+		assert.True(t, shouldTrigger("cmd/server/main.go"),
 			"cmd/server/main.go should trigger - cmd/**/*.go include pattern matches")
 
-		// These files should NOT trigger (exclude patterns win via FIFO)  
-		assert.False(t, shouldTrigger("lib/debug.log"), 
+		// These files should NOT trigger (exclude patterns win via FIFO)
+		assert.False(t, shouldTrigger("lib/debug.log"),
 			"lib/debug.log should NOT trigger - **/*.log exclude pattern wins")
-		assert.False(t, shouldTrigger("web/dist/bundle.js"), 
+		assert.False(t, shouldTrigger("web/dist/bundle.js"),
 			"web/dist/bundle.js should NOT trigger - web/**/* exclude pattern wins")
-		assert.False(t, shouldTrigger("services/debug.log"), 
+		assert.False(t, shouldTrigger("services/debug.log"),
 			"services/debug.log should NOT trigger - **/*.log exclude pattern wins")
-			
+
 		// These files should NOT trigger (no patterns match)
-		assert.False(t, shouldTrigger("docs/readme.md"), 
+		assert.False(t, shouldTrigger("docs/readme.md"),
 			"docs/readme.md should NOT trigger - no patterns match")
 	})
 }

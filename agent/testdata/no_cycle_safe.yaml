@@ -1,0 +1,31 @@
+settings:
+  project_id: "no-cycle-test"
+  verbose: true
+  cycle_detection:
+    enabled: true
+    dynamic_protection: true
+    max_triggers_per_minute: 10
+
+rules:
+  - name: "safe-build"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.ts"
+    commands:
+      - "echo 'Building...'"
+      - "mkdir -p dist"
+      - "echo 'export const built = true;' > dist/index.js"
+
+  - name: "safe-test"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.ts"
+          - "dist/**/*.js"
+    commands:
+      - "echo 'Testing...'"
+      - "mkdir -p test-results"
+      - "echo 'Tests passed' > test-results/report.html"

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fsnotify/fsnotify"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/panyam/devloop/utils"
@@ -157,22 +156,37 @@ func (w *Watcher) getBaseDirectory() string {
 func (w *Watcher) shouldWatchDirectory(dirPath string) bool {
 	// Directory watching logic: We should watch a directory if ANY include pattern
 	// could match files in it. Exclude patterns only affect individual files, not directories.
-	
+
+	// Convert absolute directory path to relative path for pattern matching
+	baseDir := w.getBaseDirectory()
+	relativeDirPath := dirPath
+
+	// If dirPath is absolute and starts with baseDir, make it relative
+	if filepath.IsAbs(dirPath) && strings.HasPrefix(dirPath, baseDir) {
+		relativeDirPath = strings.TrimPrefix(dirPath, baseDir)
+		relativeDirPath = strings.TrimPrefix(relativeDirPath, string(filepath.Separator))
+
+		// If relative path is empty, it means we're checking the base directory itself
+		// Use "." to represent the current directory for pattern matching
+		if relativeDirPath == "" {
+			relativeDirPath = "."
+		}
+	}
+
 	hasIncludeMatch := false
-	
+
 	// Check all patterns to see if directory should be watched
 	for _, matcher := range w.rule.Watch {
 		for _, pattern := range matcher.Patterns {
-			resolvedPattern := resolvePattern(pattern, w.rule, w.configPath)
-
-			if w.patternCouldMatchInDirectory(resolvedPattern, dirPath) {
+			// Patterns are already relative, no need to resolve
+			if w.shouldWatchDirectoryForPattern(pattern, relativeDirPath) {
 				if matcher.Action == "include" {
 					hasIncludeMatch = true
 				}
 			}
 		}
 	}
-	
+
 	// Watch directory only if there's an include pattern that could match files in it
 	if hasIncludeMatch {
 		return true
@@ -183,11 +197,54 @@ func (w *Watcher) shouldWatchDirectory(dirPath string) bool {
 	return false
 }
 
+// shouldWatchDirectoryForPattern determines if we should watch a directory for a given pattern
+// This is specifically for directory watching decisions, not file matching
+func (w *Watcher) shouldWatchDirectoryForPattern(pattern, dirPath string) bool {
+	// Clean paths for consistent comparison
+	pattern = filepath.Clean(pattern)
+	dirPath = filepath.Clean(dirPath)
+
+	// If checking the current directory ("."), check if pattern could match files directly
+	if dirPath == "." {
+		return true // Always watch current directory if we have any patterns
+	}
+
+	// If pattern is exact match to directory, it should be watched
+	if pattern == dirPath {
+		return true
+	}
+
+	// If pattern contains the directory as a prefix, we MUST watch this directory
+	// For example: "web/server/*.go" requires watching "web/" to detect "web/server/" changes
+	prefix := dirPath + string(filepath.Separator)
+	if strings.HasPrefix(pattern, prefix) {
+		return true
+	}
+
+	// For glob patterns, check if this directory could contain matching files
+	// For example: "**/*.go" should cause watching any directory because it could contain .go files
+	if strings.Contains(pattern, "**") {
+		return true // ** patterns can match at any directory level
+	}
+
+	return false
+}
+
 // patternCouldMatchInDirectory checks if a pattern could potentially match files in a directory
 func (w *Watcher) patternCouldMatchInDirectory(pattern, dirPath string) bool {
 	// Clean paths for consistent comparison
 	pattern = filepath.Clean(pattern)
 	dirPath = filepath.Clean(dirPath)
+
+	// If checking the current directory ("."), check if pattern could match files directly
+	if dirPath == "." {
+		// Pattern like "watch-me.txt" should match files in current directory
+		if !strings.Contains(pattern, string(filepath.Separator)) {
+			return true
+		}
+		// Pattern like "src/**/*.go" could also match starting from current directory
+		return true
+	}
 
 	// If pattern is exact match to directory, it should be watched
 	if pattern == dirPath {
@@ -195,27 +252,49 @@ func (w *Watcher) patternCouldMatchInDirectory(pattern, dirPath string) bool {
 	}
 
 	// If pattern contains the directory as a prefix, it could match files inside
-	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
-		return true
-	}
+	prefix := dirPath + string(filepath.Separator)
+	if strings.HasPrefix(pattern, prefix) {
+		// Additional check: the pattern should not specify a deeper directory structure
+		// UNLESS it uses ** wildcards which can match nested directories
+		remaining := strings.TrimPrefix(pattern, prefix)
 
-	// Check if this is a glob pattern (contains wildcards)
-	isGlob := strings.ContainsAny(pattern, "*?[]")
-
-	if isGlob {
-		// For glob patterns, use proper glob matching to check if it could match files in directory
-		testFile := filepath.Join(dirPath, "test.txt")
-		if matched, _ := doublestar.Match(pattern, testFile); matched {
+		// If remaining part contains "**", it can match at any depth
+		if strings.Contains(remaining, "**") {
 			return true
 		}
 
-		// Check with common file extensions for glob patterns
-		extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".md"}
-		for _, ext := range extensions {
-			testFile := filepath.Join(dirPath, "test"+ext)
-			if matched, _ := doublestar.Match(pattern, testFile); matched {
+		// If remaining part contains a directory separator without **, it's targeting a subdirectory
+		// For example, "web/server/*.go" should NOT match files in "web/" directory
+		if !strings.Contains(remaining, string(filepath.Separator)) {
+			return true
+		}
+	}
+
+	// For patterns with **, analyze the non-glob prefix to constrain matching
+	if strings.Contains(pattern, "**") {
+		if strings.HasPrefix(pattern, "**/") {
+			// Pattern like "**/*.go" can match in any directory (no constraint)
+			return true
+		}
+
+		// Pattern like "lib/**/*.go" - extract the constraining prefix "lib"
+		parts := strings.Split(pattern, "/**")
+		if len(parts) > 0 {
+			constrainingPrefix := parts[0]
+			// Check if this directory is within the constraining prefix
+			if dirPath == constrainingPrefix || strings.HasPrefix(dirPath, constrainingPrefix+"/") {
 				return true
 			}
+		}
+
+		return false // ** pattern doesn't apply to this directory
+	}
+
+	// For simple glob patterns (*, ?, [])
+	if strings.ContainsAny(pattern, "*?[]") {
+		// If pattern has no directory separators, it could match files in any directory
+		if !strings.Contains(pattern, string(filepath.Separator)) {
+			return true
 		}
 	}
 
@@ -297,8 +376,18 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 
 // fileMatchesRule checks if a file matches this rule's patterns
 func (w *Watcher) fileMatchesRule(filePath string) bool {
-	// Use the existing rule matching logic
-	return RuleMatches(w.rule, filePath, w.configPath) != nil
+	// Convert absolute file path to relative path for pattern matching
+	baseDir := w.getBaseDirectory()
+	relativeFilePath := filePath
+
+	// If filePath is absolute and starts with baseDir, make it relative
+	if filepath.IsAbs(filePath) && strings.HasPrefix(filePath, baseDir) {
+		relativeFilePath = strings.TrimPrefix(filePath, baseDir)
+		relativeFilePath = strings.TrimPrefix(relativeFilePath, string(filepath.Separator))
+	}
+
+	// Use the existing rule matching logic with relative path
+	return RuleMatches(w.rule, relativeFilePath, w.configPath) != nil
 }
 
 // GetWatchedDirectories returns a copy of currently watched directories

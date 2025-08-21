@@ -411,6 +411,11 @@ func (r *RuleRunner) GetTriggerCount(duration time.Duration) int {
 	return r.triggerTracker.GetTriggerCount(duration)
 }
 
+// GetBackoffLevel returns the current backoff level for this rule
+func (r *RuleRunner) GetBackoffLevel() int {
+	return r.triggerTracker.GetBackoffLevel()
+}
+
 // CleanupTriggerHistory removes old trigger records to prevent memory growth
 func (r *RuleRunner) CleanupTriggerHistory() {
 	// Keep triggers for up to 5 minutes to allow for rate limiting calculations

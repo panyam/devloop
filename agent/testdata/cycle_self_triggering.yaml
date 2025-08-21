@@ -1,0 +1,17 @@
+settings:
+  project_id: "cycle-detection-test"
+  verbose: true
+  cycle_detection:
+    enabled: true
+    dynamic_protection: true
+    max_triggers_per_minute: 3
+
+rules:
+  - name: "self-triggering"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "**/*.txt"
+    commands:
+      - "echo 'Rule triggered at $(date)' >> output.txt"

@@ -1,0 +1,49 @@
+settings:
+  project_id: "cycle-test-demo"
+  verbose: true
+  cycle_detection:
+    enabled: true
+    dynamic_protection: true
+    max_triggers_per_minute: 4
+
+rules:
+  # Rule that writes to a file it also watches (self-cycle)
+  - name: "self-cycle"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "cycle-input.txt"
+    commands:
+      - "echo 'Self cycle triggered' >> cycle-input.txt"
+
+  # Pair of rules that trigger each other (cross-cycle)
+  - name: "writer"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "trigger-writer.txt"
+    commands:
+      - "echo 'Writer triggered' >> trigger-reader.txt"
+
+  - name: "reader"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "trigger-reader.txt"
+    commands:
+      - "echo 'Reader triggered' >> trigger-writer.txt"
+
+  # Safe rule that doesn't create cycles
+  - name: "safe-build"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "src/**/*.go"
+    commands:
+      - "echo 'Building Go code'"
+      - "mkdir -p dist"
+      - "echo 'Built successfully' > dist/build.log"

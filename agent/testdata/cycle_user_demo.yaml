@@ -1,0 +1,26 @@
+settings:
+  project_id: "user-cycle-demo"
+  verbose: true
+  cycle_detection:
+    enabled: true
+    dynamic_protection: true
+    max_triggers_per_minute: 3
+
+rules:
+  - name: "build-tool"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "source.txt"
+    commands:
+      - "touch output.txt"
+
+  - name: "test-tool"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "output.txt"
+    commands:
+      - "touch source.txt"

@@ -15,7 +15,7 @@ import (
 type ProcessInfo struct {
 	cmd       *exec.Cmd
 	pid       int
-	pgid      int    // Process group ID
+	pgid      int // Process group ID
 	ruleName  string
 	startTime time.Time
 }
@@ -147,7 +147,7 @@ func (pm *ProcessManager) sendSignalToGroup(pgid int, sig syscall.Signal) error 
 	if err != nil && !strings.Contains(err.Error(), "no such process") {
 		return fmt.Errorf("failed to send signal to process group %d: %w", pgid, err)
 	}
-	
+
 	return nil
 }
 
@@ -167,14 +167,14 @@ func (pm *ProcessManager) verifyTermination(pid, pgid int, ruleName string) erro
 	// Check main process
 	if pm.isProcessAlive(pid) {
 		utils.LogDevloop("ProcessManager: WARNING: Main process %d still alive for rule %q", pid, ruleName)
-		
+
 		// Final SIGKILL attempt to process group AND individual process
 		if err := pm.sendSignalToGroup(pgid, syscall.SIGKILL); err != nil {
 			if pm.verbose {
 				utils.LogDevloop("ProcessManager: Error in final group kill: %v", err)
 			}
 		}
-		
+
 		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
 			if !strings.Contains(err.Error(), "no such process") {
 				utils.LogDevloop("ProcessManager: Error in final individual kill: %v", err)
@@ -211,17 +211,17 @@ func (pm *ProcessManager) verifyProcessGroupClean(pgid int, ruleName string) err
 		if pm.verbose {
 			utils.LogDevloop("ProcessManager: WARNING: Process group %d still has processes for rule %q", pgid, ruleName)
 		}
-		
+
 		// Final cleanup attempt
 		syscall.Kill(-pgid, syscall.SIGKILL)
 		time.Sleep(100 * time.Millisecond)
-		
+
 		// Check again
 		if syscall.Kill(-pgid, 0) == nil {
 			return fmt.Errorf("process group %d still has processes after cleanup", pgid)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -232,7 +232,7 @@ func (pm *ProcessManager) GetProcessInfo(cmd *exec.Cmd, ruleName string) *Proces
 	}
 
 	pid := cmd.Process.Pid
-	
+
 	// Get actual process group ID (setSysProcAttr should have set Setpgid: true)
 	pgid, err := syscall.Getpgid(pid)
 	if err != nil {

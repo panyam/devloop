@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/panyam/gocurrent"
 
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
@@ -390,6 +389,9 @@ type Orchestrator struct {
 	// Scheduler for routing rule execution
 	scheduler Scheduler
 
+	// Correlation tracking for dynamic cycle detection
+	correlationTracker *CorrelationTracker
+
 	// Trigger chain tracking for cross-rule cycle detection
 	triggerChain *TriggerChain
 
@@ -399,9 +401,12 @@ type Orchestrator struct {
 	// Advanced cycle breaking and resolution
 	cycleBreaker *CycleBreaker
 
+	// Execution tracking for cycle detection (tracks actual executions, not triggers)
+	executionTracker map[string][]time.Time // ruleName -> execution timestamps
+	executionMutex   sync.RWMutex
+
 	// Currently executing rule context for trigger chain tracking
 	currentExecutingRule string
-	executionMutex       sync.RWMutex
 
 	// Control channels
 	done            chan bool
@@ -470,6 +475,7 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		triggerChain:     NewTriggerChain(),
 		fileModTracker:   NewFileModificationTracker(),
 		cycleBreaker:     NewCycleBreaker(),
+		executionTracker: make(map[string][]time.Time),
 		debounceDuration: 500 * time.Millisecond,
 	}
 
@@ -484,7 +490,7 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 		utils.LogDevloop("Rule execution semaphore disabled (unlimited parallel rules)")
 	}
 
-	// Validate configuration for potential cycles
+	// Basic config validation
 	if err := orchestrator.ValidateConfig(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
@@ -508,6 +514,9 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 
 	// Initialize Scheduler
 	orchestrator.scheduler = NewDefaultScheduler(orchestrator, orchestrator.workerPool, orchestrator.lroManager)
+
+	// Initialize Correlation Tracker for dynamic cycle detection
+	orchestrator.correlationTracker = NewCorrelationTracker(orchestrator.Verbose)
 
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {
@@ -900,115 +909,11 @@ func (o *Orchestrator) logDevloop(format string, args ...interface{}) {
 	}
 }
 
-// ValidateConfig performs static cycle detection and validation on the loaded configuration
+// ValidateConfig performs basic configuration validation
 func (o *Orchestrator) ValidateConfig() error {
-	// Check if cycle detection is enabled
-	if !o.isCycleDetectionEnabled() {
-		return nil
-	}
-
-	// Check if static validation is enabled
-	if !o.isStaticValidationEnabled() {
-		return nil
-	}
-
-	if err := o.detectStaticCycles(); err != nil {
-		return fmt.Errorf("static cycle detected: %w", err)
-	}
+	// Basic config validation only - no static cycle detection
+	// Cycles are detected dynamically at runtime via rate limiting
 	return nil
-}
-
-// detectStaticCycles performs static analysis to detect potential infinite loops
-func (o *Orchestrator) detectStaticCycles() error {
-	for _, rule := range o.Config.Rules {
-		if err := o.validateRuleForSelfReference(rule); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// validateRuleForSelfReference checks if a rule might trigger itself
-func (o *Orchestrator) validateRuleForSelfReference(rule *pb.Rule) error {
-	// Check if cycle protection is enabled for this specific rule
-	if !o.isRuleCycleProtectionEnabled(rule) {
-		return nil
-	}
-
-	// Get the rule's working directory
-	workdir := o.getRuleWorkdir(rule)
-
-	// Check each watch pattern against the working directory
-	// Only consider "include" patterns for cycle detection, as "exclude" patterns prevent triggering
-	for _, matcher := range rule.Watch {
-		if matcher.Action != "include" {
-			continue // Skip exclude patterns for cycle detection
-		}
-		for _, pattern := range matcher.Patterns {
-			// Resolve pattern relative to rule's work_dir
-			resolvedPattern := resolvePattern(pattern, rule, o.ConfigPath)
-
-			// Check if the pattern could watch files in the rule's working directory
-			if o.pathOverlaps(resolvedPattern, workdir) {
-				utils.LogDevloop("Warning: Rule %q may trigger itself - pattern %q watches workdir %q",
-					rule.Name, pattern, workdir)
-				// For now, just warn - don't error out to maintain backward compatibility
-			}
-		}
-	}
-	return nil
-}
-
-// getRuleWorkdir returns the effective working directory for a rule
-func (o *Orchestrator) getRuleWorkdir(rule *pb.Rule) string {
-	if rule.WorkDir != "" {
-		if filepath.IsAbs(rule.WorkDir) {
-			return rule.WorkDir
-		}
-		// Relative to config file location
-		return filepath.Join(filepath.Dir(o.ConfigPath), rule.WorkDir)
-	}
-	// Default to config file directory
-	return filepath.Dir(o.ConfigPath)
-}
-
-// pathOverlaps checks if a pattern could potentially match files in a directory
-func (o *Orchestrator) pathOverlaps(pattern, dirPath string) bool {
-	// Make paths comparable by cleaning them
-	pattern = filepath.Clean(pattern)
-	dirPath = filepath.Clean(dirPath)
-
-	// If pattern is exact match to directory, it overlaps
-	if pattern == dirPath {
-		return true
-	}
-
-	// If pattern contains the directory as a prefix, it could match files inside
-	if strings.HasPrefix(pattern, dirPath+string(filepath.Separator)) {
-		return true
-	}
-
-	// If directory is a prefix of pattern, it could match files inside
-	if strings.HasPrefix(dirPath, filepath.Dir(pattern)) {
-		return true
-	}
-
-	// Use glob matching to check if pattern could match files in directory
-	testFile := filepath.Join(dirPath, "test.txt")
-	if matched, _ := doublestar.Match(pattern, testFile); matched {
-		return true
-	}
-
-	// Check with common file extensions that might be created by commands
-	extensions := []string{".go", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".log", ".txt", ".md"}
-	for _, ext := range extensions {
-		testFile := filepath.Join(dirPath, "test"+ext)
-		if matched, _ := doublestar.Match(pattern, testFile); matched {
-			return true
-		}
-	}
-
-	return false
 }
 
 // getCycleDetectionSettings returns the effective cycle detection settings with defaults
@@ -1020,8 +925,8 @@ func (o *Orchestrator) getCycleDetectionSettings() *pb.CycleDetectionSettings {
 	// Return default settings if not configured
 	return &pb.CycleDetectionSettings{
 		Enabled:                 true,  // Enable by default
-		StaticValidation:        true,  // Enable static validation by default
-		DynamicProtection:       false, // Disable dynamic protection by default for now
+		StaticValidation:        false, // Static validation removed - use dynamic only
+		DynamicProtection:       true,  // Enable dynamic protection by default
 		MaxTriggersPerMinute:    10,    // Default rate limit
 		MaxChainDepth:           5,     // Default chain depth limit
 		FileThrashWindowSeconds: 60,    // Default 60 second window
@@ -1033,12 +938,6 @@ func (o *Orchestrator) getCycleDetectionSettings() *pb.CycleDetectionSettings {
 func (o *Orchestrator) isCycleDetectionEnabled() bool {
 	settings := o.getCycleDetectionSettings()
 	return settings.Enabled
-}
-
-// isStaticValidationEnabled checks if static validation is enabled
-func (o *Orchestrator) isStaticValidationEnabled() bool {
-	settings := o.getCycleDetectionSettings()
-	return settings.StaticValidation
 }
 
 // isDynamicProtectionEnabled checks if dynamic protection (rate limiting) is enabled
@@ -1065,17 +964,56 @@ func (o *Orchestrator) isRuleCycleProtectionEnabled(rule *pb.Rule) bool {
 	return globalEnabled
 }
 
-// setCurrentExecutingRule sets the currently executing rule for trigger chain tracking
-func (o *Orchestrator) setCurrentExecutingRule(ruleName string) {
+// RecordExecution records an actual rule execution for cycle detection
+func (o *Orchestrator) RecordExecution(ruleName string) {
 	o.executionMutex.Lock()
 	defer o.executionMutex.Unlock()
+
+	if o.executionTracker[ruleName] == nil {
+		o.executionTracker[ruleName] = make([]time.Time, 0)
+	}
+
+	o.executionTracker[ruleName] = append(o.executionTracker[ruleName], time.Now())
+
+	// Clean up old records (keep only last 2 minutes)
+	cutoff := time.Now().Add(-2 * time.Minute)
+	executions := o.executionTracker[ruleName]
+	filtered := executions[:0]
+	for _, t := range executions {
+		if t.After(cutoff) {
+			filtered = append(filtered, t)
+		}
+	}
+	o.executionTracker[ruleName] = filtered
+}
+
+// GetExecutionCount returns the number of executions within the specified duration
+func (o *Orchestrator) GetExecutionCount(ruleName string, duration time.Duration) int {
+	o.executionMutex.RLock()
+	defer o.executionMutex.RUnlock()
+
+	executions := o.executionTracker[ruleName]
+	if executions == nil {
+		return 0
+	}
+
+	cutoff := time.Now().Add(-duration)
+	count := 0
+	for _, t := range executions {
+		if t.After(cutoff) {
+			count++
+		}
+	}
+	return count
+}
+
+// setCurrentExecutingRule sets the currently executing rule for trigger chain tracking
+func (o *Orchestrator) setCurrentExecutingRule(ruleName string) {
 	o.currentExecutingRule = ruleName
 }
 
 // clearCurrentExecutingRule clears the currently executing rule
 func (o *Orchestrator) clearCurrentExecutingRule() {
-	o.executionMutex.Lock()
-	defer o.executionMutex.Unlock()
 	o.currentExecutingRule = ""
 }
 

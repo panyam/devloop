@@ -138,7 +138,7 @@ rules:
 			err := lroManager.RestartProcess(ruleA, "concurrent_a")
 			assert.NoError(t, err)
 		}()
-		
+
 		go func() {
 			err := lroManager.RestartProcess(ruleB, "concurrent_b")
 			assert.NoError(t, err)
@@ -157,7 +157,7 @@ rules:
 		go func() {
 			lroManager.RestartProcess(ruleA, "restart_a")
 		}()
-		
+
 		go func() {
 			lroManager.RestartProcess(ruleB, "restart_b")
 		}()

@@ -112,7 +112,7 @@ func (w *Worker) executeJob(job *RuleJob, workerPool *WorkerPool) {
 	w.currentMutex.Lock()
 	w.currentJob = job
 	w.currentMutex.Unlock()
-	
+
 	// Record that this worker is executing this job
 	workerPool.recordJobStart(job, w)
 
@@ -135,6 +135,9 @@ func (w *Worker) executeJob(job *RuleJob, workerPool *WorkerPool) {
 
 	// Update rule status to running
 	w.updateRuleStatus(job.Rule, true, "RUNNING")
+
+	// Record rule execution start for correlation tracking
+	w.orchestrator.correlationTracker.RecordRuleStart(ruleName, job.TriggerType)
 
 	// Set current executing rule for trigger chain tracking
 	w.orchestrator.setCurrentExecutingRule(ruleName)
@@ -462,46 +465,46 @@ func (wp *WorkerPool) Stop() error {
 
 // EnqueueJob adds a job to the queue with deduplication logic
 func (wp *WorkerPool) EnqueueJob(job *RuleJob) {
-wp.executionMutex.Lock()
-defer wp.executionMutex.Unlock()
+	wp.executionMutex.Lock()
+	defer wp.executionMutex.Unlock()
 
-ruleName := job.Rule.Name
+	ruleName := job.Rule.Name
 
-// Check if rule is currently executing
-if executingWorker, isExecuting := wp.executingRules[ruleName]; isExecuting {
-// Rule is running - replace any existing pending job
-wp.pendingRules[ruleName] = job
-utils.LogDevloop("[%s] Rule executing on worker %d, job queued as pending (replacing previous)",
-ruleName, executingWorker.id)
-return
-}
+	// Check if rule is currently executing
+	if executingWorker, isExecuting := wp.executingRules[ruleName]; isExecuting {
+		// Rule is running - replace any existing pending job
+		wp.pendingRules[ruleName] = job
+		utils.LogDevloop("[%s] Rule executing on worker %d, job queued as pending (replacing previous)",
+			ruleName, executingWorker.id)
+		return
+	}
 
-// Check if rule already has a pending job
-if _, hasPending := wp.pendingRules[ruleName]; hasPending {
-// Replace existing pending job with newer one
-wp.pendingRules[ruleName] = job
-utils.LogDevloop("[%s] Replacing pending job with newer one", ruleName)
-return
-}
+	// Check if rule already has a pending job
+	if _, hasPending := wp.pendingRules[ruleName]; hasPending {
+		// Replace existing pending job with newer one
+		wp.pendingRules[ruleName] = job
+		utils.LogDevloop("[%s] Replacing pending job with newer one", ruleName)
+		return
+	}
 
-// Rule is free - ensure we have workers available and queue the job
-wp.ensureWorkerAvailable()
+	// Rule is free - ensure we have workers available and queue the job
+	wp.ensureWorkerAvailable()
 
-select {
-case wp.jobQueue <- job:
-utils.LogDevloop("[%s] Job queued for execution", ruleName)
-default:
-// Queue is full - make it pending instead
-wp.pendingRules[ruleName] = job
-utils.LogDevloop("[%s] Queue full, job marked as pending", ruleName)
-}
+	select {
+	case wp.jobQueue <- job:
+		utils.LogDevloop("[%s] Job queued for execution", ruleName)
+	default:
+		// Queue is full - make it pending instead
+		wp.pendingRules[ruleName] = job
+		utils.LogDevloop("[%s] Queue full, job marked as pending", ruleName)
+	}
 }
 
 // recordJobStart records that a worker is starting to execute a job
 func (wp *WorkerPool) recordJobStart(job *RuleJob, worker *Worker) {
 	wp.executionMutex.Lock()
 	defer wp.executionMutex.Unlock()
-	
+
 	wp.executingRules[job.Rule.Name] = worker
 }
 
@@ -535,24 +538,24 @@ func (wp *WorkerPool) CompleteJob(job *RuleJob, worker *Worker) {
 func (wp *WorkerPool) ensureWorkerAvailable() {
 	// Check if we need more workers
 	currentWorkers := len(wp.workers)
-	
+
 	// Don't create more workers if we're at max capacity
 	if currentWorkers >= wp.maxWorkers {
 		return
 	}
-	
+
 	// Don't create workers if we have idle ones available
 	activeWorkers := len(wp.executingRules)
 	if activeWorkers < currentWorkers {
 		return // We have idle workers
 	}
-	
+
 	// Create a new worker
 	workerID := currentWorkers + 1
 	worker := NewWorker(workerID, wp.orchestrator)
 	wp.workers = append(wp.workers, worker)
 	worker.Start(wp.jobQueue, wp)
-	
+
 	utils.LogDevloop("Created worker %d on-demand (total: %d/%d)", workerID, len(wp.workers), wp.maxWorkers)
 }
 

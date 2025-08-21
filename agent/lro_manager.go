@@ -42,23 +42,23 @@ func NewLROManager(orchestrator *Orchestrator) *LROManager {
 
 // RestartProcess kills any existing process for the rule and starts a new one
 func (lro *LROManager) RestartProcess(rule *pb.Rule, triggerType string) error {
-ruleName := rule.Name
-verbose := lro.orchestrator.isVerboseForRule(rule)
+	ruleName := rule.Name
+	verbose := lro.orchestrator.isVerboseForRule(rule)
 
-if verbose {
-utils.LogDevloop("LRO: Restarting process for rule %q (trigger: %s)", ruleName, triggerType)
-}
+	if verbose {
+		utils.LogDevloop("LRO: Restarting process for rule %q (trigger: %s)", ruleName, triggerType)
+	}
 
-// Prevent concurrent restarts for the same rule
-lro.mutex.Lock()
-existingProcess := lro.processes[ruleName]
-if existingProcess != nil {
+	// Prevent concurrent restarts for the same rule
+	lro.mutex.Lock()
+	existingProcess := lro.processes[ruleName]
+	if existingProcess != nil {
 		// Mark this process for termination but don't wait here to avoid blocking
- delete(lro.processes, ruleName)
-}
+		delete(lro.processes, ruleName)
+	}
 	lro.mutex.Unlock()
 
-// 1. Kill existing process if any (non-blocking)
+	// 1. Kill existing process if any (non-blocking)
 	if existingProcess != nil {
 		go func() {
 			if existingProcess.cancel != nil {
@@ -77,24 +77,24 @@ if existingProcess != nil {
 
 // killExistingProcess terminates the existing process for a rule
 func (lro *LROManager) killExistingProcess(ruleName string) error {
-lro.mutex.Lock()
-lroProcess := lro.processes[ruleName]
-if lroProcess == nil {
-lro.mutex.Unlock()
-return nil // No existing process
-}
+	lro.mutex.Lock()
+	lroProcess := lro.processes[ruleName]
+	if lroProcess == nil {
+		lro.mutex.Unlock()
+		return nil // No existing process
+	}
 
-// Remove from map immediately to prevent race conditions
-delete(lro.processes, ruleName)
-lro.mutex.Unlock()
+	// Remove from map immediately to prevent race conditions
+	delete(lro.processes, ruleName)
+	lro.mutex.Unlock()
 
-// Cancel context first
-if lroProcess.cancel != nil {
-lroProcess.cancel()
-}
+	// Cancel context first
+	if lroProcess.cancel != nil {
+		lroProcess.cancel()
+	}
 
-// Use improved ProcessManager for reliable termination
-return lro.processManager.TerminateProcess(lroProcess.processInfo)
+	// Use improved ProcessManager for reliable termination
+	return lro.processManager.TerminateProcess(lroProcess.processInfo)
 }
 
 // startNewProcess starts a new LRO process for the given rule
@@ -203,7 +203,7 @@ func (lro *LROManager) startNewProcess(rule *pb.Rule, triggerType string) error 
 		lro.mutex.Unlock()
 		// A race occurred - kill our new process and let the existing one run
 		if verbose {
-			utils.LogDevloop("LRO: Race detected - killing new process %d, keeping existing for rule %q", 
+			utils.LogDevloop("LRO: Race detected - killing new process %d, keeping existing for rule %q",
 				lroProcess.processInfo.pid, ruleName)
 		}
 		lro.processManager.TerminateProcess(lroProcess.processInfo)

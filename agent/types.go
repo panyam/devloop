@@ -49,6 +49,7 @@ package agent
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
@@ -95,34 +96,37 @@ func (r *Rule) GetPrefix() string {
 
 // resolvePattern resolves a pattern relative to a rule's working directory
 func resolvePattern(pattern string, rule *pb.Rule, configPath string) string {
-	// If pattern is already absolute, return as-is
-	if filepath.IsAbs(pattern) {
-		return pattern
-	}
-
-	// Determine the base directory for pattern resolution
-	var baseDir string
-	if rule.WorkDir != "" {
-		// If rule has a work_dir, use it as the base
-		if filepath.IsAbs(rule.WorkDir) {
-			baseDir = rule.WorkDir
-		} else {
-			// work_dir is relative to config file location
-			baseDir = filepath.Join(filepath.Dir(configPath), rule.WorkDir)
-		}
-	} else {
-		// No work_dir specified, use config file directory
-		baseDir = filepath.Dir(configPath)
-	}
-
-	// Resolve pattern relative to base directory
-	return filepath.Join(baseDir, pattern)
+	// For glob patterns, we don't want to join them with absolute paths
+	// Instead, patterns should remain relative to the rule's working directory
+	// The actual file path matching happens with relative paths
+	return pattern
 }
 
 // Matches checks if the given file path matches the rule's watch criteria.
 func RuleMatches(r *pb.Rule, filePath string, configPath string) *pb.RuleMatcher {
+	// Convert absolute paths to relative paths for pattern matching
+	relativeFilePath := filePath
+
+	// Determine the base directory for this rule
+	var baseDir string
+	if r.WorkDir != "" {
+		if filepath.IsAbs(r.WorkDir) {
+			baseDir = r.WorkDir
+		} else {
+			baseDir = filepath.Join(filepath.Dir(configPath), r.WorkDir)
+		}
+	} else {
+		baseDir = filepath.Dir(configPath)
+	}
+
+	// Convert absolute path to relative if needed
+	if filepath.IsAbs(filePath) && strings.HasPrefix(filePath, baseDir) {
+		relativeFilePath = strings.TrimPrefix(filePath, baseDir)
+		relativeFilePath = strings.TrimPrefix(relativeFilePath, string(filepath.Separator))
+	}
+
 	for _, matcher := range r.Watch {
-		if MatcherMatches(matcher, filePath, r, configPath) {
+		if MatcherMatches(matcher, relativeFilePath, r, configPath) {
 			return matcher
 		}
 	}

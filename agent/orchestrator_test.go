@@ -472,7 +472,8 @@ func TestCycleDetection(t *testing.T) {
 
 				if tt.config.Settings.CycleDetection != nil {
 					assert.Equal(t, tt.config.Settings.CycleDetection.Enabled, orchestrator.isCycleDetectionEnabled())
-					assert.Equal(t, tt.config.Settings.CycleDetection.StaticValidation, orchestrator.isStaticValidationEnabled())
+					// Note: Static validation removed - only test dynamic protection
+					assert.Equal(t, tt.config.Settings.CycleDetection.DynamicProtection, orchestrator.isDynamicProtectionEnabled())
 				}
 
 				// Test per-rule cycle protection

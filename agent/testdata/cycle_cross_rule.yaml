@@ -1,0 +1,26 @@
+settings:
+  project_id: "cross-rule-cycle-test"
+  verbose: true
+  cycle_detection:
+    enabled: true
+    dynamic_protection: true
+    max_triggers_per_minute: 4
+
+rules:
+  - name: "writer-a"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "trigger-a.txt"
+    commands:
+      - "echo 'Writer A triggered' >> trigger-b.txt"
+
+  - name: "writer-b"
+    skip_run_on_init: true
+    watch:
+      - action: "include"
+        patterns:
+          - "trigger-b.txt"
+    commands:
+      - "echo 'Writer B triggered' >> trigger-a.txt"

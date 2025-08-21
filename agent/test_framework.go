@@ -59,21 +59,33 @@ func (to *TestOrchestrator) WaitForRuleCompletion(ruleName string, timeout time.
 
 // TestConfig represents a test configuration builder
 type TestConfig struct {
-	ProjectID string
-	Verbose   bool
-	Rules     []TestRule
-	Settings  map[string]interface{}
+	ProjectID      string
+	Verbose        bool
+	Rules          []TestRule
+	Settings       map[string]interface{}
+	CycleDetection *CycleDetectionConfig
+}
+
+// CycleDetectionConfig represents cycle detection configuration for testing
+type CycleDetectionConfig struct {
+	Enabled              bool
+	DynamicProtection    bool
+	MaxTriggersPerMinute int
+	MaxChainDepth        int
+	FileThrashWindow     int
+	FileThrashThreshold  int
 }
 
 // TestRule represents a rule configuration for testing
 type TestRule struct {
-	Name           string
-	LRO            bool
-	SkipRunOnInit  bool
-	Commands       []string
-	WatchPatterns  []string
+	Name            string
+	LRO             bool
+	SkipRunOnInit   bool
+	Commands        []string
+	Patterns        []string // Simplified - just include patterns
+	WatchPatterns   []string // Deprecated - use Patterns
 	ExcludePatterns []string
-	Env            map[string]string
+	Env             map[string]string
 }
 
 // NewTestConfig creates a new test configuration builder
@@ -123,26 +135,43 @@ func (tc *TestConfig) WithMaxWorkers(max int) *TestConfig {
 // ToYAML converts the test config to YAML string
 func (tc *TestConfig) ToYAML() string {
 	yaml := fmt.Sprintf("settings:\n  project_id: %q\n", tc.ProjectID)
-	
+
 	if tc.Verbose {
 		yaml += "  verbose: true\n"
 	}
-	
+
+	// Add cycle detection settings
+	if tc.CycleDetection != nil {
+		yaml += "  cycle_detection:\n"
+		yaml += fmt.Sprintf("    enabled: %t\n", tc.CycleDetection.Enabled)
+		yaml += fmt.Sprintf("    dynamic_protection: %t\n", tc.CycleDetection.DynamicProtection)
+		yaml += fmt.Sprintf("    max_triggers_per_minute: %d\n", tc.CycleDetection.MaxTriggersPerMinute)
+		if tc.CycleDetection.MaxChainDepth > 0 {
+			yaml += fmt.Sprintf("    max_chain_depth: %d\n", tc.CycleDetection.MaxChainDepth)
+		}
+		if tc.CycleDetection.FileThrashWindow > 0 {
+			yaml += fmt.Sprintf("    file_thrash_window_seconds: %d\n", tc.CycleDetection.FileThrashWindow)
+		}
+		if tc.CycleDetection.FileThrashThreshold > 0 {
+			yaml += fmt.Sprintf("    file_thrash_threshold: %d\n", tc.CycleDetection.FileThrashThreshold)
+		}
+	}
+
 	// Add custom settings
 	for key, value := range tc.Settings {
 		yaml += fmt.Sprintf("  %s: %v\n", key, value)
 	}
-	
+
 	yaml += "\nrules:\n"
-	
+
 	for _, rule := range tc.Rules {
 		yaml += fmt.Sprintf("  - name: %q\n", rule.Name)
 		yaml += fmt.Sprintf("    lro: %t\n", rule.LRO)
-		
+
 		if rule.SkipRunOnInit {
 			yaml += "    skip_run_on_init: true\n"
 		}
-		
+
 		// Add environment variables
 		if len(rule.Env) > 0 {
 			yaml += "    env:\n"
@@ -150,16 +179,16 @@ func (tc *TestConfig) ToYAML() string {
 				yaml += fmt.Sprintf("      %s: %q\n", key, value)
 			}
 		}
-		
+
 		// Add commands
 		yaml += "    commands:\n"
 		for _, cmd := range rule.Commands {
 			yaml += fmt.Sprintf("      - %q\n", cmd)
 		}
-		
+
 		// Add watch patterns
 		yaml += "    watch:\n"
-		
+
 		// Add exclude patterns first if any
 		if len(rule.ExcludePatterns) > 0 {
 			yaml += "      - action: exclude\n        patterns:\n"
@@ -167,18 +196,23 @@ func (tc *TestConfig) ToYAML() string {
 				yaml += fmt.Sprintf("          - %q\n", pattern)
 			}
 		}
-		
-		// Add include patterns
-		if len(rule.WatchPatterns) > 0 {
+
+		// Add include patterns - use Patterns field if available, otherwise WatchPatterns for backward compatibility
+		patterns := rule.Patterns
+		if len(patterns) == 0 {
+			patterns = rule.WatchPatterns
+		}
+
+		if len(patterns) > 0 {
 			yaml += "      - action: include\n        patterns:\n"
-			for _, pattern := range rule.WatchPatterns {
+			for _, pattern := range patterns {
 				yaml += fmt.Sprintf("          - %q\n", pattern)
 			}
 		}
-		
+
 		yaml += "\n"
 	}
-	
+
 	return yaml
 }
 
@@ -199,7 +233,7 @@ func (th *TestHelper) WithOrchestrator(config *TestConfig, testFunc func(*TestOr
 		// Write config to temp directory
 		configPath := filepath.Join(tmpDir, ".devloop.yaml")
 		configContent := config.ToYAML()
-		
+
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err, "Failed to write test config")
 
@@ -234,10 +268,10 @@ func (th *TestHelper) WithRunningOrchestrator(config *TestConfig, testFunc func(
 				to.t.Logf("Orchestrator start error: %v", err)
 			}
 		}()
-		
+
 		// Give time for components to start
 		time.Sleep(200 * time.Millisecond)
-		
+
 		testFunc(to)
 	})
 }
@@ -246,9 +280,9 @@ func (th *TestHelper) WithRunningOrchestrator(config *TestConfig, testFunc func(
 func (th *TestHelper) AssertRuleStatus(orchestrator *Orchestrator, ruleName string, expectedRunning bool, expectedStatus string) {
 	ruleRunner := orchestrator.GetRuleRunner(ruleName)
 	require.NotNil(th.t, ruleRunner, "Rule %q should exist", ruleName)
-	
+
 	status := ruleRunner.GetStatus()
-	require.Equal(th.t, expectedRunning, ruleRunner.IsRunning(), 
+	require.Equal(th.t, expectedRunning, ruleRunner.IsRunning(),
 		"Rule %q running state. Status: %s", ruleName, status.LastBuildStatus)
 	require.Equal(th.t, expectedStatus, status.LastBuildStatus,
 		"Rule %q status", ruleName)
@@ -257,6 +291,6 @@ func (th *TestHelper) AssertRuleStatus(orchestrator *Orchestrator, ruleName stri
 // AssertLROProcessCount asserts the expected number of LRO processes
 func (th *TestHelper) AssertLROProcessCount(lroManager *LROManager, expectedCount int) {
 	processes := lroManager.GetRunningProcesses()
-	require.Len(th.t, processes, expectedCount, 
+	require.Len(th.t, processes, expectedCount,
 		"Expected %d LRO processes, got %d: %v", expectedCount, len(processes), processes)
 }
