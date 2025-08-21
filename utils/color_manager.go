@@ -4,6 +4,7 @@ import (
 	"hash/fnv"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 )
@@ -37,6 +38,7 @@ type ColorManager struct {
 	colorMap     map[string]*color.Color
 	darkPalette  []*color.Color
 	lightPalette []*color.Color
+	mu           sync.RWMutex // Protects colorMap from concurrent access
 }
 
 // NewColorManager creates a new color manager with the given settings
@@ -117,10 +119,13 @@ func (cm *ColorManager) GetColorForRule(rule ColorRule) *color.Color {
 		ruleName = rule.GetPrefix()
 	}
 
-	// Check if we already have a color assigned for this rule
+	// Check if we already have a color assigned for this rule (read lock)
+	cm.mu.RLock()
 	if existingColor, exists := cm.colorMap[ruleName]; exists {
+		cm.mu.RUnlock()
 		return existingColor
 	}
+	cm.mu.RUnlock()
 
 	var ruleColor *color.Color
 
@@ -141,8 +146,15 @@ func (cm *ColorManager) GetColorForRule(rule ColorRule) *color.Color {
 		ruleColor = cm.assignColorFromPalette(ruleName)
 	}
 
-	// Cache the color assignment
+	// Cache the color assignment (write lock)
+	cm.mu.Lock()
+	// Double-check in case another goroutine added it while we were computing
+	if existingColor, exists := cm.colorMap[ruleName]; exists {
+		cm.mu.Unlock()
+		return existingColor
+	}
 	cm.colorMap[ruleName] = ruleColor
+	cm.mu.Unlock()
 	return ruleColor
 }
 
