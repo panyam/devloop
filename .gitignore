@@ -1,4 +1,5 @@
 bin
+coverage.out
 .claude 
 logs
 locallinks
