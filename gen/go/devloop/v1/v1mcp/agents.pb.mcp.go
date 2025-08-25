@@ -8,13 +8,13 @@ import (
 )
 
 import (
+	"connectrpc.com/connect"
 	"context"
+	"encoding/json"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"encoding/json"
-	"google.golang.org/protobuf/encoding/protojson"
-	"connectrpc.com/connect"
 	grpc "google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (

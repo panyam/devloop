@@ -167,7 +167,6 @@ func (tc *TestConfig) ToYAML() string {
 	for _, rule := range tc.Rules {
 		yaml += fmt.Sprintf("  - name: %q\n", rule.Name)
 
-
 		if rule.SkipRunOnInit {
 			yaml += "    skip_run_on_init: true\n"
 		}

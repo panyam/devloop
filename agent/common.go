@@ -234,7 +234,6 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 					}
 				}
 
-
 			}
 		}
 	}

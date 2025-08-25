@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"os/exec"
 
 	"strings"
@@ -136,7 +135,7 @@ func (r *RuleRunner) executeWithRetry() error {
 			time.Sleep(backoffDuration)
 		}
 
-		if err := r.Execute(); err != nil {
+		if err := r.execute(true); err != nil {
 			lastErr = err
 			utils.LogDevloop("[%s] Rule %q execution failed (attempt %d/%d): %v",
 				r.rule.Name, r.rule.Name, attempt+1, maxRetries+1, err)
@@ -188,6 +187,7 @@ func (r *RuleRunner) Stop() error {
 	r.debounceMutex.Lock()
 	if r.debounceTimer != nil {
 		r.debounceTimer.Stop()
+		r.debounceTimer = nil
 	}
 	r.debounceMutex.Unlock()
 
@@ -200,7 +200,7 @@ func (r *RuleRunner) Restart() error {
 	if err := r.TerminateProcesses(); err != nil {
 		return err
 	}
-	return r.Execute()
+	return r.execute(true)
 }
 
 // IsRunning returns true if any commands are currently running
@@ -279,6 +279,7 @@ func (r *RuleRunner) triggerDebouncedWithRetry(bypassRateLimit bool) {
 	// Cancel existing timer if any
 	if r.debounceTimer != nil {
 		r.debounceTimer.Stop()
+		r.debounceTimer = nil
 	}
 
 	// Set new timer with retry logic for startup
@@ -289,6 +290,7 @@ func (r *RuleRunner) triggerDebouncedWithRetry(bypassRateLimit bool) {
 	}
 	r.debounceTimer = time.AfterFunc(startupDelay, func() {
 		err := r.executeWithRetry()
+		r.debounceTimer = nil
 		if err != nil {
 			// Check if we should exit on failed init
 			if r.rule.ExitOnFailedInit {
@@ -323,8 +325,6 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 	defer r.debounceMutex.Unlock()
 
 	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
-	log.Println("BypassRateLimit: ", bypassRateLimit)
-	log.Println("isDynProtEnabled: ", r.orchestrator.isDynamicProtectionEnabled())
 	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
 		// Check if we're in backoff period
 		if r.triggerTracker.IsInBackoff() {
@@ -352,45 +352,15 @@ func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
 	// Cancel existing timer if any
 	if r.debounceTimer != nil {
 		r.debounceTimer.Stop()
+		r.debounceTimer = nil
 	}
 
 	// Check if rule is currently running
-	isRunning := r.isCurrentlyRunning()
-	log.Println("Is Currnetly Running: ", isRunning)
+	// isRunning := r.isCurrentlyRunning()
 
-	if isRunning {
-		// Rule is currently executing - mark for pending execution after completion
-		// (WorkerPool will now handle the killing/restarting logic)
-		wasPending := r.hasPendingExecution()
-		log.Println("wasPending: ", wasPending)
-		r.setPendingExecution(true)
-
-		if r.isVerbose() {
-			triggerType := "File change"
-			if bypassRateLimit {
-				triggerType = "Manual trigger"
-			}
-			if wasPending {
-				r.logDevloop("[%s] %s detected while running, replacing previous pending execution", r.rule.Name, triggerType)
-			} else {
-				r.logDevloop("[%s] %s detected while running, scheduling execution after completion", r.rule.Name, triggerType)
-			}
-		}
-	} else {
-		// Rule is not running - use normal debouncing
-		r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
-			if err := r.Execute(); err != nil {
-				r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
-			}
-		})
-
-		if r.isVerbose() {
-			triggerType := "File change"
-			if bypassRateLimit {
-				triggerType = "Manual trigger"
-			}
-			r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
-		}
+	// Clean interface - always call execute, let it handle debouncing internally
+	if err := r.execute(bypassRateLimit); err != nil {
+		r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
 	}
 }
 
@@ -515,17 +485,50 @@ func (r *RuleRunner) logDevloop(format string, args ...any) {
 	r.orchestrator.logDevloop(format, args...)
 }
 
-// Execute sends a trigger event to the scheduler for execution
-func (r *RuleRunner) Execute() error {
+// execute handles debouncing internally and routes to scheduler
+func (r *RuleRunner) execute(bypassRateLimit bool) error {
+	if bypassRateLimit {
+		// Manual trigger - execute immediately
+		if r.isVerbose() {
+			r.logDevloop("[%s] Manual trigger - executing immediately", r.rule.Name)
+		}
+		return r.executeNow("manual")
+	}
+
+	// File change - handle debouncing internally
+	if r.debounceTimer != nil {
+		// Already debouncing - existing timer will handle it
+		if r.isVerbose() {
+			r.logDevloop("[%s] File change detected while debouncing - will execute when timer expires", r.rule.Name)
+		}
+		return nil
+	}
+
+	// Start debounce timer
+	if r.isVerbose() {
+		r.logDevloop("[%s] File change detected, execution scheduled in %v", r.rule.Name, r.debounceDuration)
+	}
+
+	r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
+		r.debounceTimer = nil // Clear timer
+		if err := r.executeNow("file_change"); err != nil {
+			r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
+		}
+	})
+	return nil
+}
+
+// executeNow immediately sends trigger event to scheduler
+func (r *RuleRunner) executeNow(triggerType string) error {
 	// Create trigger event
 	event := &TriggerEvent{
 		Rule:        r.rule,
-		TriggerType: "file_change", // TODO: Could be made more specific
+		TriggerType: triggerType,
 		Context:     context.Background(),
 	}
 
 	if r.isVerbose() {
-		r.logDevloop("[%s] Sending trigger event to scheduler", r.rule.Name)
+		r.logDevloop("[%s] Sending trigger event to scheduler (trigger: %s)", r.rule.Name, triggerType)
 	}
 
 	// Send to scheduler for routing

@@ -47,10 +47,10 @@ func (j *RuleJob) CanBeKilled(newJob *RuleJob, orchestrator *Orchestrator) bool 
 	if newJob.IsManualTrigger() {
 		return true // Manual triggers always kill existing jobs
 	}
-	
+
 	// Check if job has been running long enough (debounce window)
 	debounceDuration := orchestrator.getDebounceDelayForRule(j.Rule)
-	
+
 	return time.Since(j.StartTime) >= debounceDuration
 }
 
@@ -112,12 +112,14 @@ func (w *Worker) Start(jobQueue <-chan *RuleJob, workerPool *WorkerPool) {
 func (w *Worker) Stop() error {
 	close(w.stopChan)
 
+	terminationTimeout := 2 * time.Second
+
 	// Wait for worker to stop with timeout
 	select {
 	case <-w.stoppedChan:
 		utils.LogDevloop("Worker %d stopped gracefully", w.id)
-	case <-time.After(5 * time.Second):
-		utils.LogDevloop("Worker %d stop timeout, forcing termination", w.id)
+	case <-time.After(terminationTimeout):
+		utils.LogDevloop("Worker %d stop timeout (%ds), forcing termination", w.id, terminationTimeout)
 		w.terminateCurrentJob()
 	}
 
@@ -493,7 +495,7 @@ func (wp *WorkerPool) EnqueueJob(job *RuleJob) {
 	// 1. Check if rule is currently running
 	if runningJob, isRunning := wp.runningJobs[ruleName]; isRunning {
 		shouldKill := runningJob.CanBeKilled(job, wp.orchestrator)
-		
+
 		if shouldKill {
 			// Kill the running process
 			executingWorker := wp.executingRules[ruleName]
@@ -503,10 +505,10 @@ func (wp *WorkerPool) EnqueueJob(job *RuleJob) {
 					triggerType = "Manual trigger"
 				}
 				utils.LogDevloop("[%s] %s detected while running, killing process and restarting", ruleName, triggerType)
-				
+
 				// Terminate the running job's processes
 				go executingWorker.TerminateProcesses()
-				
+
 				// Clear the running job (worker will handle cleanup via CompleteJob)
 				delete(wp.runningJobs, ruleName)
 			}
@@ -541,7 +543,7 @@ func (wp *WorkerPool) recordJobStart(job *RuleJob, worker *Worker) {
 
 	ruleName := job.Rule.Name
 	job.StartTime = time.Now() // Record when job actually started executing
-	
+
 	wp.runningJobs[ruleName] = job
 	wp.executingRules[ruleName] = worker
 }
