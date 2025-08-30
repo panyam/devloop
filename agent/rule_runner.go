@@ -44,7 +44,6 @@ type RuleRunner struct {
 
 	// Channel-based event handling
 	triggerChan chan bool
-	killChan    chan struct{} // Kill current execution
 	stopChan    chan struct{} // Shutdown signal
 	stoppedChan chan struct{} // Shutdown complete
 }
@@ -68,10 +67,9 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 		},
 		debounceDuration: orchestrator.getDebounceDelayForRule(rule),
 		verbose:          verbose,
-		triggerChan:      make(chan bool, 1),     // Single timer event
-		killChan:         make(chan struct{}, 1), // Kill current execution
-		stopChan:         make(chan struct{}),    // Shutdown signal
-		stoppedChan:      make(chan struct{}),    // Shutdown complete
+		triggerChan:      make(chan bool, 1),  // Single timer event
+		stopChan:         make(chan struct{}), // Shutdown signal
+		stoppedChan:      make(chan struct{}), // Shutdown complete
 	}
 
 	return runner
@@ -116,7 +114,7 @@ func (r *RuleRunner) eventLoop() {
 		case <-r.watcher.EventChan():
 			// Here we have a simple batching strategy
 			// If process is running, see if this time is > startTime + debounceDuration
-			if r.lastStarted.Sub(time.Now()) <= r.debounceDuration {
+			if time.Since(r.lastStarted) <= r.debounceDuration {
 				triggerCount++
 			} else {
 				triggerCount = 0
@@ -126,19 +124,18 @@ func (r *RuleRunner) eventLoop() {
 		case <-r.triggerChan:
 			triggerCount = 0
 			r.executeNow("manual", true)
-			break
 
 		case <-ticker.C:
 			// see if there are any pending executions due to debouncing
-			if triggerCount > 0 && time.Now().Sub(r.lastStarted) > r.debounceDuration {
+			if triggerCount > 0 && time.Since(r.lastStarted) > r.debounceDuration {
 				triggerCount = 0
 				r.executeNow("file_change", true)
 			}
 
-		case <-r.killChan:
 		case <-r.stopChan:
+			r.logDevloop("Stop received")
 			// Don't block shutdown on process termination
-			go r.TerminateProcesses()
+			r.TerminateProcesses()
 			return
 		}
 	}
@@ -150,6 +147,7 @@ func (r *RuleRunner) TriggerManual() {
 }
 
 // executeWithRetry executes the rule with exponential backoff retry logic
+/*
 func (r *RuleRunner) executeWithRetry() error {
 	maxRetries := r.getMaxInitRetries()
 	backoffBase := r.getInitRetryBackoffBase()
@@ -200,6 +198,7 @@ func (r *RuleRunner) getInitRetryBackoffBase() uint64 {
 	}
 	return r.rule.InitRetryBackoffBase
 }
+*/
 
 // Stop terminates all processes and cleans up
 func (r *RuleRunner) Stop() error {
@@ -228,16 +227,6 @@ func (r *RuleRunner) Stop() error {
 	}()
 
 	return nil
-}
-
-// Kill terminates currently running processes without stopping the rule
-func (r *RuleRunner) Kill() {
-	select {
-	case r.killChan <- struct{}{}:
-	default:
-		// Channel full, terminate directly
-		r.TerminateProcesses()
-	}
 }
 
 // GetStatus returns a copy of the current status
@@ -304,7 +293,7 @@ func (r *RuleRunner) isVerbose() bool {
 
 // logDevloop logs a message using the orchestrator's logging mechanism
 func (r *RuleRunner) logDevloop(format string, args ...any) {
-	r.orchestrator.logDevloop(fmt.Sprintf("[%s] %s", r.rule.Name, format), args...)
+	r.orchestrator.logDevloop(r.rule, format, args...)
 }
 
 // UpdateStatus allows external systems to update this rule's execution status

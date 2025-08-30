@@ -396,9 +396,6 @@ type Orchestrator struct {
 	executionTracker map[string][]time.Time // ruleName -> execution timestamps
 	executionMutex   sync.RWMutex
 
-	// Currently executing rule context for trigger chain tracking
-	currentExecutingRule string
-
 	// Control channels
 	done            chan bool
 	doneOnce        sync.Once
@@ -806,15 +803,21 @@ func (o *Orchestrator) SetRuleVerbose(ruleName string, verbose bool) error {
 }
 
 // logDevloop logs devloop internal messages with consistent formatting
-func (o *Orchestrator) logDevloop(format string, args ...interface{}) {
+func (o *Orchestrator) logDevloop(rule *pb.Rule, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 
 	if o.Config.Settings.PrefixLogs && o.Config.Settings.PrefixMaxLength > 0 {
 		// Format with left-aligned "devloop" prefix to match rule output format
 		prefix := "devloop"
-		totalPadding := int(o.Config.Settings.PrefixMaxLength - uint32(len(prefix)))
-		leftAlignedPrefix := prefix + strings.Repeat(" ", totalPadding)
-		prefixStr := "[" + leftAlignedPrefix + "] "
+		if rule != nil {
+			prefix = "devloop/" + rule.Name
+		}
+		prefixStr := "[" + prefix + "]"
+		if len(prefix) < int(o.Config.Settings.PrefixMaxLength) {
+			totalPadding := int(o.Config.Settings.PrefixMaxLength - uint32(len(prefix)))
+			leftAlignedPrefix := prefix + strings.Repeat(" ", totalPadding)
+			prefixStr = "[" + leftAlignedPrefix + "] "
+		}
 
 		// Add color if enabled
 		if o.ColorManager != nil && o.ColorManager.IsEnabled() {
@@ -931,16 +934,6 @@ func (o *Orchestrator) GetExecutionCount(ruleName string, duration time.Duration
 		}
 	}
 	return count
-}
-
-// setCurrentExecutingRule sets the currently executing rule for trigger chain tracking
-func (o *Orchestrator) setCurrentExecutingRule(ruleName string) {
-	o.currentExecutingRule = ruleName
-}
-
-// clearCurrentExecutingRule clears the currently executing rule
-func (o *Orchestrator) clearCurrentExecutingRule() {
-	o.currentExecutingRule = ""
 }
 
 // cleanupTriggerHistory periodically cleans up old trigger records to prevent memory growth
