@@ -24,9 +24,9 @@ type Watcher struct {
 	mutex       sync.RWMutex
 
 	// Event handling
-	eventHandler func(string) // Called when a relevant file changes
-	stopChan     chan struct{}
-	stoppedChan  chan struct{}
+	eventChan   chan string
+	stopChan    chan struct{}
+	stoppedChan chan struct{}
 }
 
 // NewWatcher creates a new Watcher for the given rule
@@ -38,12 +38,12 @@ func NewWatcher(rule *pb.Rule, configPath string, verbose bool) *Watcher {
 		watchedDirs: make(map[string]bool),
 		stopChan:    make(chan struct{}),
 		stoppedChan: make(chan struct{}),
+		eventChan:   make(chan string),
 	}
 }
 
-// SetEventHandler sets the callback function for file change events
-func (w *Watcher) SetEventHandler(handler func(string)) {
-	w.eventHandler = handler
+func (w *Watcher) EventChan() chan string {
+	return w.eventChan
 }
 
 // Start initializes the file watcher and begins monitoring
@@ -322,7 +322,11 @@ func (w *Watcher) patternCouldMatchInDirectory(pattern, dirPath string) bool {
 
 // watchFiles processes file system events
 func (w *Watcher) watchFiles() {
-	defer close(w.stoppedChan)
+	defer func() {
+		close(w.eventChan)
+		w.eventChan = nil
+		close(w.stoppedChan)
+	}()
 
 	for {
 		select {
@@ -387,9 +391,8 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 		w.mutex.Unlock()
 	}
 
-	// Call the event handler if one is set
-	if w.eventHandler != nil {
-		w.eventHandler(event.Name)
+	if w.eventChan != nil {
+		w.eventChan <- event.Name
 	}
 }
 

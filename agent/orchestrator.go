@@ -380,12 +380,6 @@ type Orchestrator struct {
 	ruleRunners  map[string]*RuleRunner
 	runnersMutex sync.RWMutex
 
-	// Worker pool for all jobs (short and long-running)
-	workerPool *WorkerPool
-
-	// Scheduler for routing rule execution
-	scheduler Scheduler
-
 	// Correlation tracking for dynamic cycle detection
 	correlationTracker *CorrelationTracker
 
@@ -502,13 +496,6 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 	// Initialize ColorManager
 	orchestrator.ColorManager = utils.NewColorManager(config.Settings)
 
-	// Initialize WorkerPool for all jobs (short and long-running)
-	maxWorkers := int(orchestrator.getMaxParallelRules())
-	orchestrator.workerPool = NewWorkerPool(orchestrator, maxWorkers)
-
-	// Initialize Scheduler
-	orchestrator.scheduler = NewDefaultScheduler(orchestrator, orchestrator.workerPool)
-
 	// Initialize Correlation Tracker for dynamic cycle detection
 	orchestrator.correlationTracker = NewCorrelationTracker(orchestrator.Verbose)
 
@@ -547,16 +534,6 @@ func (o *Orchestrator) Start() error {
 	}
 
 	utils.LogDevloop("All rules started - initialization retry logic running in background")
-
-	// Start WorkerPool for short-running jobs
-	if err := o.workerPool.Start(); err != nil {
-		return fmt.Errorf("failed to start worker pool: %w", err)
-	}
-
-	// Start Scheduler
-	if err := o.scheduler.Start(); err != nil {
-		return fmt.Errorf("failed to start scheduler: %w", err)
-	}
 
 	// Start trigger history cleanup goroutine
 	go o.cleanupTriggerHistory()
@@ -638,23 +615,6 @@ func (o *Orchestrator) Stop() error {
 
 	wg.Wait()
 	utils.LogDevloop("All rules stopped")
-
-	// Stop Scheduler
-	if o.scheduler != nil {
-		if err := o.scheduler.Stop(); err != nil {
-			utils.LogDevloop("Error stopping scheduler: %v", err)
-		}
-	}
-
-	// Stop WorkerPool
-	if o.workerPool != nil {
-		if err := o.workerPool.Stop(); err != nil {
-			utils.LogDevloop("Error stopping worker pool: %v", err)
-		}
-	}
-
-	// Disconnect from gateway
-	// if o.gatewayStream != nil { o.disconnectFromGateway() }
 
 	// Close log manager
 	if err := o.LogManager.Close(); err != nil {
@@ -784,8 +744,8 @@ func (o *Orchestrator) TriggerRule(ruleName string) error {
 		return fmt.Errorf("rule %q not found", ruleName)
 	}
 
-	// Trigger the rule runner's debounced execution (bypass rate limiting for manual triggers)
-	runner.TriggerDebouncedWithOptions(true)
+	// Trigger the rule runner's execution (manual trigger)
+	runner.TriggerManual()
 	return nil
 }
 
@@ -806,27 +766,6 @@ func (o *Orchestrator) SetGlobalDebounceDelay(duration time.Duration) {
 			runner.SetDebounceDelay(duration)
 		}
 	}
-}
-
-// SetRuleDebounceDelay sets the debounce delay for a specific rule
-func (o *Orchestrator) SetRuleDebounceDelay(ruleName string, duration time.Duration) error {
-	o.runnersMutex.Lock()
-	defer o.runnersMutex.Unlock()
-
-	// Find the rule and update its debounce delay
-	for i := range o.Config.Rules {
-		if o.Config.Rules[i].Name == ruleName {
-			dur := uint64(duration / time.Millisecond)
-			o.Config.Rules[i].DebounceDelay = &dur
-
-			// Update the rule runner if it exists
-			if runner, exists := o.ruleRunners[ruleName]; exists {
-				runner.SetDebounceDelay(duration)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("rule %q not found", ruleName)
 }
 
 // SetVerbose sets the global verbose flag
@@ -1014,12 +953,6 @@ func (o *Orchestrator) cleanupTriggerHistory() {
 		case <-o.done:
 			return
 		case <-ticker.C:
-			o.runnersMutex.RLock()
-			for _, runner := range o.ruleRunners {
-				runner.CleanupTriggerHistory()
-			}
-			o.runnersMutex.RUnlock()
-
 			// Cleanup trigger chains
 			o.triggerChain.CleanupOldChains()
 

@@ -1,9 +1,12 @@
 package agent
 
 import (
-	"context"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 
 	"strings"
 	"sync"
@@ -26,30 +29,24 @@ type RuleRunner struct {
 	// Process management
 	runningCommands []*exec.Cmd
 	commandsMutex   sync.RWMutex
+	lastStarted     time.Time
+	lastFinished    time.Time
+	lastError       error
 
 	// Status tracking
 	status      *pb.RuleStatus
 	statusMutex sync.RWMutex
 
-	// Debouncing
-	debounceTimer    *time.Timer
-	debounceMutex    sync.Mutex
+	// Configuration
+	verbose          bool
+	configMutex      sync.RWMutex
 	debounceDuration time.Duration
 
-	// Pending execution management - prevents queuing builds during execution
-	pendingExecution      bool
-	pendingExecutionMutex sync.Mutex
-
-	// Configuration
-	verbose     bool
-	configMutex sync.RWMutex
-
-	// Trigger tracking for rate limiting
-	triggerTracker *TriggerTracker
-
-	// Control
-	stopChan    chan struct{}
-	stoppedChan chan struct{}
+	// Channel-based event handling
+	triggerChan chan bool
+	killChan    chan struct{} // Kill current execution
+	stopChan    chan struct{} // Shutdown signal
+	stoppedChan chan struct{} // Shutdown complete
 }
 
 // NewRuleRunner creates a new RuleRunner for the given rule
@@ -58,6 +55,8 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 
 	runner := &RuleRunner{
 		rule:            rule,
+		lastFinished:    time.Now(),
+		lastStarted:     time.Now(),
 		orchestrator:    orchestrator,
 		watcher:         NewWatcher(rule, orchestrator.ConfigPath, verbose),
 		runningCommands: make([]*exec.Cmd, 0),
@@ -69,15 +68,11 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 		},
 		debounceDuration: orchestrator.getDebounceDelayForRule(rule),
 		verbose:          verbose,
-		triggerTracker:   NewTriggerTracker(),
-		stopChan:         make(chan struct{}),
-		stoppedChan:      make(chan struct{}),
+		triggerChan:      make(chan bool, 1),     // Single timer event
+		killChan:         make(chan struct{}, 1), // Kill current execution
+		stopChan:         make(chan struct{}),    // Shutdown signal
+		stoppedChan:      make(chan struct{}),    // Shutdown complete
 	}
-
-	// Set up the watcher event handler to trigger rule execution
-	runner.watcher.SetEventHandler(func(filePath string) {
-		runner.handleFileChange(filePath)
-	})
 
 	return runner
 }
@@ -89,30 +84,68 @@ func (r *RuleRunner) Start() error {
 		return fmt.Errorf("failed to start file watcher for rule %q: %w", r.rule.Name, err)
 	}
 
-	// Skip execution if skip_run_on_init is true
-	if r.rule.SkipRunOnInit {
-		if r.isVerbose() {
-			utils.LogDevloop("[%s] Skipping initialization execution (skip_run_on_init: true)", r.rule.Name)
-		}
-		return nil
-	}
-
-	// Start background retry logic - don't block orchestrator startup
-	if r.isVerbose() {
-		utils.LogDevloop("[%s] Starting background initialization for rule %q", r.rule.Name, r.rule.Name)
-	}
-
-	// Run initialization in background goroutine
-	go r.startWithRetry()
+	// Start the main event loop
+	go r.eventLoop()
 
 	return nil
 }
 
-// startWithRetry runs the initialization retry logic in background
-func (r *RuleRunner) startWithRetry() {
-	// Use debounced execution for startup to coordinate with file change triggers
-	// This ensures startup and file change executions are properly serialized
-	r.triggerDebouncedWithRetry(true) // bypass rate limiting for startup
+func (r *RuleRunner) IsRunning() bool {
+	r.statusMutex.RLock()
+	defer r.statusMutex.RUnlock()
+	return r.lastStarted.Sub(r.lastFinished) < 0
+}
+
+// eventLoop is the main event processing loop for this rule
+func (r *RuleRunner) eventLoop() {
+	defer close(r.stoppedChan)
+	ticker := time.NewTicker(r.debounceDuration)
+	defer ticker.Stop()
+
+	// Trigger initial execution if not skipped
+	if !r.rule.SkipRunOnInit {
+		if r.isVerbose() {
+			r.logDevloop("Triggering initial execution")
+		}
+		r.executeNow("startup", false)
+	}
+
+	triggerCount := 0
+	for {
+		select {
+		case <-r.watcher.EventChan():
+			// Here we have a simple batching strategy
+			// If process is running, see if this time is > startTime + debounceDuration
+			if r.lastStarted.Sub(time.Now()) <= r.debounceDuration {
+				triggerCount++
+			} else {
+				triggerCount = 0
+				r.executeNow("file_trigger", true)
+			}
+
+		case <-r.triggerChan:
+			triggerCount = 0
+			r.executeNow("manual", true)
+			break
+
+		case <-ticker.C:
+			// see if there are any pending executions due to debouncing
+			if triggerCount > 0 && time.Now().Sub(r.lastStarted) > r.debounceDuration {
+				triggerCount = 0
+				r.executeNow("file_change", true)
+			}
+
+		case <-r.killChan:
+		case <-r.stopChan:
+			r.TerminateProcesses()
+			return
+		}
+	}
+}
+
+func (r *RuleRunner) TriggerManual() {
+	log.Println("Manual Trigger Called")
+	r.triggerChan <- true
 }
 
 // executeWithRetry executes the rule with exponential backoff retry logic
@@ -128,24 +161,22 @@ func (r *RuleRunner) executeWithRetry() error {
 			backoffDuration := time.Duration(backoffMs) * time.Millisecond
 
 			nextRetryTime := time.Now().Add(backoffDuration)
-			utils.LogDevloop("[%s] Rule %q failed, retrying in %v (attempt %d/%d) at %s",
-				r.rule.Name, r.rule.Name, backoffDuration, attempt+1, maxRetries+1,
+			r.logDevloop("Rule failed, retrying in %v (attempt %d/%d) at %s",
+				backoffDuration, attempt+1, maxRetries+1,
 				nextRetryTime.Format("15:04:05"))
 
 			time.Sleep(backoffDuration)
 		}
 
-		if err := r.execute(true); err != nil {
+		if err := r.executeNow("startup_retry", false); err != nil {
 			lastErr = err
-			utils.LogDevloop("[%s] Rule %q execution failed (attempt %d/%d): %v",
-				r.rule.Name, r.rule.Name, attempt+1, maxRetries+1, err)
+			r.logDevloop("Rule execution failed (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
 			continue
 		}
 
 		// Success!
 		if attempt > 0 {
-			utils.LogDevloop("[%s] Rule %q succeeded on attempt %d/%d",
-				r.rule.Name, r.rule.Name, attempt+1, maxRetries+1)
+			r.logDevloop("Rule succeeded on attempt %d/%d", attempt+1, maxRetries+1)
 		}
 		return nil
 	}
@@ -171,43 +202,28 @@ func (r *RuleRunner) getInitRetryBackoffBase() uint64 {
 
 // Stop terminates all processes and cleans up
 func (r *RuleRunner) Stop() error {
+	// Signal the event loop to stop
 	close(r.stopChan)
 
 	// Stop the file watcher
 	if err := r.watcher.Stop(); err != nil {
-		utils.LogDevloop("[%s] Error stopping file watcher: %v", r.rule.Name, err)
+		r.logDevloop("Error stopping file watcher: %v", err)
 	}
 
-	// Terminate all running processes
-	if err := r.TerminateProcesses(); err != nil {
-		return fmt.Errorf("failed to terminate processes for rule %q: %w", r.rule.Name, err)
-	}
+	// Wait for event loop to finish
+	<-r.stoppedChan
 
-	// Cancel any pending debounce timer
-	r.debounceMutex.Lock()
-	if r.debounceTimer != nil {
-		r.debounceTimer.Stop()
-		r.debounceTimer = nil
-	}
-	r.debounceMutex.Unlock()
-
-	close(r.stoppedChan)
 	return nil
 }
 
-// Restart stops and starts the rule
-func (r *RuleRunner) Restart() error {
-	if err := r.TerminateProcesses(); err != nil {
-		return err
+// Kill terminates currently running processes without stopping the rule
+func (r *RuleRunner) Kill() {
+	select {
+	case r.killChan <- struct{}{}:
+	default:
+		// Channel full, terminate directly
+		r.TerminateProcesses()
 	}
-	return r.execute(true)
-}
-
-// IsRunning returns true if any commands are currently running
-func (r *RuleRunner) IsRunning() bool {
-	r.statusMutex.RLock()
-	defer r.statusMutex.RUnlock()
-	return r.status.IsRunning
 }
 
 // GetStatus returns a copy of the current status
@@ -231,173 +247,6 @@ func (r *RuleRunner) GetRule() *pb.Rule {
 	return r.rule
 }
 
-// handleFileChange handles file change events from the watcher
-func (r *RuleRunner) handleFileChange(filePath string) {
-	if r.isVerbose() {
-		utils.LogDevloop("[%s] File change detected: %s", r.rule.Name, filePath)
-	}
-
-	// Trigger debounced execution
-	r.TriggerDebounced()
-}
-
-// TriggerDebounced triggers execution after debounce period
-func (r *RuleRunner) TriggerDebounced() {
-	r.TriggerDebouncedWithOptions(false)
-}
-
-// triggerDebouncedWithRetry triggers execution with retry logic after debounce period
-func (r *RuleRunner) triggerDebouncedWithRetry(bypassRateLimit bool) {
-	r.debounceMutex.Lock()
-	defer r.debounceMutex.Unlock()
-
-	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
-	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
-		// Check if we're in backoff period
-		if r.triggerTracker.IsInBackoff() {
-			level := r.triggerTracker.GetBackoffLevel()
-			r.logDevloop("[%s] In backoff period (level %d), skipping execution", r.rule.Name, level)
-			return
-		}
-
-		// Check if we're exceeding rate limits (check before recording new trigger)
-		if r.isRateLimited() {
-			r.triggerTracker.SetBackoff()
-			rate := r.triggerTracker.GetTriggerRate()
-			level := r.triggerTracker.GetBackoffLevel()
-			r.logDevloop("[%s] Rate limit exceeded (%.1f triggers/min), entering backoff (level %d)", r.rule.Name, rate, level)
-			return
-		}
-
-		// Reset backoff if we're not rate limited
-		r.triggerTracker.ResetBackoff()
-	}
-
-	// Record the trigger for rate limiting (only after passing rate limit checks)
-	r.triggerTracker.RecordTrigger()
-
-	// Cancel existing timer if any
-	if r.debounceTimer != nil {
-		r.debounceTimer.Stop()
-		r.debounceTimer = nil
-	}
-
-	// Set new timer with retry logic for startup
-	// Use very short delay for startup to avoid interfering with file change debouncing
-	startupDelay := 1 * time.Millisecond
-	if !bypassRateLimit {
-		startupDelay = r.debounceDuration // Use normal debounce delay for file changes
-	}
-	r.debounceTimer = time.AfterFunc(startupDelay, func() {
-		err := r.executeWithRetry()
-		r.debounceTimer = nil
-		if err != nil {
-			// Check if we should exit on failed init
-			if r.rule.ExitOnFailedInit {
-				utils.LogDevloop("[%s] Critical rule %q failed after all retries - signaling devloop to exit", r.rule.Name, r.rule.Name)
-				// Send critical failure to orchestrator
-				select {
-				case r.orchestrator.criticalFailure <- r.rule.Name:
-					// Critical failure sent successfully
-				default:
-					// Channel is full, log error
-					utils.LogDevloop("[%s] Failed to send critical failure for rule %q - channel full", r.rule.Name, r.rule.Name)
-				}
-				return
-			}
-			// Log the failure but continue (devloop continues)
-			utils.LogDevloop("[%s] Rule %q failed startup after all retries, but continuing devloop (exit_on_failed_init: false)", r.rule.Name, r.rule.Name)
-		}
-	})
-
-	if r.isVerbose() {
-		triggerType := "File change"
-		if bypassRateLimit {
-			triggerType = "Startup trigger"
-		}
-		r.logDevloop("[%s] %s detected, execution scheduled in %v", r.rule.Name, triggerType, r.debounceDuration)
-	}
-}
-
-// TriggerDebouncedWithOptions triggers execution after debounce period with options
-func (r *RuleRunner) TriggerDebouncedWithOptions(bypassRateLimit bool) {
-	r.debounceMutex.Lock()
-	defer r.debounceMutex.Unlock()
-
-	// Check if rate limiting is enabled and if we're exceeding limits BEFORE recording trigger
-	if !bypassRateLimit && r.orchestrator.isDynamicProtectionEnabled() {
-		// Check if we're in backoff period
-		if r.triggerTracker.IsInBackoff() {
-			level := r.triggerTracker.GetBackoffLevel()
-			r.logDevloop("[%s] In backoff period (level %d), skipping execution", r.rule.Name, level)
-			return
-		}
-
-		// Check if we're exceeding rate limits (check before recording new trigger)
-		if r.isRateLimited() {
-			r.triggerTracker.SetBackoff()
-			rate := r.triggerTracker.GetTriggerRate()
-			level := r.triggerTracker.GetBackoffLevel()
-			r.logDevloop("[%s] Rate limit exceeded (%.1f triggers/min), entering backoff (level %d)", r.rule.Name, rate, level)
-			return
-		}
-
-		// Reset backoff if we're not rate limited
-		r.triggerTracker.ResetBackoff()
-	}
-
-	// Record the trigger for rate limiting (only after passing rate limit checks)
-	r.triggerTracker.RecordTrigger()
-
-	// Cancel existing timer if any
-	if r.debounceTimer != nil {
-		r.debounceTimer.Stop()
-		r.debounceTimer = nil
-	}
-
-	// Check if rule is currently running
-	// isRunning := r.isCurrentlyRunning()
-
-	// Clean interface - always call execute, let it handle debouncing internally
-	if err := r.execute(bypassRateLimit); err != nil {
-		r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
-	}
-}
-
-// isRateLimited checks if the rule is currently rate limited
-func (r *RuleRunner) isRateLimited() bool {
-	settings := r.orchestrator.getCycleDetectionSettings()
-	maxTriggers := settings.MaxTriggersPerMinute
-
-	if maxTriggers == 0 {
-		return false // No rate limiting
-	}
-
-	currentRate := r.triggerTracker.GetTriggerCount(time.Minute)
-	return uint32(currentRate) > maxTriggers
-}
-
-// GetTriggerRate returns the current trigger rate for this rule
-func (r *RuleRunner) GetTriggerRate() float64 {
-	return r.triggerTracker.GetTriggerRate()
-}
-
-// GetTriggerCount returns the trigger count within the specified duration
-func (r *RuleRunner) GetTriggerCount(duration time.Duration) int {
-	return r.triggerTracker.GetTriggerCount(duration)
-}
-
-// GetBackoffLevel returns the current backoff level for this rule
-func (r *RuleRunner) GetBackoffLevel() int {
-	return r.triggerTracker.GetBackoffLevel()
-}
-
-// CleanupTriggerHistory removes old trigger records to prevent memory growth
-func (r *RuleRunner) CleanupTriggerHistory() {
-	// Keep triggers for up to 5 minutes to allow for rate limiting calculations
-	r.triggerTracker.CleanupOldTriggers(5 * time.Minute)
-}
-
 // updateStatus updates the rule status and notifies gateway if connected
 func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
 	r.statusMutex.Lock()
@@ -409,60 +258,10 @@ func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
 		r.status.LastBuildTime = tspb.New(time.Now())
 	}
 	r.statusMutex.Unlock()
-
-	// TODO - Add an event emitter if needed
-	/*
-		// Notify gateway if connected
-		if r.orchestrator.gatewayStream != nil {
-			statusMsg := &pb.DevloopMessage{
-				Content: &pb.DevloopMessage_UpdateRuleStatusRequest{
-					UpdateRuleStatusRequest: &pb.UpdateRuleStatusRequest{
-						RuleStatus: &pb.RuleStatus{
-							ProjectId:       status.ProjectId,
-							RuleName:        status.RuleName,
-							IsRunning:       status.IsRunning,
-							StartTime:       status.StartTime.UnixMilli(),
-							LastBuildTime:   status.LastBuildTime.UnixMilli(),
-							LastBuildStatus: status.LastBuildStatus,
-						},
-					},
-				},
-			}
-
-			select {
-			case r.orchestrator.gatewaySendChan <- statusMsg:
-			default:
-				utils.LogDevloop("[%s] Failed to send rule status update: channel full", r.rule.Name)
-			}
-		}
-	*/
-}
-
-// setPendingExecution marks that an execution should happen after the current one completes
-func (r *RuleRunner) setPendingExecution(pending bool) {
-	r.pendingExecutionMutex.Lock()
-	defer r.pendingExecutionMutex.Unlock()
-	r.pendingExecution = pending
-}
-
-// hasPendingExecution returns whether there's a pending execution scheduled
-func (r *RuleRunner) hasPendingExecution() bool {
-	r.pendingExecutionMutex.Lock()
-	defer r.pendingExecutionMutex.Unlock()
-	return r.pendingExecution
-}
-
-// isCurrentlyRunning checks if the rule is currently executing
-func (r *RuleRunner) isCurrentlyRunning() bool {
-	r.statusMutex.RLock()
-	defer r.statusMutex.RUnlock()
-	return r.status.IsRunning
 }
 
 // SetDebounceDelay sets the debounce delay for this rule
 func (r *RuleRunner) SetDebounceDelay(duration time.Duration) {
-	r.debounceMutex.Lock()
-	defer r.debounceMutex.Unlock()
 	r.debounceDuration = duration
 }
 
@@ -485,56 +284,6 @@ func (r *RuleRunner) logDevloop(format string, args ...any) {
 	r.orchestrator.logDevloop(format, args...)
 }
 
-// execute handles debouncing internally and routes to scheduler
-func (r *RuleRunner) execute(bypassRateLimit bool) error {
-	if bypassRateLimit {
-		// Manual trigger - execute immediately
-		if r.isVerbose() {
-			r.logDevloop("[%s] Manual trigger - executing immediately", r.rule.Name)
-		}
-		return r.executeNow("manual")
-	}
-
-	// File change - handle debouncing internally
-	if r.debounceTimer != nil {
-		// Already debouncing - existing timer will handle it
-		if r.isVerbose() {
-			r.logDevloop("[%s] File change detected while debouncing - will execute when timer expires", r.rule.Name)
-		}
-		return nil
-	}
-
-	// Start debounce timer
-	if r.isVerbose() {
-		r.logDevloop("[%s] File change detected, execution scheduled in %v", r.rule.Name, r.debounceDuration)
-	}
-
-	r.debounceTimer = time.AfterFunc(r.debounceDuration, func() {
-		r.debounceTimer = nil // Clear timer
-		if err := r.executeNow("file_change"); err != nil {
-			r.logDevloop("[%s] Error executing rule %q: %v", r.rule.Name, r.rule.Name, err)
-		}
-	})
-	return nil
-}
-
-// executeNow immediately sends trigger event to scheduler
-func (r *RuleRunner) executeNow(triggerType string) error {
-	// Create trigger event
-	event := &TriggerEvent{
-		Rule:        r.rule,
-		TriggerType: triggerType,
-		Context:     context.Background(),
-	}
-
-	if r.isVerbose() {
-		r.logDevloop("[%s] Sending trigger event to scheduler (trigger: %s)", r.rule.Name, triggerType)
-	}
-
-	// Send to scheduler for routing
-	return r.orchestrator.scheduler.ScheduleRule(event)
-}
-
 // UpdateStatus allows external systems to update this rule's execution status
 // This is called by execution engines (WorkerPool, LROManager) to keep RuleRunner in sync
 func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string) {
@@ -543,6 +292,7 @@ func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string) {
 
 // TerminateProcesses terminates all running processes for this rule
 func (r *RuleRunner) TerminateProcesses() error {
+	r.logDevloop("Kill signal received, terminating processes")
 	r.commandsMutex.Lock()
 	cmds := make([]*exec.Cmd, len(r.runningCommands))
 	copy(cmds, r.runningCommands)
@@ -568,20 +318,19 @@ func (r *RuleRunner) TerminateProcesses() error {
 			if err := syscall.Kill(pid, 0); err != nil {
 				// Process already dead
 				if r.isVerbose() {
-					utils.LogDevloop("Process %d for rule %q already terminated", pid, r.rule.Name)
+					r.logDevloop("Process %d for rule already terminated", pid)
 				}
 				return
 			}
 
 			// Try graceful termination first
 			if r.isVerbose() {
-				utils.LogDevloop("Terminating process group %d for rule %q", pid, r.rule.Name)
+				r.logDevloop("Terminating process group %d for rule", pid)
 			}
 
 			if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 				if !strings.Contains(err.Error(), "no such process") {
-					utils.LogDevloop("Error sending SIGTERM to process group %d for rule %q: %v",
-						pid, r.rule.Name, err)
+					r.logDevloop("Error sending SIGTERM to process group %d for rule: %v", pid, err)
 				}
 			}
 
@@ -595,12 +344,11 @@ func (r *RuleRunner) TerminateProcesses() error {
 			select {
 			case <-done:
 				if r.isVerbose() {
-					utils.LogDevloop("Process group %d for rule %q terminated gracefully",
-						pid, r.rule.Name)
+					r.logDevloop("Process group %d for rule terminated gracefully", pid)
 				}
 			case <-time.After(2 * time.Second):
 				// Force kill
-				utils.LogDevloop("Force killing process group %d for rule %q", pid, r.rule.Name)
+				r.logDevloop("Force killing process group %d for rule", pid)
 				syscall.Kill(-pid, syscall.SIGKILL)
 				c.Process.Kill()
 				<-done
@@ -608,13 +356,157 @@ func (r *RuleRunner) TerminateProcesses() error {
 
 			// Verify termination
 			if err := syscall.Kill(pid, 0); err == nil {
-				utils.LogDevloop("WARNING: Process %d for rule %q still exists after termination",
-					pid, r.rule.Name)
+				r.logDevloop("WARNING: Process %d for rule still exists after termination", pid)
 				syscall.Kill(pid, syscall.SIGKILL)
 			}
 		}(cmd)
 	}
 
 	wg.Wait()
+	return nil
+}
+
+// executeCommands executes the commands for a rule job
+// executeNow immediately sends trigger event to scheduler
+func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
+	rule := r.rule
+	if r.isVerbose() {
+		r.logDevloop("Executing commands for rule")
+	}
+
+	// Terminate any previously running commands for this worker
+	if terminate {
+		if err := r.TerminateProcesses(); err != nil {
+			r.logDevloop("Error terminating previous processes: %v", err)
+		}
+	}
+
+	// Get log writer for this rule
+	logWriter, err := r.orchestrator.LogManager.GetWriter(rule.Name)
+	if err != nil {
+		return fmt.Errorf("error getting log writer: %w", err)
+	}
+
+	// Execute commands sequentially
+	var currentCmds []*exec.Cmd
+	var lastCmd *exec.Cmd
+	r.lastStarted = time.Now()
+	r.lastError = nil
+
+	for i, cmdStr := range rule.Commands {
+		r.logDevloop("Running command: %s", cmdStr)
+		cmd := createCrossPlatformCommand(cmdStr)
+
+		// Setup output handling
+		if err := r.setupCommandOutput(cmd, logWriter); err != nil {
+			r.lastError = err
+			return fmt.Errorf("failed to setup command output: %w", err)
+		}
+
+		// Set platform-specific process attributes
+		setSysProcAttr(cmd)
+
+		// Set working directory - default to config file directory if not specified
+		workDir := rule.WorkDir
+		if workDir == "" {
+			workDir = filepath.Dir(r.orchestrator.ConfigPath)
+		}
+		cmd.Dir = workDir
+
+		// Set environment variables
+		cmd.Env = os.Environ() // Inherit parent environment
+
+		// Add environment variables to help subprocesses detect color support
+		suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
+		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
+			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")       // npm, chalk (Node.js)
+			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")    // many CLI tools
+			cmd.Env = append(cmd.Env, "COLORTERM=truecolor") // general color support indicator
+		}
+
+		// Add rule-specific environment variables
+		for key, value := range rule.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
+
+		if err := cmd.Start(); err != nil {
+			r.logDevloop("Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
+			return fmt.Errorf("failed to start command: %w", err)
+		}
+
+		currentCmds = append(currentCmds, cmd)
+
+		// For non-last commands, wait for completion before proceeding
+		if i < len(rule.Commands)-1 {
+			if err := cmd.Wait(); err != nil {
+				r.logDevloop("Command failed: %v", err)
+				return fmt.Errorf("command failed: %w", err)
+			}
+		} else {
+			// This is the last command - let it run and monitor it
+			lastCmd = cmd
+		}
+	}
+
+	// Update running commands
+	r.commandsMutex.Lock()
+	r.runningCommands = currentCmds
+	r.commandsMutex.Unlock()
+
+	// Monitor the last command if it exists
+	if lastCmd != nil {
+		err := lastCmd.Wait()
+		if err != nil {
+			r.logDevloop("Last command failed: %v", err)
+			return fmt.Errorf("last command failed: %w", err)
+		}
+	}
+
+	// Signal log manager that rule finished
+	r.orchestrator.LogManager.SignalFinished(rule.Name)
+
+	return nil
+}
+
+// setupCommandOutput configures stdout/stderr for a command
+func (r *RuleRunner) setupCommandOutput(cmd *exec.Cmd, logWriter io.Writer) error {
+	rule := r.rule
+	writers := []io.Writer{os.Stdout, logWriter}
+
+	if r.orchestrator.Config.Settings.PrefixLogs {
+		prefix := rule.Name
+		if rule.Prefix != "" {
+			prefix = rule.Prefix
+		}
+
+		// Apply prefix length constraints and left-align the text
+		if r.orchestrator.Config.Settings.PrefixMaxLength > 0 {
+			if uint32(len(prefix)) > r.orchestrator.Config.Settings.PrefixMaxLength {
+				prefix = prefix[:r.orchestrator.Config.Settings.PrefixMaxLength]
+			} else {
+				// Left-align the prefix within the max length
+				totalPadding := int(r.orchestrator.Config.Settings.PrefixMaxLength - uint32(len(prefix)))
+				prefix = prefix + strings.Repeat(" ", totalPadding)
+			}
+		}
+
+		// Use ColoredPrefixWriter for enhanced output with color support
+		prefixStr := "[" + prefix + "] "
+		coloredWriter := utils.NewColoredPrefixWriter(writers, prefixStr, r.orchestrator.ColorManager, rule)
+		cmd.Stdout = coloredWriter
+		cmd.Stderr = coloredWriter
+	} else {
+		// For non-prefixed output, still use ColoredPrefixWriter but with empty prefix
+		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() {
+			coloredWriter := utils.NewColoredPrefixWriter(writers, "", r.orchestrator.ColorManager, rule)
+			cmd.Stdout = coloredWriter
+			cmd.Stderr = coloredWriter
+		} else {
+			multiWriter := io.MultiWriter(writers...)
+			cmd.Stdout = multiWriter
+			cmd.Stderr = multiWriter
+		}
+	}
+
 	return nil
 }

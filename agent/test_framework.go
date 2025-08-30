@@ -126,12 +126,6 @@ func (tc *TestConfig) AddLRORule(name string, commands []string) *TestConfig {
 	})
 }
 
-// WithMaxWorkers sets the max parallel workers setting
-func (tc *TestConfig) WithMaxWorkers(max int) *TestConfig {
-	tc.Settings["max_parallel_rules"] = max
-	return tc
-}
-
 // ToYAML converts the test config to YAML string
 func (tc *TestConfig) ToYAML() string {
 	yaml := fmt.Sprintf("settings:\n  project_id: %q\n", tc.ProjectID)
@@ -285,11 +279,4 @@ func (th *TestHelper) AssertRuleStatus(orchestrator *Orchestrator, ruleName stri
 		"Rule %q running state. Status: %s", ruleName, status.LastBuildStatus)
 	require.Equal(th.t, expectedStatus, status.LastBuildStatus,
 		"Rule %q status", ruleName)
-}
-
-// AssertRunningJobCount asserts the expected number of running jobs in worker pool
-func (th *TestHelper) AssertRunningJobCount(workerPool *WorkerPool, expectedCount int) {
-	runningRules := workerPool.GetExecutingRules()
-	require.Len(th.t, runningRules, expectedCount,
-		"Expected %d running jobs, got %d: %v", expectedCount, len(runningRules), runningRules)
 }
