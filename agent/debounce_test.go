@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
+	"github.com/panyam/devloop/utils"
 )
 
 // TestChannelBasedDebouncing verifies the channel-based debouncing behavior
@@ -15,13 +17,20 @@ func TestChannelBasedDebouncing(t *testing.T) {
 	}
 
 	// Create minimal orchestrator for testing
+	tmpDir := t.TempDir()
+	logManager, err := utils.NewLogManager(filepath.Join(tmpDir, "logs"))
+	if err != nil {
+		t.Fatalf("Failed to create log manager: %v", err)
+	}
+	defer logManager.Close()
+
 	orchestrator := &Orchestrator{
 		Config: &pb.Config{
 			Settings: &pb.Settings{
 				PrefixLogs: false,
 			},
 		},
-		LogManager: &mockLogManager{},
+		LogManager: logManager,
 	}
 
 	runner := NewRuleRunner(rule, orchestrator)
@@ -30,13 +39,8 @@ func TestChannelBasedDebouncing(t *testing.T) {
 	// Start the event loop
 	go runner.eventLoop()
 
-	// Test 1: File change should trigger debouncing
-	select {
-	case runner.fileChangeChan <- "test.go":
-		// File change sent successfully
-	default:
-		t.Fatal("File change channel should not be full")
-	}
+	// Test 1: File change should trigger debouncing (simulate via TriggerManual)
+	runner.TriggerManual()
 
 	// Wait less than debounce duration - should not execute yet
 	time.Sleep(25 * time.Millisecond)
@@ -48,14 +52,10 @@ func TestChannelBasedDebouncing(t *testing.T) {
 	// Wait for debounce to complete
 	time.Sleep(30 * time.Millisecond)
 
-	// Test 2: Multiple rapid file changes should only trigger once
+	// Test 2: Multiple rapid triggers (simulated)
 	for i := 0; i < 5; i++ {
-		select {
-		case runner.fileChangeChan <- "test.go":
-		default:
-			// Channel full is okay for this test
-		}
-		time.Sleep(10 * time.Millisecond) // Rapid changes
+		runner.TriggerManual()
+		time.Sleep(10 * time.Millisecond) // Rapid triggers
 	}
 
 	// Wait for debounce
@@ -75,11 +75,18 @@ func TestManualTrigger(t *testing.T) {
 		Commands: []string{"echo 'manual test'"},
 	}
 
+	tmpDir := t.TempDir()
+	logManager, err := utils.NewLogManager(filepath.Join(tmpDir, "logs"))
+	if err != nil {
+		t.Fatalf("Failed to create log manager: %v", err)
+	}
+	defer logManager.Close()
+
 	orchestrator := &Orchestrator{
 		Config: &pb.Config{
 			Settings: &pb.Settings{},
 		},
-		LogManager: &mockLogManager{},
+		LogManager: logManager,
 	}
 
 	runner := NewRuleRunner(rule, orchestrator)
@@ -88,26 +95,11 @@ func TestManualTrigger(t *testing.T) {
 	go runner.eventLoop()
 
 	// Test manual trigger (should execute immediately, no debouncing)
-	runner.triggerExecution("manual")
+	runner.TriggerManual()
 
 	// Brief wait to allow execution to start
 	time.Sleep(10 * time.Millisecond)
 
 	// Cleanup
 	close(runner.stopChan)
-}
-
-// mockLogManager implements the minimal LogManager interface needed for testing
-type mockLogManager struct{}
-
-func (m *mockLogManager) GetWriter(ruleName string) (*mockWriter, error) {
-	return &mockWriter{}, nil
-}
-
-func (m *mockLogManager) SignalFinished(ruleName string) {}
-
-type mockWriter struct{}
-
-func (m *mockWriter) Write(p []byte) (n int, err error) {
-	return len(p), nil
 }

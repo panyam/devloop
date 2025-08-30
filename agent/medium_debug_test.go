@@ -111,20 +111,20 @@ rules:
 		// Check if rule was triggered by file change
 		newStatus := ruleRunner.GetStatus()
 		t.Logf("After file change - last build time changed: %t, status: %s",
-			newStatus.LastBuildTime.AsTime().After(status.LastBuildTime.AsTime()),
+			newStatus.LastFinished.AsTime().After(status.LastFinished.AsTime()),
 			newStatus.LastBuildStatus)
 
 		// The key test: was the rule triggered by the file change?
-		if !newStatus.LastBuildTime.AsTime().After(status.LastBuildTime.AsTime()) {
+		if !newStatus.LastFinished.AsTime().After(status.LastFinished.AsTime()) {
 			t.Error("File change to web/server/main.go should have triggered betests rule")
-			t.Logf("Original build time: %v", status.LastBuildTime.AsTime())
-			t.Logf("New build time: %v", newStatus.LastBuildTime.AsTime())
+			t.Logf("Original build time: %v", status.LastFinished.AsTime())
+			t.Logf("New build time: %v", newStatus.LastFinished.AsTime())
 		}
 
 		// Test 4: File change to lib/utils.go (should also trigger)
 		t.Logf("Modifying lib/utils.go...")
 
-		beforeLibChange := newStatus.LastBuildTime.AsTime()
+		beforeLibChange := newStatus.LastFinished.AsTime()
 
 		err = os.WriteFile(libFile, []byte("package lib\n\n// Modified\n"), 0644)
 		require.NoError(t, err)
@@ -133,10 +133,10 @@ rules:
 
 		finalStatus := ruleRunner.GetStatus()
 		t.Logf("After lib change - triggered: %t, status: %s",
-			finalStatus.LastBuildTime.AsTime().After(beforeLibChange),
+			finalStatus.LastFinished.AsTime().After(beforeLibChange),
 			finalStatus.LastBuildStatus)
 
-		if !finalStatus.LastBuildTime.AsTime().After(beforeLibChange) {
+		if !finalStatus.LastFinished.AsTime().After(beforeLibChange) {
 			t.Error("File change to lib/utils.go should have triggered betests rule")
 		}
 	})
