@@ -180,7 +180,7 @@ message RuleMatcher {
 }
 
 // RuleStatus represents the current execution status and history of a rule.
-// Use this to monitor build/test progress and check for failures.
+// Use this to monitor execution progress and check for failures.
 message RuleStatus {
 	string project_id = 1;
 	string rule_name = 2;
@@ -189,13 +189,13 @@ message RuleStatus {
   // true = commands are running, false = rule is idle
   bool is_running = 3;
   
-  // When the current execution started (Unix timestamp in milliseconds)
-  // Only meaningful when is_running = true
-  google.protobuf.Timestamp start_time = 4;
+  // When the most recent execution started
+  // Set when rule begins executing, cleared when rule finishes
+  google.protobuf.Timestamp last_started = 4;
   
-  // When the last execution completed (Unix timestamp in milliseconds)
-  // Use this to check how recently a rule was executed
-  google.protobuf.Timestamp last_build_time = 5;
+  // When the most recent execution finished (success or failure)
+  // Use this to check how recently a rule completed execution
+  google.protobuf.Timestamp last_finished = 5;
   
   // Result of the last execution. Possible values:
   // - "SUCCESS": All commands completed successfully (exit code 0)
@@ -203,4 +203,9 @@ message RuleStatus {
   // - "RUNNING": Rule is currently executing
   // - "IDLE": Rule has not been executed yet
   string last_build_status = 6;
+  
+  // Error message from the last failed execution
+  // Only set when last_build_status = "FAILED"
+  // Contains the actual error message that caused the failure
+  string last_error = 7;
 }

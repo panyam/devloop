@@ -440,22 +440,26 @@
           "type": "boolean",
           "title": "Whether the rule is currently executing commands\ntrue = commands are running, false = rule is idle"
         },
-        "startTime": {
+        "lastStarted": {
           "type": "string",
           "format": "date-time",
-          "title": "When the current execution started (Unix timestamp in milliseconds)\nOnly meaningful when is_running = true"
+          "title": "When the most recent execution started\nSet when rule begins executing, cleared when rule finishes"
         },
-        "lastBuildTime": {
+        "lastFinished": {
           "type": "string",
           "format": "date-time",
-          "title": "When the last execution completed (Unix timestamp in milliseconds)\nUse this to check how recently a rule was executed"
+          "title": "When the most recent execution finished (success or failure)\nUse this to check how recently a rule completed execution"
         },
         "lastBuildStatus": {
           "type": "string",
           "title": "Result of the last execution. Possible values:\n- \"SUCCESS\": All commands completed successfully (exit code 0)\n- \"FAILED\": One or more commands failed (non-zero exit code)\n- \"RUNNING\": Rule is currently executing\n- \"IDLE\": Rule has not been executed yet"
+        },
+        "lastError": {
+          "type": "string",
+          "title": "Error message from the last failed execution\nOnly set when last_build_status = \"FAILED\"\nContains the actual error message that caused the failure"
         }
       },
-      "description": "RuleStatus represents the current execution status and history of a rule.\nUse this to monitor build/test progress and check for failures."
+      "description": "RuleStatus represents the current execution status and history of a rule.\nUse this to monitor execution progress and check for failures."
     },
     "v1Settings": {
       "type": "object",

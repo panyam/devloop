@@ -93,16 +93,20 @@ func printRuleStatus(rule *pb.Rule) {
 			fmt.Printf("  Currently Running: No\n")
 		}
 
-		if rule.Status.StartTime != nil {
-			fmt.Printf("  Started At: %s\n", rule.Status.StartTime.AsTime().Format("2006-01-02 15:04:05"))
+		if rule.Status.LastStarted != nil {
+			fmt.Printf("  Last Started: %s\n", rule.Status.LastStarted.AsTime().Format("2006-01-02 15:04:05"))
 		}
 
-		if rule.Status.LastBuildTime != nil {
-			fmt.Printf("  Last Build: %s\n", rule.Status.LastBuildTime.AsTime().Format("2006-01-02 15:04:05"))
+		if rule.Status.LastFinished != nil {
+			fmt.Printf("  Last Finished: %s\n", rule.Status.LastFinished.AsTime().Format("2006-01-02 15:04:05"))
 		}
 
 		if rule.Status.LastBuildStatus != "" {
 			fmt.Printf("  Last Build Status: %s\n", rule.Status.LastBuildStatus)
+		}
+
+		if rule.Status.LastError != "" {
+			fmt.Printf("  Last Error: %s\n", rule.Status.LastError)
 		}
 	}
 

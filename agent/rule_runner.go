@@ -236,9 +236,10 @@ func (r *RuleRunner) GetStatus() *pb.RuleStatus {
 		ProjectId:       r.status.ProjectId,
 		RuleName:        r.status.RuleName,
 		IsRunning:       r.status.IsRunning,
-		StartTime:       r.status.StartTime,
-		LastBuildTime:   r.status.LastBuildTime,
+		LastStarted:     r.status.LastStarted,
+		LastFinished:    r.status.LastFinished,
 		LastBuildStatus: r.status.LastBuildStatus,
+		LastError:       r.status.LastError,
 	}
 }
 
@@ -248,14 +249,22 @@ func (r *RuleRunner) GetRule() *pb.Rule {
 }
 
 // updateStatus updates the rule status and notifies gateway if connected
-func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string) {
+func (r *RuleRunner) updateStatus(isRunning bool, buildStatus string, errorMsg ...string) {
 	r.statusMutex.Lock()
 	r.status.IsRunning = isRunning
 	r.status.LastBuildStatus = buildStatus
+
+	// Clear error on success or when starting
+	if buildStatus == "SUCCESS" || buildStatus == "RUNNING" {
+		r.status.LastError = ""
+	} else if buildStatus == "FAILED" && len(errorMsg) > 0 {
+		r.status.LastError = errorMsg[0]
+	}
+
 	if isRunning {
-		r.status.StartTime = tspb.New(time.Now())
+		r.status.LastStarted = tspb.New(time.Now())
 	} else {
-		r.status.LastBuildTime = tspb.New(time.Now())
+		r.status.LastFinished = tspb.New(time.Now())
 	}
 	r.statusMutex.Unlock()
 }
@@ -281,13 +290,13 @@ func (r *RuleRunner) isVerbose() bool {
 
 // logDevloop logs a message using the orchestrator's logging mechanism
 func (r *RuleRunner) logDevloop(format string, args ...any) {
-	r.orchestrator.logDevloop(format, args...)
+	r.orchestrator.logDevloop(fmt.Sprintf("[%s] %s", r.rule.Name, format), args...)
 }
 
 // UpdateStatus allows external systems to update this rule's execution status
-// This is called by execution engines (WorkerPool, LROManager) to keep RuleRunner in sync
-func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string) {
-	r.updateStatus(isRunning, buildStatus)
+// This is called by execution engines to keep RuleRunner in sync
+func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string, errorMsg ...string) {
+	r.updateStatus(isRunning, buildStatus, errorMsg...)
 }
 
 // TerminateProcesses terminates all running processes for this rule
@@ -366,13 +375,21 @@ func (r *RuleRunner) TerminateProcesses() error {
 	return nil
 }
 
-// executeCommands executes the commands for a rule job
-// executeNow immediately sends trigger event to scheduler
+// executeNow immediately executes the rule commands
 func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 	rule := r.rule
 	if r.isVerbose() {
-		r.logDevloop("Executing commands for rule")
+		r.logDevloop("Starting execution (trigger: %s)", triggerType)
 	}
+
+	// Update status to running
+	r.updateStatus(true, "RUNNING")
+	defer func() {
+		// Always update status when done (success or failure)
+		if r.GetStatus().LastBuildStatus == "RUNNING" {
+			r.updateStatus(false, "SUCCESS")
+		}
+	}()
 
 	// Terminate any previously running commands for this worker
 	if terminate {
@@ -384,6 +401,7 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 	// Get log writer for this rule
 	logWriter, err := r.orchestrator.LogManager.GetWriter(rule.Name)
 	if err != nil {
+		r.updateStatus(false, "FAILED", err.Error())
 		return fmt.Errorf("error getting log writer: %w", err)
 	}
 
@@ -430,7 +448,8 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 		}
 
 		if err := cmd.Start(); err != nil {
-			r.logDevloop("Command %q failed to start for rule %q: %v", cmdStr, rule.Name, err)
+			r.logDevloop("Command %q failed to start for rule: %v", cmdStr, err)
+			r.updateStatus(false, "FAILED", err.Error())
 			return fmt.Errorf("failed to start command: %w", err)
 		}
 
@@ -440,6 +459,7 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 		if i < len(rule.Commands)-1 {
 			if err := cmd.Wait(); err != nil {
 				r.logDevloop("Command failed: %v", err)
+				r.updateStatus(false, "FAILED", err.Error())
 				return fmt.Errorf("command failed: %w", err)
 			}
 		} else {
@@ -458,6 +478,7 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 		err := lastCmd.Wait()
 		if err != nil {
 			r.logDevloop("Last command failed: %v", err)
+			r.updateStatus(false, "FAILED", err.Error())
 			return fmt.Errorf("last command failed: %w", err)
 		}
 	}
