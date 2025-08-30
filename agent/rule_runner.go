@@ -414,12 +414,6 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 
 	// Update status to running
 	r.updateStatus(true, "RUNNING")
-	defer func() {
-		// Always update status when done (success or failure)
-		if r.GetStatus().LastBuildStatus == "RUNNING" {
-			r.updateStatus(false, "SUCCESS")
-		}
-	}()
 
 	// Terminate any previously running commands for this worker
 	if terminate {
@@ -446,6 +440,15 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 		var err error
 		defer func() {
 			r.status.LastFinished = tspb.New(time.Now())
+			// Always update status when done (success or failure)
+			if r.GetStatus().LastBuildStatus == "RUNNING" {
+				r.lastError = err
+				if err == nil {
+					r.updateStatus(false, "FAILED")
+				} else {
+					r.updateStatus(false, "SUCCESS")
+				}
+			}
 			r.execDoneChan <- err
 		}()
 		for i, cmdStr := range rule.Commands {
