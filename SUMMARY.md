@@ -44,16 +44,37 @@ The tool can operate in three distinct modes:
     *   Its primary role is to accept connections from multiple `devloop` instances running in **Agent Mode**, aggregate their logs and statuses, and provide a unified API for clients to interact with the entire project ecosystem.
     *   **Note**: Gateway mode is temporarily removed and will be reimplemented using the grpcrouter library for simplified proxy and reverse tunnel functionality.
 
-## 3. Execution Flow (Standalone Mode)
+## 3. Recent Architectural Simplification (v0.0.80)
+
+**Major Architectural Changes:**
+The system has been significantly simplified to remove unnecessary complexity while maintaining all core functionality:
+
+1. **Removed Scheduler/Worker Components**: Previously used callback-based triggers with complex routing through Scheduler → WorkerPool. Now uses direct execution in RuleRunner.
+
+2. **Channel-Based Event Loop**: Replaced callback chains with clean Go channel patterns:
+   - `fileChangeChan`: File change events from watcher
+   - `timerChan`: Debounce timer expiration
+   - `killChan`: Process termination requests
+   - `stopChan`: Graceful shutdown signals
+
+3. **Enhanced Status Tracking**: 
+   - Improved field names: `start_time` → `last_started`, `last_build_time` → `last_finished`
+   - Added `last_error` field for detailed error reporting
+   - Real-time status updates during execution
+
+4. **Unified Execution Model**: All rules now execute directly in RuleRunner instead of being routed through separate execution engines.
+
+## 4. Execution Flow (Standalone Mode)
 
 1.  **Startup:** `devloop` reads `.devloop.yaml`. Relative `watch` paths are resolved to absolute paths based on the config file's location.
 2.  **Server Start:** The combined gRPC server and gRPC-Gateway proxy is started in the background.
-3.  **File Watching:** A single file watcher monitors the project directory.
-4.  **Event Processing:** When a file changes, `devloop` identifies all rules whose `watch` globs match the file's absolute path.
-5.  **Debouncing (per rule):** Each matched rule is debounced independently.
+3.  **File Watching:** Per-rule file watchers monitor directories independently.
+4.  **Event Processing:** File changes are sent to RuleRunner via channels (fileChangeChan).
+5.  **Debouncing (per rule):** Channel-based debouncing with timer reset on file changes.
 6.  **Action Execution (per rule):**
-    *   Once a rule's debounce timer expires, any previously running processes for that rule are terminated.
-    *   The `commands` for the rule are then executed sequentially.
+    *   Timer expiration triggers executeNow via timerChan.
+    *   Direct command execution with real-time status updates.
+    *   Process termination with SIGTERM → SIGKILL progression.
 
 ## 4. Key Technical Decisions
 

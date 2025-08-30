@@ -1,5 +1,34 @@
 # Devloop Release Notes
 
+## v0.0.80 (2025-08-29)
+
+### Simplified Architecture & Enhanced Status Tracking
+
+**Major Architectural Simplification**
+- **Replaced callback-based triggers with channel-based event loop** - Eliminated complex callback chains and multiple trigger methods
+- **Removed scheduler and worker complexity** - Direct execution in RuleRunner for cleaner code paths
+- **Channel-driven event handling** - File changes → channels → execution with proper Go concurrency patterns
+- **Unified process management** - Single execution flow with proper status tracking
+
+**Enhanced Status & Error Tracking**
+- **Improved protobuf field names** for clarity:
+  - `start_time` → `last_started` (when most recent execution started)
+  - `last_build_time` → `last_finished` (when most recent execution finished) 
+- **Added `last_error` field** to RuleStatus - Captures actual error messages from failed executions
+- **Real-time status updates** - Proper "RUNNING" → "SUCCESS"/"FAILED" status transitions
+- **Enhanced status display** - `devloop status` now shows detailed error information
+
+**Event Flow Simplification**
+```
+Old: File Change → Callback → TriggerDebounced → Complex Timer Logic → Scheduler → Worker
+New: File Change → fileChangeChan → handleFileChangeEvent → timerChan → executeNow
+```
+
+**Breaking Changes**
+- Removed LRO (Long-Running Operations) distinction - all rules now execute directly
+- Removed `lro: true/false` configuration flag - no longer needed
+- Test interfaces changed from internal method access to channel-based behavior testing
+
 ## v0.0.70 (2025-08-20)
 
 ### LRO (Long-Running Operations) Architecture

@@ -4,7 +4,7 @@ This document describes the internal architecture of the devloop agent package.
 
 ## Overview
 
-The agent package implements an event-driven, unified execution architecture that handles all types of jobs (short and long-running) through a single WorkerPool with intelligent process management.
+The agent package implements a simplified, channel-based architecture where RuleRunner instances handle direct command execution with proper debouncing and status tracking.
 
 ## Core Components
 
@@ -18,36 +18,36 @@ The agent package implements an event-driven, unified execution architecture tha
 - Project-level settings and defaults
 
 **Key Features**:
-- Manages RuleRunners, Scheduler, and WorkerPool
+- Manages RuleRunners with direct execution
 - Advanced cycle detection with TriggerChain and FileModificationTracker
 - Startup resilience with exponential backoff retry logic
 
 ### 2. RuleRunner (`rule_runner.go`) 
-**Role**: File watching, debouncing, and trigger coordination
+**Role**: File watching, debouncing, and direct command execution
 
 **Responsibilities**:
 - Per-rule file system monitoring via independent Watcher instances
-- Debouncing logic to prevent command storms
+- Channel-based event loop for clean concurrency
+- Direct command execution with process management
+- Status management and error tracking
 - Rate limiting and cycle protection
-- Status management (single source of truth for rule execution state)
-- Event emission to Scheduler
 
 **Key Features**:
 - Independent fsnotify.Watcher per rule (no cross-rule interference)
-- Rule-specific debounce delays and verbose logging
-- Status tracking: IsRunning, StartTime, LastBuildTime, LastBuildStatus
-- TriggerEvent emission for execution requests
+- Channel-based event handling: fileChangeChan, timerChan, killChan, stopChan
+- Status tracking: IsRunning, LastStarted, LastFinished, LastBuildStatus, LastError
+- Direct process execution with proper status updates
 
-### 3. Scheduler (`scheduler.go`)
-**Role**: Event-driven job routing
+### 3. Watcher (`watcher.go`)
+**Role**: File system monitoring per rule
 
 **Responsibilities**:
-- Receive TriggerEvents from RuleRunners
-- Route all jobs to WorkerPool (unified execution)
-- Stateless routing logic
+- Directory watching with inotify/FSEvents
+- Pattern matching for include/exclude rules
+- Event routing to RuleRunner via channels
 
 **Key Features**:
-- Clean separation between orchestration and execution
+- Per-rule file system isolation
 - Interface-based design for extensibility
 - Zero state management (pure routing)
 
@@ -85,31 +85,34 @@ The agent package implements an event-driven, unified execution architecture tha
 ## Data Flow
 
 ```
-File Change → Watcher → RuleRunner → [Debounce] → TriggerEvent → Scheduler
-                                                                    ↓
-All Rules → WorkerPool → Worker → Process Management → Status Callback ↗
+File Change → Watcher → fileChangeChan → RuleRunner.eventLoop → [Debounce] → timerChan → executeNow
+                                          ↓                                        ↓
+Manual Trigger → triggerExecution -------→                          Direct Command Execution
+                                          ↓                                        ↓
+Stop Signal → stopChan → handleStopEvent                               Status Updates
 ```
 
-### Process Management Logic
+### Execution Flow
 
-1. **Job Enqueueing**: Check if rule already running
-2. **Debounce Check**: Manual triggers or time > debounce window → kill existing
-3. **Process Termination**: SIGTERM (5s) → SIGKILL with process group handling  
-4. **Job Execution**: Start new process with proper monitoring
-5. **Status Updates**: Running → Success/Failed via callbacks
+1. **Event Reception**: Channels receive file changes, timer expiration, kill signals, stop signals
+2. **Debounce Handling**: File changes reset debounce timer, timer expiration triggers execution
+3. **Direct Execution**: executeNow runs commands sequentially with status tracking
+4. **Status Updates**: RUNNING → SUCCESS/FAILED with error messages
+5. **Process Management**: Process termination with SIGTERM → SIGKILL progression
 
 ## Key Design Principles
 
 ### 1. Single Responsibility
 Each component has one clear purpose:
-- **RuleRunner**: "When to execute?" (file watching, debouncing)
-- **Scheduler**: "How to route?" (simple WorkerPool routing)
-- **WorkerPool**: "Execute all jobs" (process management, killing, status)
+- **RuleRunner**: "When and how to execute?" (file watching, debouncing, command execution)
+- **Watcher**: "What files changed?" (file system monitoring per rule)
+- **Orchestrator**: "Configuration and lifecycle?" (startup, shutdown, global settings)
 
-### 2. Event-Driven Communication
-Components communicate via events, not direct method calls:
-- RuleRunner → Scheduler: TriggerEvent
-- WorkerPool → RuleRunner: Status callbacks
+### 2. Channel-Based Communication
+Components communicate via Go channels for clean concurrency:
+- Watcher → RuleRunner: File change events via fileChangeChan
+- Timer → RuleRunner: Debounce expiration via timerChan
+- Manual triggers → RuleRunner: Direct execution requests
 
 ### 3. Process Safety
 - **Process Replacement**: Proper kill → wait → verify → start cycle for all jobs
