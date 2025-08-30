@@ -154,3 +154,119 @@ rules:
 		t.Logf("Devloop process stderr:\n%s", stderr.String())
 	})
 }
+
+// TestRuleRunnerShutdownTimeout verifies that RuleRunner.Stop() doesn't hang
+// when TerminateProcesses() takes too long, addressing the SIGTERM handling issue
+func TestRuleRunnerShutdownTimeout(t *testing.T) {
+	testhelpers.WithTestContext(t, 15*time.Second, func(t *testing.T, tmpDir string) {
+		// Create a rule that runs a long-running process
+		configContent := `
+settings:
+  project_id: "shutdown-test"
+  prefix_logs: false
+
+rules:
+  - name: "long-running"
+    skip_run_on_init: false
+    commands:
+      - "sleep 10"  # Long running process that might not respond to SIGTERM quickly
+`
+
+		configPath := filepath.Join(tmpDir, ".devloop.yaml")
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		assert.NoError(t, err)
+
+		// Create orchestrator and rule runner
+		orchestrator, err := NewOrchestrator(configPath)
+		assert.NoError(t, err)
+
+		err = orchestrator.Start()
+		assert.NoError(t, err)
+		defer orchestrator.Stop()
+
+		// Get the rule runner
+		ruleRunner := orchestrator.GetRuleRunner("long-running")
+		assert.NotNil(t, ruleRunner)
+
+		// Wait a bit for the process to start
+		time.Sleep(1 * time.Second)
+
+		// Verify the rule is running
+		status := ruleRunner.GetStatus()
+		t.Logf("Rule status: %s", status.LastBuildStatus)
+
+		// Test that Stop() completes within a reasonable timeout
+		startTime := time.Now()
+
+		stopDone := make(chan error, 1)
+		go func() {
+			stopDone <- ruleRunner.Stop()
+		}()
+
+		select {
+		case err := <-stopDone:
+			duration := time.Since(startTime)
+			assert.NoError(t, err)
+			assert.Less(t, duration, 5*time.Second, "RuleRunner.Stop() should complete within 5 seconds")
+			t.Logf("Stop completed in %v", duration)
+		case <-time.After(6 * time.Second):
+			t.Fatal("RuleRunner.Stop() hung - this indicates a SIGTERM handling issue")
+		}
+	})
+}
+
+// TestTerminateProcessesTimeout verifies that TerminateProcesses() doesn't hang indefinitely
+func TestTerminateProcessesTimeout(t *testing.T) {
+	testhelpers.WithTestContext(t, 10*time.Second, func(t *testing.T, tmpDir string) {
+		// Create a simple rule with a command that might not respond well to signals
+		configContent := `
+settings:
+  project_id: "terminate-test"
+  prefix_logs: false
+
+rules:
+  - name: "test-rule"
+    skip_run_on_init: true  # Don't auto-start
+    commands:
+      - "sleep 5"
+`
+
+		configPath := filepath.Join(tmpDir, ".devloop.yaml")
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		assert.NoError(t, err)
+
+		orchestrator, err := NewOrchestrator(configPath)
+		assert.NoError(t, err)
+
+		err = orchestrator.Start()
+		assert.NoError(t, err)
+		defer orchestrator.Stop()
+
+		ruleRunner := orchestrator.GetRuleRunner("test-rule")
+		assert.NotNil(t, ruleRunner)
+
+		// Manually start execution
+		ruleRunner.TriggerManual()
+
+		// Wait for process to start
+		time.Sleep(500 * time.Millisecond)
+
+		// Test that TerminateProcesses completes within timeout
+		startTime := time.Now()
+
+		terminateDone := make(chan error, 1)
+		go func() {
+			terminateDone <- ruleRunner.TerminateProcesses()
+		}()
+
+		select {
+		case err := <-terminateDone:
+			duration := time.Since(startTime)
+			assert.NoError(t, err)
+			assert.Less(t, duration, 4*time.Second, "TerminateProcesses should complete within 4 seconds")
+			t.Logf("TerminateProcesses completed in %v", duration)
+		case <-time.After(5 * time.Second):
+			t.Fatal("TerminateProcesses() hung - timeout mechanism failed")
+		}
+	})
+}

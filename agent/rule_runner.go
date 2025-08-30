@@ -137,7 +137,8 @@ func (r *RuleRunner) eventLoop() {
 
 		case <-r.killChan:
 		case <-r.stopChan:
-			r.TerminateProcesses()
+			// Don't block shutdown on process termination
+			go r.TerminateProcesses()
 			return
 		}
 	}
@@ -210,8 +211,21 @@ func (r *RuleRunner) Stop() error {
 		r.logDevloop("Error stopping file watcher: %v", err)
 	}
 
-	// Wait for event loop to finish
-	<-r.stoppedChan
+	// Wait for event loop to finish with timeout
+	select {
+	case <-r.stoppedChan:
+		// Clean shutdown
+	case <-time.After(3 * time.Second):
+		// Event loop didn't finish, but don't hang forever
+		r.logDevloop("WARNING: Event loop didn't finish within timeout")
+	}
+
+	// Ensure processes are terminated
+	go func() {
+		if err := r.TerminateProcesses(); err != nil {
+			r.logDevloop("Error during final process termination: %v", err)
+		}
+	}()
 
 	return nil
 }
@@ -301,7 +315,7 @@ func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string, errorMsg .
 
 // TerminateProcesses terminates all running processes for this rule
 func (r *RuleRunner) TerminateProcesses() error {
-	r.logDevloop("Kill signal received, terminating processes")
+	r.logDevloop("Terminating running processes for rule %q", r.rule.Name)
 	r.commandsMutex.Lock()
 	cmds := make([]*exec.Cmd, len(r.runningCommands))
 	copy(cmds, r.runningCommands)
@@ -360,7 +374,15 @@ func (r *RuleRunner) TerminateProcesses() error {
 				r.logDevloop("Force killing process group %d for rule", pid)
 				syscall.Kill(-pid, syscall.SIGKILL)
 				c.Process.Kill()
-				<-done
+
+				// Wait for c.Wait() to return but with a timeout
+				select {
+				case <-done:
+					// Wait completed
+				case <-time.After(1 * time.Second):
+					// c.Wait() is still hanging, give up waiting
+					r.logDevloop("WARNING: c.Wait() for process %d timed out", pid)
+				}
 			}
 
 			// Verify termination
