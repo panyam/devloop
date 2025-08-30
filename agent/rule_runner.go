@@ -29,8 +29,6 @@ type RuleRunner struct {
 	// Process management
 	runningCommands []*exec.Cmd
 	commandsMutex   sync.RWMutex
-	lastStarted     time.Time
-	lastFinished    time.Time
 	lastError       error
 
 	// Status tracking
@@ -43,9 +41,10 @@ type RuleRunner struct {
 	debounceDuration time.Duration
 
 	// Channel-based event handling
-	triggerChan chan bool
-	stopChan    chan struct{} // Shutdown signal
-	stoppedChan chan struct{} // Shutdown complete
+	triggerChan  chan bool
+	execDoneChan chan error
+	stopChan     chan struct{} // Shutdown signal
+	stoppedChan  chan struct{} // Shutdown complete
 }
 
 // NewRuleRunner creates a new RuleRunner for the given rule
@@ -54,8 +53,6 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 
 	runner := &RuleRunner{
 		rule:            rule,
-		lastFinished:    time.Now(),
-		lastStarted:     time.Now(),
 		orchestrator:    orchestrator,
 		watcher:         NewWatcher(rule, orchestrator.ConfigPath, verbose),
 		runningCommands: make([]*exec.Cmd, 0),
@@ -64,10 +61,13 @@ func NewRuleRunner(rule *pb.Rule, orchestrator *Orchestrator) *RuleRunner {
 			RuleName:        rule.Name,
 			IsRunning:       false,
 			LastBuildStatus: "IDLE",
+			LastFinished:    tspb.New(time.Now()),
+			LastStarted:     tspb.New(time.Now()),
 		},
 		debounceDuration: orchestrator.getDebounceDelayForRule(rule),
 		verbose:          verbose,
-		triggerChan:      make(chan bool, 1),  // Single timer event
+		triggerChan:      make(chan bool, 1), // Single timer event
+		execDoneChan:     make(chan error, 1),
 		stopChan:         make(chan struct{}), // Shutdown signal
 		stoppedChan:      make(chan struct{}), // Shutdown complete
 	}
@@ -91,7 +91,9 @@ func (r *RuleRunner) Start() error {
 func (r *RuleRunner) IsRunning() bool {
 	r.statusMutex.RLock()
 	defer r.statusMutex.RUnlock()
-	return r.lastStarted.Sub(r.lastFinished) < 0
+	lastStarted := r.status.LastStarted.AsTime()
+	lastFinished := r.status.LastFinished.AsTime()
+	return lastStarted.Sub(lastFinished) < 0
 }
 
 // eventLoop is the main event processing loop for this rule
@@ -114,7 +116,7 @@ func (r *RuleRunner) eventLoop() {
 		case <-r.watcher.EventChan():
 			// Here we have a simple batching strategy
 			// If process is running, see if this time is > startTime + debounceDuration
-			if time.Since(r.lastStarted) <= r.debounceDuration {
+			if time.Since(r.status.LastStarted.AsTime()) <= r.debounceDuration {
 				triggerCount++
 			} else {
 				triggerCount = 0
@@ -127,15 +129,20 @@ func (r *RuleRunner) eventLoop() {
 
 		case <-ticker.C:
 			// see if there are any pending executions due to debouncing
-			if triggerCount > 0 && time.Since(r.lastStarted) > r.debounceDuration {
+			if triggerCount > 0 && time.Since(r.status.LastStarted.AsTime()) > r.debounceDuration {
 				triggerCount = 0
 				r.executeNow("file_change", true)
 			}
+
+		case <-r.execDoneChan:
+			// called when an execution has finished
+			log.Println("Execution complete....")
 
 		case <-r.stopChan:
 			r.logDevloop("Stop received")
 			// Don't block shutdown on process termination
 			r.TerminateProcesses()
+			r.logDevloop("Stop COMPLETED")
 			return
 		}
 	}
@@ -214,7 +221,7 @@ func (r *RuleRunner) Stop() error {
 	select {
 	case <-r.stoppedChan:
 		// Clean shutdown
-	case <-time.After(3 * time.Second):
+		// case <-time.After(3 * time.Second):
 		// Event loop didn't finish, but don't hang forever
 		r.logDevloop("WARNING: Event loop didn't finish within timeout")
 	}
@@ -305,6 +312,7 @@ func (r *RuleRunner) UpdateStatus(isRunning bool, buildStatus string, errorMsg .
 // TerminateProcesses terminates all running processes for this rule
 func (r *RuleRunner) TerminateProcesses() error {
 	r.logDevloop("Terminating running processes for rule %q", r.rule.Name)
+	defer r.logDevloop("Terminated ALL running processes for rule %q", r.rule.Name)
 	r.commandsMutex.Lock()
 	cmds := make([]*exec.Cmd, len(r.runningCommands))
 	copy(cmds, r.runningCommands)
@@ -315,25 +323,44 @@ func (r *RuleRunner) TerminateProcesses() error {
 		return nil
 	}
 
-	var wg sync.WaitGroup
+	// Only terminate processes that are actually still running
+	// Most commands should already be finished since they're executed sequentially
+	var activeCommands []*exec.Cmd
 	for _, cmd := range cmds {
 		if cmd == nil || cmd.Process == nil {
 			continue
 		}
 
+		// Check if process still exists
+		if err := syscall.Kill(cmd.Process.Pid, 0); err != nil {
+			// Process already dead, skip it
+			if r.isVerbose() {
+				r.logDevloop("Process %d already terminated", cmd.Process.Pid)
+			}
+			continue
+		}
+
+		activeCommands = append(activeCommands, cmd)
+	}
+
+	if len(activeCommands) == 0 {
+		if r.isVerbose() {
+			r.logDevloop("No active processes to terminate for rule %q", r.rule.Name)
+		}
+		return nil
+	}
+
+	if r.isVerbose() {
+		r.logDevloop("Terminating %d active processes for rule %q", len(activeCommands), r.rule.Name)
+	}
+
+	var wg sync.WaitGroup
+	for _, cmd := range activeCommands {
+		r.logDevloop("Adding command to kill list: %s", cmd)
 		wg.Add(1)
 		go func(c *exec.Cmd) {
 			defer wg.Done()
 			pid := c.Process.Pid
-
-			// Check if process still exists
-			if err := syscall.Kill(pid, 0); err != nil {
-				// Process already dead
-				if r.isVerbose() {
-					r.logDevloop("Process %d for rule already terminated", pid)
-				}
-				return
-			}
 
 			// Try graceful termination first
 			if r.isVerbose() {
@@ -419,83 +446,91 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 	// Execute commands sequentially
 	var currentCmds []*exec.Cmd
 	var lastCmd *exec.Cmd
-	r.lastStarted = time.Now()
+	r.status.LastStarted = tspb.New(time.Now())
 	r.lastError = nil
 
-	for i, cmdStr := range rule.Commands {
-		r.logDevloop("Running command: %s", cmdStr)
-		cmd := createCrossPlatformCommand(cmdStr)
+	// Start the commands in a goroutine
+	go func() {
+		var err error
+		defer func() {
+			r.status.LastFinished = tspb.New(time.Now())
+			r.execDoneChan <- err
+		}()
+		for i, cmdStr := range rule.Commands {
+			r.logDevloop("Running command: %s", cmdStr)
+			cmd := createCrossPlatformCommand(cmdStr)
 
-		// Setup output handling
-		if err := r.setupCommandOutput(cmd, logWriter); err != nil {
-			r.lastError = err
-			return fmt.Errorf("failed to setup command output: %w", err)
-		}
-
-		// Set platform-specific process attributes
-		setSysProcAttr(cmd)
-
-		// Set working directory - default to config file directory if not specified
-		workDir := rule.WorkDir
-		if workDir == "" {
-			workDir = filepath.Dir(r.orchestrator.ConfigPath)
-		}
-		cmd.Dir = workDir
-
-		// Set environment variables
-		cmd.Env = os.Environ() // Inherit parent environment
-
-		// Add environment variables to help subprocesses detect color support
-		suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
-		if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
-			cmd.Env = append(cmd.Env, "FORCE_COLOR=1")       // npm, chalk (Node.js)
-			cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")    // many CLI tools
-			cmd.Env = append(cmd.Env, "COLORTERM=truecolor") // general color support indicator
-		}
-
-		// Add rule-specific environment variables
-		for key, value := range rule.Env {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
-		}
-
-		if err := cmd.Start(); err != nil {
-			r.logDevloop("Command %q failed to start for rule: %v", cmdStr, err)
-			r.updateStatus(false, "FAILED", err.Error())
-			return fmt.Errorf("failed to start command: %w", err)
-		}
-
-		currentCmds = append(currentCmds, cmd)
-
-		// For non-last commands, wait for completion before proceeding
-		if i < len(rule.Commands)-1 {
-			if err := cmd.Wait(); err != nil {
-				r.logDevloop("Command failed: %v", err)
-				r.updateStatus(false, "FAILED", err.Error())
-				return fmt.Errorf("command failed: %w", err)
+			// Setup output handling
+			if err = r.setupCommandOutput(cmd, logWriter); err != nil {
+				r.lastError = err
+				return // fmt.Errorf("failed to setup command output: %w", err)
 			}
-		} else {
-			// This is the last command - let it run and monitor it
-			lastCmd = cmd
+
+			// Set platform-specific process attributes
+			setSysProcAttr(cmd)
+
+			// Set working directory - default to config file directory if not specified
+			workDir := rule.WorkDir
+			if workDir == "" {
+				workDir = filepath.Dir(r.orchestrator.ConfigPath)
+			}
+			cmd.Dir = workDir
+
+			// Set environment variables
+			cmd.Env = os.Environ() // Inherit parent environment
+
+			// Add environment variables to help subprocesses detect color support
+			suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
+			if r.orchestrator.ColorManager != nil && r.orchestrator.ColorManager.IsEnabled() && !suppressColors {
+				cmd.Env = append(cmd.Env, "FORCE_COLOR=1")       // npm, chalk (Node.js)
+				cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")    // many CLI tools
+				cmd.Env = append(cmd.Env, "COLORTERM=truecolor") // general color support indicator
+			}
+
+			// Add rule-specific environment variables
+			for key, value := range rule.Env {
+				cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+			}
+
+			if err = cmd.Start(); err != nil {
+				r.logDevloop("Command %q failed to start for rule: %v", cmdStr, err)
+				r.updateStatus(false, "FAILED", err.Error())
+				return // fmt.Errorf("failed to start command: %w", err)
+			}
+
+			currentCmds = append(currentCmds, cmd)
+
+			// For non-last commands, wait for completion before proceeding
+			if i < len(rule.Commands)-1 {
+				if err = cmd.Wait(); err != nil {
+					r.logDevloop("Command failed: %v", err)
+					r.updateStatus(false, "FAILED", err.Error())
+					return // fmt.Errorf("command failed: %w", err)
+				}
+			} else {
+				// This is the last command - let it run and monitor it
+				lastCmd = cmd
+			}
 		}
-	}
 
-	// Update running commands
-	r.commandsMutex.Lock()
-	r.runningCommands = currentCmds
-	r.commandsMutex.Unlock()
+		// Update running commands
+		r.commandsMutex.Lock()
+		r.runningCommands = currentCmds
+		r.commandsMutex.Unlock()
 
-	// Monitor the last command if it exists
-	if lastCmd != nil {
-		err := lastCmd.Wait()
-		if err != nil {
-			r.logDevloop("Last command failed: %v", err)
-			r.updateStatus(false, "FAILED", err.Error())
-			return fmt.Errorf("last command failed: %w", err)
+		// Monitor the last command if it exists
+		if lastCmd != nil {
+			err = lastCmd.Wait()
+			if err != nil {
+				r.logDevloop("Last command failed: %v", err)
+				r.updateStatus(false, "FAILED", err.Error())
+				return // fmt.Errorf("last command failed: %w", err)
+			}
 		}
-	}
 
-	// Signal log manager that rule finished
-	r.orchestrator.LogManager.SignalFinished(rule.Name)
+		// Signal log manager that rule finished
+		r.orchestrator.LogManager.SignalFinished(rule.Name)
+	}()
 
 	return nil
 }
