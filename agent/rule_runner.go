@@ -139,10 +139,8 @@ func (r *RuleRunner) eventLoop() {
 			log.Println("Execution complete....")
 
 		case <-r.stopChan:
-			r.logDevloop("Stop received")
 			// Don't block shutdown on process termination
 			r.TerminateProcesses()
-			r.logDevloop("Stop COMPLETED")
 			return
 		}
 	}
@@ -218,13 +216,7 @@ func (r *RuleRunner) Stop() error {
 	}
 
 	// Wait for event loop to finish with timeout
-	select {
-	case <-r.stoppedChan:
-		// Clean shutdown
-		// case <-time.After(3 * time.Second):
-		// Event loop didn't finish, but don't hang forever
-		r.logDevloop("WARNING: Event loop didn't finish within timeout")
-	}
+	<-r.stoppedChan
 
 	// Ensure processes are terminated
 	go func() {
