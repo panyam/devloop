@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,7 +135,7 @@ func (r *RuleRunner) eventLoop() {
 
 		case <-r.execDoneChan:
 			// called when an execution has finished
-			log.Println("Execution complete....")
+			r.logDevloop("Execution complete....")
 
 		case <-r.stopChan:
 			// Don't block shutdown on process termination
@@ -147,7 +146,7 @@ func (r *RuleRunner) eventLoop() {
 }
 
 func (r *RuleRunner) TriggerManual() {
-	log.Println("Manual Trigger Called")
+	r.logDevloop("Manual Trigger Called")
 	r.triggerChan <- true
 }
 
@@ -174,7 +173,6 @@ func (r *RuleRunner) executeWithRetry() error {
 
 		if err := r.executeNow("startup_retry", false); err != nil {
 			lastErr = err
-			r.logDevloop("Rule execution failed (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
 			continue
 		}
 
