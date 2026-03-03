@@ -2,6 +2,20 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## In Progress: Streaming Logs Overhaul (2026-03-03)
+
+Design doc: `docs/streaming-logs-design.md`
+
+Bug discovered: `finishedRules` map is never cleared when a rule re-runs, so after the first completed run, `StreamLogs` always takes the `streamFinishedLogs` path and misses live output from subsequent runs.
+
+Three tasks planned (sequential):
+
+1. **Single-Poller-Per-Rule with Fan-Out** — Replace per-client file polling with one `LogBroadcaster` per rule that reads new lines and fans out to subscribers. Introduces `LogSource` interface for future extensibility (custom pollers). Adds ring buffer for `last_n_lines` support. Fixes the `finishedRules` bug.
+
+2. **Configurable Truncate vs Append** — Add `append_on_restarts` per-rule config (default: `false` = truncate, current behavior). When `true`, consecutive runs append to the same log file with a separator line. Proto field: `Rule.append_on_restarts`. YAML field: `append_on_restarts: true`.
+
+3. **Structured Log Events** — Add typed `LogEvent` messages (`RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `TIMEOUT`) to `StreamLogsResponse`. Replaces fragile plain-text control messages. `RUN_STARTED` includes a `truncated` flag so clients can decide to clear their view or not.
+
 ## Recently Completed (2025-08-21)
 
 - ✅ **Architecture Simplification - Unified WorkerPool:**

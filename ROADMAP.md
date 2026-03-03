@@ -53,6 +53,11 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [ ] Add agent connection logic for grpcrouter-based gateway
   - [ ] Add comprehensive tests for distributed mode operations with new architecture
   - [x] Agent Service integration completed (provides foundation for gateway)
+- [ ] **Streaming Logs Overhaul (In Progress - 2026-03-03):**
+  - Design doc: `docs/streaming-logs-design.md`
+  - [ ] Single-poller-per-rule with fan-out broadcaster (fixes `finishedRules` bug)
+  - [ ] Configurable truncate vs append on re-run (`append_on_restarts` per-rule config)
+  - [ ] Structured `LogEvent` messages in `StreamLogsResponse` (RUN_STARTED, RUN_COMPLETED, etc.)
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.
