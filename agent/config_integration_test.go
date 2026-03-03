@@ -178,6 +178,58 @@ func TestSemaphoreLogging(t *testing.T) {
 	})
 }
 
+func TestConfigAppendOnRestarts(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "devloop-append-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	configContent := `
+rules:
+  - name: "appending-rule"
+    append_on_restarts: true
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["go build"]
+  - name: "truncating-rule"
+    append_on_restarts: false
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["go test"]
+  - name: "default-rule"
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["echo hi"]
+`
+	configPath := filepath.Join(tmpDir, "append_test.yaml")
+	err = os.WriteFile(configPath, []byte(strings.TrimSpace(configContent)), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if len(config.Rules) != 3 {
+		t.Fatalf("Expected 3 rules, got %d", len(config.Rules))
+	}
+	if !config.Rules[0].AppendOnRestarts {
+		t.Errorf("Expected appending-rule to have AppendOnRestarts=true")
+	}
+	if config.Rules[1].AppendOnRestarts {
+		t.Errorf("Expected truncating-rule to have AppendOnRestarts=false")
+	}
+	if config.Rules[2].AppendOnRestarts {
+		t.Errorf("Expected default-rule to have AppendOnRestarts=false (default)")
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	// Test that invalid max_parallel_rules values are handled properly
 	tmpDir, err := os.MkdirTemp("", "devloop-validation-test-*")

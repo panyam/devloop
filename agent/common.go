@@ -234,6 +234,11 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 					}
 				}
 
+				if appendOnRestarts, exists := ruleMap["append_on_restarts"]; exists {
+					if appendBool, ok := appendOnRestarts.(bool); ok && i < len(config.Rules) {
+						config.Rules[i].AppendOnRestarts = appendBool
+					}
+				}
 			}
 		}
 	}

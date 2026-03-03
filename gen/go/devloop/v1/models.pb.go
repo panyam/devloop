@@ -507,8 +507,12 @@ type Rule struct {
 	// Base backoff duration in milliseconds for startup retries (default: 3000ms)
 	// Grows exponentially: 3s, 6s, 12s, 24s, etc.
 	InitRetryBackoffBase uint64 `protobuf:"varint,17,opt,name=init_retry_backoff_base,json=initRetryBackoffBase,proto3" json:"init_retry_backoff_base,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// Whether to append logs across rule re-runs or truncate on each run.
+	// false (default): each run starts with a clean log file (O_TRUNC).
+	// true: consecutive runs append to the same log file with a separator line.
+	AppendOnRestarts bool `protobuf:"varint,18,opt,name=append_on_restarts,json=appendOnRestarts,proto3" json:"append_on_restarts,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
@@ -658,6 +662,13 @@ func (x *Rule) GetInitRetryBackoffBase() uint64 {
 		return x.InitRetryBackoffBase
 	}
 	return 0
+}
+
+func (x *Rule) GetAppendOnRestarts() bool {
+	if x != nil {
+		return x.AppendOnRestarts
+	}
+	return false
 }
 
 type RuleMatcher struct {

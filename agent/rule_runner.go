@@ -421,7 +421,7 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 	}
 
 	// Get log writer for this rule
-	logWriter, err := r.orchestrator.LogManager.GetWriter(rule.Name)
+	logWriter, err := r.orchestrator.LogManager.GetWriter(rule.Name, rule.AppendOnRestarts)
 	if err != nil {
 		r.updateStatus(false, "FAILED", err.Error())
 		return fmt.Errorf("error getting log writer: %w", err)
