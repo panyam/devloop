@@ -12,7 +12,6 @@ require (
 	github.com/mark3labs/mcp-go v0.32.0
 	github.com/panyam/gocurrent v0.0.2
 	github.com/pelletier/go-toml/v2 v2.2.4
-	github.com/redpanda-data/protoc-gen-go-mcp v0.0.0-20250614184940-a304d5967ba0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822
@@ -37,6 +36,3 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 )
-
-// This is needed till the custom tool names annotations PR (#16) is merged
-replace github.com/redpanda-data/protoc-gen-go-mcp v0.0.0-20250614184940-a304d5967ba0 => ./locallinks/protoc-gen-go-mcp/

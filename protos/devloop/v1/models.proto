@@ -7,7 +7,6 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/api/http.proto";
 import "google/protobuf/empty.proto";
-import "mcp/v1/annotations.proto";
 
 
 // ProjectInfo represents the information about a registered devloop project.
