@@ -13,7 +13,6 @@ var (
 	httpPort    int
 	grpcPort    int
 	gatewayAddr string
-	enableMCP   bool
 	autoPorts   bool
 )
 
@@ -54,6 +53,5 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&httpPort, "http-port", 9999, "Port for the HTTP gateway server (-1 to disable)")
 	rootCmd.PersistentFlags().IntVar(&grpcPort, "grpc-port", 5555, "Port for the gRPC server (-1 to disable)")
 	rootCmd.PersistentFlags().StringVar(&gatewayAddr, "gateway", "", "Host and port of the gateway to connect to")
-	rootCmd.PersistentFlags().BoolVar(&enableMCP, "enable-mcp", true, "Enable MCP server for AI tool integration")
 	rootCmd.PersistentFlags().BoolVar(&autoPorts, "auto-ports", false, "Automatically find available ports if specified ports are in use")
 }
