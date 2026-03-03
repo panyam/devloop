@@ -10,14 +10,10 @@ import (
 	"syscall"
 
 	"github.com/felixge/httpsnoop"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/panyam/devloop/agent"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
-	"github.com/panyam/devloop/gen/go/devloop/v1/v1mcp"
 	"github.com/panyam/devloop/utils"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -27,7 +23,6 @@ type AgentConfig struct {
 	HTTPPort    int
 	GRPCPort    int
 	GatewayAddr string
-	EnableMCP   bool
 	AutoPorts   bool
 }
 
@@ -211,42 +206,12 @@ func (s *Agent) startGRPCServer(errChan chan<- error) error {
 	return nil
 }
 
-// startHTTPServer starts the HTTP gateway server
+// startHTTPServer starts the HTTP server
 func (s *Agent) startHTTPServer(errChan chan<- error) error {
-	utils.LogDevloop("Starting HTTP gateway server on port %d", s.config.HTTPPort)
+	utils.LogDevloop("Starting HTTP server on port %d", s.config.HTTPPort)
 
-	gwmux := runtime.NewServeMux()
 	address := fmt.Sprintf(":%d", s.config.HTTPPort)
-	grpcAddress := fmt.Sprintf(":%d", s.config.GRPCPort)
-
-	err := pb.RegisterAgentServiceHandlerFromEndpoint(
-		s.ctx,
-		gwmux,
-		grpcAddress,
-		[]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to register gateway: %w", err)
-	}
-
-	// Create main HTTP router with organized path prefixes
 	mainMux := http.NewServeMux()
-
-	// Mount gRPC gateway at /api prefix
-	mainMux.Handle("/api/", http.StripPrefix("/api", gwmux))
-
-	// Mount MCP handlers if enabled
-	if s.config.EnableMCP {
-		mcpServer := server.NewMCPServer("devloop", "1.0.0")
-		adapter := agent.NewAgentService(s.orchestrator)
-		v1mcp.RegisterAgentServiceHandler(mcpServer, adapter)
-		mcpHandler := server.NewStreamableHTTPServer(mcpServer,
-			server.WithStateLess(true),      // Stateless mode - no sessionId required
-			server.WithEndpointPath("/mcp"), // Single endpoint for all MCP operations
-		)
-		mainMux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
-		utils.LogDevloop("MCP enabled on /mcp")
-	}
 
 	// Create HTTP server with middleware
 	handler := s.withLogger(mainMux)
