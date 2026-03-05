@@ -345,17 +345,17 @@ rules:
 		assert.NoError(t, err)
 		t.Logf("Created Go file at %s", goFilePath)
 
-		// Wait for command execution
-		time.Sleep(1 * time.Second)
+		// Wait for debounce + command execution (poll instead of fixed sleep)
+		assert.Eventually(t, func() bool {
+			content, err := os.ReadFile(outputFilePath)
+			if err != nil {
+				return false
+			}
+			lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+			// Expect at least 3 lines: 2 from init + 1 from Go file change
+			return len(lines) >= 3
+		}, 5*time.Second, 200*time.Millisecond, "Expected Go file change to trigger execution")
 
-		// Check if the file was triggered
-		if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
-			t.Logf("Output file does not exist yet at %s", outputFilePath)
-			// Wait a bit more
-			time.Sleep(2 * time.Second)
-		}
-
-		// Check output
 		content, err := os.ReadFile(outputFilePath)
 		assert.NoError(t, err)
 		assert.Contains(t, string(content), "Go file changed")
@@ -364,10 +364,17 @@ rules:
 		err = os.WriteFile(jsFilePath, []byte("console.log('test')"), 0644)
 		assert.NoError(t, err)
 
-		// Wait for command execution
-		time.Sleep(1 * time.Second)
+		// Wait for debounce + command execution (poll instead of fixed sleep)
+		assert.Eventually(t, func() bool {
+			content, err := os.ReadFile(outputFilePath)
+			if err != nil {
+				return false
+			}
+			lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+			// Expect 4 lines: 2 from init + 2 from file changes
+			return len(lines) >= 4
+		}, 5*time.Second, 200*time.Millisecond, "Expected JS file change to trigger execution")
 
-		// Check output again
 		content, err = os.ReadFile(outputFilePath)
 		assert.NoError(t, err)
 		assert.Contains(t, string(content), "Go file changed")

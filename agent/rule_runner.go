@@ -9,6 +9,7 @@ import (
 
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,6 +45,8 @@ type RuleRunner struct {
 	execDoneChan chan error
 	stopChan     chan struct{} // Shutdown signal
 	stoppedChan  chan struct{} // Shutdown complete
+	started      atomic.Bool   // Whether eventLoop was started
+	stopped      atomic.Bool   // Whether Stop() was already called
 }
 
 // NewRuleRunner creates a new RuleRunner for the given rule
@@ -82,6 +85,7 @@ func (r *RuleRunner) Start() error {
 	}
 
 	// Start the main event loop
+	r.started.Store(true)
 	go r.eventLoop()
 
 	return nil
@@ -110,25 +114,23 @@ func (r *RuleRunner) eventLoop() {
 	}
 
 	triggerCount := 0
+	var lastEventTime time.Time
 	for {
 		select {
 		case <-r.watcher.EventChan():
-			// Here we have a simple batching strategy
-			// If process is running, see if this time is > startTime + debounceDuration
-			if time.Since(r.status.LastStarted.AsTime()) <= r.debounceDuration {
-				triggerCount++
-			} else {
-				triggerCount = 0
-				r.executeNow("file_trigger", true)
-			}
+			// Record file change event; defer execution to ticker for proper debouncing.
+			// This ensures rapid successive events are coalesced into a single execution
+			// after the debounce quiet period.
+			triggerCount++
+			lastEventTime = time.Now()
 
 		case <-r.triggerChan:
 			triggerCount = 0
 			r.executeNow("manual", true)
 
 		case <-ticker.C:
-			// see if there are any pending executions due to debouncing
-			if triggerCount > 0 && time.Since(r.status.LastStarted.AsTime()) > r.debounceDuration {
+			// Execute if there are pending events and the debounce quiet period has elapsed
+			if triggerCount > 0 && time.Since(lastEventTime) >= r.debounceDuration {
 				triggerCount = 0
 				r.executeNow("file_change", true)
 			}
@@ -205,6 +207,11 @@ func (r *RuleRunner) getInitRetryBackoffBase() uint64 {
 
 // Stop terminates all processes and cleans up
 func (r *RuleRunner) Stop() error {
+	// Prevent double-close of stopChan
+	if r.stopped.Swap(true) {
+		return nil
+	}
+
 	// Signal the event loop to stop
 	close(r.stopChan)
 
@@ -213,8 +220,10 @@ func (r *RuleRunner) Stop() error {
 		r.logDevloop("Error stopping file watcher: %v", err)
 	}
 
-	// Wait for event loop to finish with timeout
-	<-r.stoppedChan
+	// Only wait for event loop if it was started
+	if r.started.Load() {
+		<-r.stoppedChan
+	}
 
 	// Ensure processes are terminated
 	go func() {
@@ -442,9 +451,9 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 			if r.GetStatus().LastBuildStatus == "RUNNING" {
 				r.lastError = err
 				if err == nil {
-					r.updateStatus(false, "FAILED")
-				} else {
 					r.updateStatus(false, "SUCCESS")
+				} else {
+					r.updateStatus(false, "FAILED")
 				}
 			}
 			r.execDoneChan <- err

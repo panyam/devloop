@@ -16,6 +16,17 @@ Three tasks planned (sequential):
 
 3. **Structured Log Events** — Add typed `LogEvent` messages (`RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `TIMEOUT`) to `StreamLogsResponse`. Replaces fragile plain-text control messages. `RUN_STARTED` includes a `truncated` flag so clients can decide to clear their view or not.
 
+## Recently Completed: Test Suite Bug Fixes (2026-03-04)
+
+Fixed 6 bugs across `agent/rule_runner.go`, `agent/graceful_shutdown_test.go`, and `agent/e2e_test.go`. Several were pre-existing issues on `main` (TestSemaphoreLogging, TestMediumPatternMatching), others were test issues (synchronous Start calls, timing-dependent assertions). All tests now pass.
+
+- Fix: `RuleRunner.Stop()` hang when eventLoop never started (added `started` atomic flag)
+- Fix: Inverted success/failure status in `executeNow()` defer block
+- Fix: `orchestrator.Start()` called synchronously in shutdown tests (blocks forever)
+- Fix: Double-close panic risk on `stopChan` (added `stopped` atomic with Swap)
+- Fix: Debounce acting as rate limiter instead of proper debounce (defer to ticker)
+- Fix: `TestRelativePathPatterns` fragile sleep replaced with `assert.Eventually` polling
+
 ## Recently Completed (2025-08-21)
 
 - ✅ **Architecture Simplification - Unified WorkerPool:**

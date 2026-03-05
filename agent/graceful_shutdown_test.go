@@ -180,8 +180,8 @@ rules:
 		orchestrator, err := NewOrchestrator(configPath)
 		assert.NoError(t, err)
 
-		err = orchestrator.Start()
-		assert.NoError(t, err)
+		// Start() blocks until shutdown, so run it in a goroutine
+		go orchestrator.Start()
 		defer orchestrator.Stop()
 
 		// Get the rule runner
@@ -238,9 +238,12 @@ rules:
 		orchestrator, err := NewOrchestrator(configPath)
 		assert.NoError(t, err)
 
-		err = orchestrator.Start()
-		assert.NoError(t, err)
+		// Start() blocks until shutdown, so run it in a goroutine
+		go orchestrator.Start()
 		defer orchestrator.Stop()
+
+		// Wait for event loop to be ready
+		time.Sleep(200 * time.Millisecond)
 
 		ruleRunner := orchestrator.GetRuleRunner("test-rule")
 		assert.NotNil(t, ruleRunner)

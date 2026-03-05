@@ -178,6 +178,13 @@ settings:
   - **Backward Compatibility:** Default behavior allows devloop to continue running despite startup failures
 
 **Major Bug Fixes:**
+- **RuleRunner Test Suite Fixes (2026-03-04):** Fixed 6 bugs in RuleRunner and associated tests
+  - `Stop()` hang when eventLoop never started: added `started atomic.Bool` to skip `<-stoppedChan` wait
+  - Inverted success/failure: `executeNow()` defer set "FAILED" on `err==nil`, swapped conditions
+  - Shutdown tests called `orchestrator.Start()` synchronously (blocks forever), changed to `go orchestrator.Start()`
+  - Double-close panic on `stopChan`: added `stopped atomic.Bool` with `Swap(true)` for atomic test-and-set
+  - Debounce acted as rate limiter: event handler executed immediately on first event if time since last start exceeded debounce, changed to defer all file events to ticker-based execution after quiet period
+  - `TestRelativePathPatterns` fragile timing: replaced fixed `time.Sleep` with `assert.Eventually` polling to handle ticker-based debounce timing
 - **Directory Watching Logic (Critical):** Fixed shouldWatchDirectory ignoring FIFO order and exclude patterns (2025-08-18)
   - Before: Directory watching ignored pattern order and action types, causing massive over-watching of excluded directories
   - Root Cause: `patternCouldMatchInDirectory` was too permissive - specific files like `buf.yaml` incorrectly matched unrelated directories like `web/node_modules`
