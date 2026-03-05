@@ -120,7 +120,7 @@ func TestLogManager_StreamLogs_Historical(t *testing.T) {
 		mockWriter := newMockWriter()
 		writer := gocurrent.NewWriter(mockWriter.write)
 
-		err = lm.StreamLogs(ruleName, "", 0, writer) // 0 timeout for finished rules
+		err = lm.StreamLogs(ruleName, "", 0, 0, writer) // 0 timeout for finished rules
 		assert.NoError(t, err)
 
 		writer.Stop()
@@ -149,7 +149,7 @@ func TestLogManager_StreamLogs_Realtime(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			err := lm.StreamLogs(ruleName, "", 5, writer) // 5 second timeout for live logs
+			err := lm.StreamLogs(ruleName, "", 5, 0, writer) // 5 second timeout for live logs
 			assert.NoError(t, err)
 		}()
 
@@ -189,7 +189,7 @@ func TestLogManager_StreamLogs_Blocking(t *testing.T) {
 		writer := gocurrent.NewWriter(mockWriter.write)
 
 		go func() {
-			streamErrChan <- lm.StreamLogs(ruleName, "", 5, writer) // 5 second timeout
+			streamErrChan <- lm.StreamLogs(ruleName, "", 5, 0, writer) // 5 second timeout
 		}()
 
 		time.Sleep(100 * time.Millisecond)
@@ -226,7 +226,7 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 		mockWriter := newMockWriter()
 		gocurrentWriter := gocurrent.NewWriter(mockWriter.write)
 
-		err = lm.StreamLogs(ruleName, "filter keyword", 0, gocurrentWriter) // 0 timeout for finished rules
+		err = lm.StreamLogs(ruleName, "filter keyword", 0, 0, gocurrentWriter) // 0 timeout for finished rules
 		assert.NoError(t, err)
 
 		gocurrentWriter.Stop()
@@ -349,7 +349,7 @@ func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
 
 		mock1 := newMockWriter()
 		gw1 := gocurrent.NewWriter(mock1.write)
-		err = lm.StreamLogs(ruleName, "", 0, gw1)
+		err = lm.StreamLogs(ruleName, "", 0, 0, gw1)
 		assert.NoError(t, err)
 		gw1.Stop()
 		assert.Contains(t, mock1.getContent(), "run1 line")
@@ -366,7 +366,7 @@ func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
 		gw2 := gocurrent.NewWriter(mock2.write)
 		go func() {
 			defer wg.Done()
-			lm.StreamLogs(ruleName, "", 5, gw2)
+			lm.StreamLogs(ruleName, "", 5, 0, gw2)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
@@ -426,5 +426,175 @@ func TestLogManager_AppendMode_MultipleRuns(t *testing.T) {
 		// Should have two separator lines (between run1->run2 and run2->run3)
 		separatorCount := strings.Count(contentStr, "--- [rule: test-rule-multi-append] run started at")
 		assert.Equal(t, 2, separatorCount)
+	})
+}
+
+// TestLogManager_StreamLogs_MultipleClients verifies that two concurrent streams
+// both receive the same log lines from a single rule.
+func TestLogManager_StreamLogs_MultipleClients(t *testing.T) {
+	testhelpers.WithTestContext(t, 3*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-multi-client"
+		fileWriter, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+
+		mock1 := newMockWriter()
+		gw1 := gocurrent.NewWriter(mock1.write)
+		mock2 := newMockWriter()
+		gw2 := gocurrent.NewWriter(mock2.write)
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw1)
+		}()
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw2)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		_, err = fileWriter.Write([]byte("shared line 1\nshared line 2\n"))
+		assert.NoError(t, err)
+		time.Sleep(200 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+		gw1.Stop()
+		gw2.Stop()
+
+		assert.Contains(t, mock1.getContent(), "shared line 1")
+		assert.Contains(t, mock1.getContent(), "shared line 2")
+		assert.Contains(t, mock2.getContent(), "shared line 1")
+		assert.Contains(t, mock2.getContent(), "shared line 2")
+	})
+}
+
+// TestLogManager_StreamLogs_LastNLines verifies that history lines are sent before live lines.
+func TestLogManager_StreamLogs_LastNLines(t *testing.T) {
+	testhelpers.WithTestContext(t, 3*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-history"
+		fileWriter, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		// Write some initial content
+		_, err = fileWriter.Write([]byte("line1\nline2\nline3\nline4\nline5\n"))
+		assert.NoError(t, err)
+
+		// Give broadcaster time to ingest
+		time.Sleep(300 * time.Millisecond)
+
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 3, gw) // last 3 lines of history
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		// Write a live line
+		_, err = fileWriter.Write([]byte("live line\n"))
+		assert.NoError(t, err)
+		time.Sleep(200 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+		gw.Stop()
+
+		content := mock.getContent()
+		// Should contain history lines
+		assert.Contains(t, content, "line3")
+		assert.Contains(t, content, "line4")
+		assert.Contains(t, content, "line5")
+		// And live line
+		assert.Contains(t, content, "live line")
+	})
+}
+
+// TestLogManager_StreamLogs_RuleRestart_Truncate verifies that after a rule restarts
+// with truncation, a connected client gets the new run's output.
+func TestLogManager_StreamLogs_RuleRestart_Truncate(t *testing.T) {
+	testhelpers.WithTestContext(t, 3*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-restart-trunc"
+
+		// First run
+		w1, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = w1.Write([]byte("run1 output\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		// Second run (truncate)
+		w2, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+		_, err = w2.Write([]byte("run2 output\n"))
+		assert.NoError(t, err)
+		time.Sleep(200 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+		gw.Stop()
+
+		content := mock.getContent()
+		assert.Contains(t, content, "run2 output")
+	})
+}
+
+// TestLogManager_Close_StopsBroadcasters verifies that Close stops all broadcasters.
+func TestLogManager_Close_StopsBroadcasters(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-close-bc"
+		fileWriter, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, _ = fileWriter.Write([]byte("data\n"))
+
+		// Force broadcaster creation by calling StreamLogs in background
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", -1, 0, gw) // infinite timeout
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		// Close should stop the broadcaster and unblock StreamLogs
+		err = lm.Close()
+		assert.NoError(t, err)
+
+		wg.Wait()
+		gw.Stop()
 	})
 }

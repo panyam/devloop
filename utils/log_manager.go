@@ -15,12 +15,15 @@ import (
 )
 
 // LogManager manages log files and provides streaming capabilities.
+// It uses a single LogBroadcaster per rule to fan out log lines
+// to all subscribers instead of each client polling independently.
 type LogManager struct {
 	logDir string
-	// Mutex to protect access to finishedRules map
-	mu sync.Mutex
+	mu     sync.Mutex
 	// Map to track which rules have finished execution
 	finishedRules map[string]bool
+	// One broadcaster per rule — lazy-created
+	broadcasters map[string]*LogBroadcaster
 }
 
 // NewLogManager creates a new LogManager instance.
@@ -31,6 +34,7 @@ func NewLogManager(logDir string) (*LogManager, error) {
 	return &LogManager{
 		logDir:        logDir,
 		finishedRules: make(map[string]bool),
+		broadcasters:  make(map[string]*LogBroadcaster),
 	}, nil
 }
 
@@ -65,6 +69,10 @@ func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Write
 	// Clear finished state so StreamLogs uses the live path for this new run
 	lm.mu.Lock()
 	delete(lm.finishedRules, ruleName)
+	// Reset broadcaster if one exists (clears ring buffer, resets source offset)
+	if b, ok := lm.broadcasters[ruleName]; ok {
+		b.SignalReset()
+	}
 	lm.mu.Unlock()
 
 	return file, nil
@@ -73,34 +81,158 @@ func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Write
 // SignalFinished signals that a rule's execution has finished.
 func (lm *LogManager) SignalFinished(ruleName string) {
 	lm.mu.Lock()
-	defer lm.mu.Unlock()
 	lm.finishedRules[ruleName] = true
+	b := lm.broadcasters[ruleName]
+	lm.mu.Unlock()
+
+	if b != nil {
+		b.SignalFinished()
+	}
+}
+
+// getOrCreateBroadcaster returns the broadcaster for a rule, creating one if needed.
+// Caller must NOT hold lm.mu.
+func (lm *LogManager) getOrCreateBroadcaster(ruleName string) *LogBroadcaster {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	if b, ok := lm.broadcasters[ruleName]; ok {
+		return b
+	}
+
+	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
+	source := NewFileLogSource(logFilePath)
+	b := NewLogBroadcaster(ruleName, source)
+	lm.broadcasters[ruleName] = b
+	return b
 }
 
 // StreamLogs streams logs for a given rule to the provided gocurrent Writer.
-func (lm *LogManager) StreamLogs(ruleName, filter string, timeoutSeconds int64, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
+// lastNLines controls history replay: 0 = no history, negative = all available.
+func (lm *LogManager) StreamLogs(ruleName, filter string, timeoutSeconds int64, lastNLines int32, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
 	// Check if log file exists
 	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
-	_, err := os.Stat(logFilePath)
-	if err != nil {
+	if _, err := os.Stat(logFilePath); err != nil {
 		return fmt.Errorf("log file not found for rule %q", ruleName)
 	}
 
-	// Check if rule has finished
+	// If the rule is already finished, read the file directly and return.
+	// This handles the case where content was written before a broadcaster existed.
 	lm.mu.Lock()
 	ruleFinished := lm.finishedRules[ruleName]
 	lm.mu.Unlock()
 
 	if ruleFinished {
-		// Rule has finished - stream all content and exit
 		return lm.streamFinishedLogs(logFilePath, ruleName, filter, writer)
+	}
+
+	b := lm.getOrCreateBroadcaster(ruleName)
+
+	// Send history if requested
+	if lastNLines != 0 {
+		history := b.GetHistory(int(lastNLines))
+		if len(history) > 0 {
+			now := time.Now().UnixMilli()
+			for _, line := range history {
+				if filter != "" && !contains(line, filter) {
+					continue
+				}
+				resp := &pb.StreamLogsResponse{
+					Lines: []*pb.LogLine{{
+						RuleName:  ruleName,
+						Line:      line,
+						Timestamp: now,
+					}},
+				}
+				if !writer.Send(resp) {
+					return fmt.Errorf("failed to send history line")
+				}
+			}
+		}
+	}
+
+	// Subscribe for live updates
+	subID := fmt.Sprintf("%s-%d", ruleName, time.Now().UnixNano())
+	sub := b.Subscribe(subID, filter)
+	defer b.Unsubscribe(subID)
+
+	// Setup timeout
+	var timeoutDuration time.Duration
+	var timeoutTimer *time.Timer
+	var timeoutChan <-chan time.Time
+
+	if timeoutSeconds < 0 {
+		timeoutChan = nil
 	} else {
-		// Rule is still running - stream in real-time with timeout
-		return lm.streamLiveLogs(logFilePath, ruleName, filter, timeoutSeconds, writer)
+		if timeoutSeconds == 0 {
+			timeoutSeconds = 3
+		}
+		timeoutDuration = time.Duration(timeoutSeconds) * time.Second
+		timeoutTimer = time.NewTimer(timeoutDuration)
+		defer timeoutTimer.Stop()
+		timeoutChan = timeoutTimer.C
+	}
+
+	for {
+		select {
+		case batch := <-sub.Ch:
+			for _, logLine := range batch {
+				resp := &pb.StreamLogsResponse{
+					Lines: []*pb.LogLine{logLine},
+				}
+				if !writer.Send(resp) {
+					return fmt.Errorf("failed to send log line")
+				}
+			}
+			// Reset timeout on new content
+			if timeoutTimer != nil {
+				if !timeoutTimer.Stop() {
+					select {
+					case <-timeoutTimer.C:
+					default:
+					}
+				}
+				timeoutTimer.Reset(timeoutDuration)
+			}
+
+		case <-sub.Done:
+			// Drain remaining batches from channel
+			for {
+				select {
+				case batch := <-sub.Ch:
+					for _, logLine := range batch {
+						writer.Send(&pb.StreamLogsResponse{
+							Lines: []*pb.LogLine{logLine},
+						})
+					}
+				default:
+					goto drained
+				}
+			}
+		drained:
+			writer.Send(&pb.StreamLogsResponse{
+				Lines: []*pb.LogLine{{
+					RuleName:  ruleName,
+					Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
+					Timestamp: time.Now().UnixMilli(),
+				}},
+			})
+			return nil
+
+		case <-timeoutChan:
+			writer.Send(&pb.StreamLogsResponse{
+				Lines: []*pb.LogLine{{
+					RuleName:  ruleName,
+					Line:      fmt.Sprintf("Log streaming timed out after %d seconds of no new content", timeoutSeconds),
+					Timestamp: time.Now().UnixMilli(),
+				}},
+			})
+			return nil
+		}
 	}
 }
 
-// streamFinishedLogs streams all logs for a rule that has finished execution
+// streamFinishedLogs reads a completed rule's log file and sends all lines.
 func (lm *LogManager) streamFinishedLogs(logFilePath, ruleName, filter string, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
 	file, err := os.Open(logFilePath)
 	if err != nil {
@@ -112,173 +244,29 @@ func (lm *LogManager) streamFinishedLogs(logFilePath, ruleName, filter string, w
 	for {
 		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			line = strings.TrimSuffix(line, "\n") // Remove trailing newline
-			if filter == "" || contains(line, filter) {
-				response := &pb.StreamLogsResponse{
-					Lines: []*pb.LogLine{
-						{
-							RuleName:  ruleName,
-							Line:      line,
-							Timestamp: time.Now().UnixMilli(),
-						},
-					},
-				}
-				if !writer.Send(response) {
-					return fmt.Errorf("failed to send log line")
-				}
-			}
-		}
-		if err == io.EOF {
-			// Send final completion message
-			finalMsg := &pb.StreamLogsResponse{
-				Lines: []*pb.LogLine{
-					{
-						RuleName:  ruleName,
-						Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
-						Timestamp: time.Now().UnixMilli(),
-					},
-				},
-			}
-			writer.Send(finalMsg)
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-// streamLiveLogs streams logs for a rule that is currently running
-func (lm *LogManager) streamLiveLogs(logFilePath, ruleName, filter string, timeoutSeconds int64, writer *gocurrent.Writer[*pb.StreamLogsResponse]) error {
-	file, err := os.Open(logFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to open log file for streaming: %w", err)
-	}
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-
-	// Setup timeout logic
-	var timeoutDuration time.Duration
-	var timeoutTimer *time.Timer
-	var timeoutChan <-chan time.Time
-
-	if timeoutSeconds < 0 {
-		// Negative timeout means forever - no timeout
-		timeoutChan = nil
-	} else {
-		// Use provided timeout (default 3 seconds if 0)
-		if timeoutSeconds == 0 {
-			timeoutSeconds = 3
-		}
-		timeoutDuration = time.Duration(timeoutSeconds) * time.Second
-		timeoutTimer = time.NewTimer(timeoutDuration)
-		timeoutChan = timeoutTimer.C
-	}
-
-	// Helper function to reset timeout
-	resetTimeout := func() {
-		if timeoutTimer != nil {
-			timeoutTimer.Reset(timeoutDuration)
-		}
-	}
-
-	for {
-		// Check if rule has finished (without blocking)
-		lm.mu.Lock()
-		ruleFinished := lm.finishedRules[ruleName]
-		lm.mu.Unlock()
-
-		if ruleFinished {
-			// Rule finished while we were streaming - drain remaining content
-			for {
-				line, err := reader.ReadString('\n')
-				if len(line) > 0 {
-					line = strings.TrimSuffix(line, "\n")
-					if filter == "" || contains(line, filter) {
-						response := &pb.StreamLogsResponse{
-							Lines: []*pb.LogLine{
-								{
-									RuleName:  ruleName,
-									Line:      line,
-									Timestamp: time.Now().UnixMilli(),
-								},
-							},
-						}
-						if !writer.Send(response) {
-							return fmt.Errorf("failed to send log line")
-						}
-					}
-				}
-				if err == io.EOF {
-					// Send completion message and exit
-					finalMsg := &pb.StreamLogsResponse{
-						Lines: []*pb.LogLine{
-							{
-								RuleName:  ruleName,
-								Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
-								Timestamp: time.Now().UnixMilli(),
-							},
-						},
-					}
-					writer.Send(finalMsg)
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		// Try to read a line
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
 			line = strings.TrimSuffix(line, "\n")
 			if filter == "" || contains(line, filter) {
-				response := &pb.StreamLogsResponse{
-					Lines: []*pb.LogLine{
-						{
-							RuleName:  ruleName,
-							Line:      line,
-							Timestamp: time.Now().UnixMilli(),
-						},
-					},
+				resp := &pb.StreamLogsResponse{
+					Lines: []*pb.LogLine{{
+						RuleName:  ruleName,
+						Line:      line,
+						Timestamp: time.Now().UnixMilli(),
+					}},
 				}
-				if !writer.Send(response) {
+				if !writer.Send(resp) {
 					return fmt.Errorf("failed to send log line")
 				}
 			}
-			// Reset timeout since we got new content
-			resetTimeout()
 		}
 		if err == io.EOF {
-			// At end of file but rule is still running
-			// Check for timeout if configured
-			if timeoutChan != nil {
-				select {
-				case <-timeoutChan:
-					// Timeout reached - send timeout message and exit
-					timeoutMsg := &pb.StreamLogsResponse{
-						Lines: []*pb.LogLine{
-							{
-								RuleName:  ruleName,
-								Line:      fmt.Sprintf("Log streaming timed out after %d seconds of no new content", timeoutSeconds),
-								Timestamp: time.Now().UnixMilli(),
-							},
-						},
-					}
-					writer.Send(timeoutMsg)
-					return nil
-				default:
-					// No timeout yet - wait and try again
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-			} else {
-				// No timeout configured - wait forever
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
+			writer.Send(&pb.StreamLogsResponse{
+				Lines: []*pb.LogLine{{
+					RuleName:  ruleName,
+					Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
+					Timestamp: time.Now().UnixMilli(),
+				}},
+			})
+			return nil
 		}
 		if err != nil {
 			return err
@@ -291,9 +279,18 @@ func contains(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// Close closes the LogManager and cleans up resources.
+// Close closes the LogManager and stops all broadcasters.
 func (lm *LogManager) Close() error {
-	// With simplified design, we don't manage open file handles
-	// Individual file operations open/close their own handles
+	lm.mu.Lock()
+	broadcasters := make(map[string]*LogBroadcaster, len(lm.broadcasters))
+	for k, v := range lm.broadcasters {
+		broadcasters[k] = v
+	}
+	lm.broadcasters = make(map[string]*LogBroadcaster)
+	lm.mu.Unlock()
+
+	for _, b := range broadcasters {
+		b.Stop()
+	}
 	return nil
 }

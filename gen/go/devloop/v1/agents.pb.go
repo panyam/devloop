@@ -400,7 +400,10 @@ type StreamLogsRequest struct {
 	// Timeout (in seconds) if no new log lines found to be streamed
 	// negative value  => Wait indefinitely/forever
 	// 0 => use a default value (say 3s)
-	Timeout       int64 `protobuf:"varint,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Timeout int64 `protobuf:"varint,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	// Number of recent log lines to replay on connect (history).
+	// 0 => no history, negative => all available history.
+	LastNLines    int32 `protobuf:"varint,4,opt,name=last_n_lines,json=lastNLines,proto3" json:"last_n_lines,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -452,6 +455,13 @@ func (x *StreamLogsRequest) GetFilter() string {
 func (x *StreamLogsRequest) GetTimeout() int64 {
 	if x != nil {
 		return x.Timeout
+	}
+	return 0
+}
+
+func (x *StreamLogsRequest) GetLastNLines() int32 {
+	if x != nil {
+		return x.LastNLines
 	}
 	return 0
 }
@@ -520,11 +530,13 @@ const file_devloop_v1_agents_proto_rawDesc = "" +
 	"\trule_name\x18\x01 \x01(\tR\bruleName\"I\n" +
 	"\x13TriggerRuleResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"b\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\x01\n" +
 	"\x11StreamLogsRequest\x12\x1b\n" +
 	"\trule_name\x18\x01 \x01(\tR\bruleName\x12\x16\n" +
 	"\x06filter\x18\x02 \x01(\tR\x06filter\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeout\"?\n" +
+	"\atimeout\x18\x03 \x01(\x03R\atimeout\x12 \n" +
+	"\flast_n_lines\x18\x04 \x01(\x05R\n" +
+	"lastNLines\"?\n" +
 	"\x12StreamLogsResponse\x12)\n" +
 	"\x05lines\x18\x01 \x03(\v2\x13.devloop.v1.LogLineR\x05lines2\xa0\x04\n" +
 	"\fAgentService\x12Y\n" +
