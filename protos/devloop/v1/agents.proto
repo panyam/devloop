@@ -6,7 +6,7 @@ option go_package = "github.com/panyam/devloop/gen/go/devloop/v1";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
 import "google/protobuf/empty.proto";
-import "mcp/v1/annotations.proto";
+// import "mcp/v1/annotations.proto";
 import "devloop/v1/models.proto";
 
 // AgentService defines the gRPC service for clients to interact with

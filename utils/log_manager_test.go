@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -72,7 +73,7 @@ func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
 		ruleName := "test-rule-1"
 		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
 
-		writer, err := lm.GetWriter(ruleName)
+		writer, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 		assert.NotNil(t, writer)
 
@@ -87,7 +88,7 @@ func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "line 1\nline 2\n", string(content))
 
-		writer2, err := lm.GetWriter(ruleName)
+		writer2, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 		_, err = writer2.Write([]byte("new line 1\n"))
 		assert.NoError(t, err)
@@ -137,7 +138,7 @@ func TestLogManager_StreamLogs_Realtime(t *testing.T) {
 		assert.NoError(t, err)
 
 		ruleName := "test-rule-realtime"
-		fileWriter, err := lm.GetWriter(ruleName)
+		fileWriter, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
@@ -181,7 +182,7 @@ func TestLogManager_StreamLogs_Blocking(t *testing.T) {
 		ruleName := "test-rule-blocking"
 		streamErrChan := make(chan error, 1)
 
-		fileWriter, err := lm.GetWriter(ruleName)
+		fileWriter, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 
 		mockWriter := newMockWriter()
@@ -214,7 +215,7 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 		assert.NoError(t, err)
 
 		ruleName := "test-rule-filter"
-		writer, err := lm.GetWriter(ruleName)
+		writer, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 
 		contentToWrite := "line with filter keyword\nline without\nANOTHER LINE WITH FILTER KEYWORD\nfinal line\n"
@@ -242,12 +243,12 @@ func TestLogManager_Close(t *testing.T) {
 		lm, err := NewLogManager(tmpDir)
 		assert.NoError(t, err)
 
-		writer1, err := lm.GetWriter("rule-close-1")
+		writer1, err := lm.GetWriter("rule-close-1", false)
 		assert.NoError(t, err)
 		_, err = writer1.Write([]byte("data"))
 		assert.NoError(t, err)
 
-		writer2, err := lm.GetWriter("rule-close-2")
+		writer2, err := lm.GetWriter("rule-close-2", false)
 		assert.NoError(t, err)
 		_, err = writer2.Write([]byte("data"))
 		assert.NoError(t, err)
@@ -259,5 +260,171 @@ func TestLogManager_Close(t *testing.T) {
 		// since each GetWriter() returns a new file handle. This test just verifies
 		// that Close() can be called without error.
 		assert.NoError(t, err)
+	})
+}
+
+// TestLogManager_GetWriter_AppendMode tests that GetWriter in append mode
+// preserves previous content and writes a separator line.
+func TestLogManager_GetWriter_AppendMode(t *testing.T) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-append"
+		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
+
+		// First run: truncate mode (default)
+		writer1, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = writer1.Write([]byte("run1 line1\nrun1 line2\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		content, err := os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		assert.Equal(t, "run1 line1\nrun1 line2\n", string(content))
+
+		// Second run: append mode - previous content should be preserved
+		writer2, err := lm.GetWriter(ruleName, true)
+		assert.NoError(t, err)
+		_, err = writer2.Write([]byte("run2 line1\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		content, err = os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		// Should contain run1 content + separator + run2 content
+		assert.Contains(t, string(content), "run1 line1\nrun1 line2\n")
+		assert.Contains(t, string(content), "--- [rule: test-rule-append] run started at")
+		assert.Contains(t, string(content), "run2 line1\n")
+	})
+}
+
+// TestLogManager_GetWriter_TruncateMode tests that GetWriter in truncate mode
+// replaces previous content entirely.
+func TestLogManager_GetWriter_TruncateMode(t *testing.T) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-truncate"
+		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
+
+		// First run
+		writer1, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = writer1.Write([]byte("run1 output\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		// Second run: truncate mode - previous content should be gone
+		writer2, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = writer2.Write([]byte("run2 output\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		content, err := os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		assert.Equal(t, "run2 output\n", string(content))
+		assert.NotContains(t, string(content), "run1")
+	})
+}
+
+// TestLogManager_GetWriter_ClearsFinishedState tests that GetWriter clears
+// the finishedRules state so subsequent StreamLogs calls use the live path.
+func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-finished-clear"
+
+		// First run: write, finish, and verify StreamLogs returns completed content
+		writer1, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = writer1.Write([]byte("run1 line\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		mock1 := newMockWriter()
+		gw1 := gocurrent.NewWriter(mock1.write)
+		err = lm.StreamLogs(ruleName, "", 0, gw1)
+		assert.NoError(t, err)
+		gw1.Stop()
+		assert.Contains(t, mock1.getContent(), "run1 line")
+		assert.Contains(t, mock1.getContent(), "execution completed")
+
+		// Second run: GetWriter should clear finished state
+		writer2, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		// Now stream in background - should use live path (not finished path)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		mock2 := newMockWriter()
+		gw2 := gocurrent.NewWriter(mock2.write)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, gw2)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		_, err = writer2.Write([]byte("run2 live line\n"))
+		assert.NoError(t, err)
+		time.Sleep(50 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+		gw2.Stop()
+
+		// Should have the live content from run2, not just a "completed" message
+		assert.Contains(t, mock2.getContent(), "run2 live line")
+	})
+}
+
+// TestLogManager_AppendMode_MultipleRuns tests that multiple append-mode runs
+// accumulate content with separator lines between each run.
+func TestLogManager_AppendMode_MultipleRuns(t *testing.T) {
+	testhelpers.WithTestContext(t, 1*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-multi-append"
+		logFilePath := filepath.Join(tmpDir, fmt.Sprintf("%s.log", ruleName))
+
+		// Run 1: truncate (initial run)
+		w1, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+		_, err = w1.Write([]byte("run1\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		// Run 2: append
+		w2, err := lm.GetWriter(ruleName, true)
+		assert.NoError(t, err)
+		_, err = w2.Write([]byte("run2\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		// Run 3: append
+		w3, err := lm.GetWriter(ruleName, true)
+		assert.NoError(t, err)
+		_, err = w3.Write([]byte("run3\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		content, err := os.ReadFile(logFilePath)
+		assert.NoError(t, err)
+		contentStr := string(content)
+
+		// All three runs should be present
+		assert.Contains(t, contentStr, "run1\n")
+		assert.Contains(t, contentStr, "run2\n")
+		assert.Contains(t, contentStr, "run3\n")
+
+		// Should have two separator lines (between run1->run2 and run2->run3)
+		separatorCount := strings.Count(contentStr, "--- [rule: test-rule-multi-append] run started at")
+		assert.Equal(t, 2, separatorCount)
 	})
 }

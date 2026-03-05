@@ -7,7 +7,6 @@
 package v1
 
 import (
-	_ "github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp/v1"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -506,7 +505,7 @@ var File_devloop_v1_agents_proto protoreflect.FileDescriptor
 const file_devloop_v1_agents_proto_rawDesc = "" +
 	"\n" +
 	"\x17devloop/v1/agents.proto\x12\n" +
-	"devloop.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x15google/api/http.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x18mcp/v1/annotations.proto\x1a\x17devloop/v1/models.proto\"\x12\n" +
+	"devloop.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x15google/api/http.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17devloop/v1/models.proto\"\x12\n" +
 	"\x10GetConfigRequest\"?\n" +
 	"\x11GetConfigResponse\x12*\n" +
 	"\x06config\x18\x01 \x01(\v2\x12.devloop.v1.ConfigR\x06config\"-\n" +

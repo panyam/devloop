@@ -18,7 +18,6 @@ This is the default mode when no subcommand is specified. The server will:
 - Start file watching for pattern matching
 - Execute commands when matching files change
 - Optionally start gRPC and HTTP servers for API access
-- Optionally enable MCP (Model Context Protocol) for AI integration
 
 Examples:
   devloop server                    # Start with default settings
@@ -41,7 +40,6 @@ func runServer() {
 		HTTPPort:    httpPort,
 		GRPCPort:    grpcPort,
 		GatewayAddr: gatewayAddr,
-		EnableMCP:   enableMCP,
 		AutoPorts:   autoPorts,
 	}
 

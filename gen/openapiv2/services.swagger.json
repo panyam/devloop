@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "mcp/v1/annotations.proto",
+    "title": "devloop/v1/models.proto",
     "version": "version not set"
   },
   "tags": [
@@ -408,6 +408,10 @@
           "type": "string",
           "format": "uint64",
           "description": "Base backoff duration in milliseconds for startup retries (default: 3000ms)\nGrows exponentially: 3s, 6s, 12s, 24s, etc."
+        },
+        "appendOnRestarts": {
+          "type": "boolean",
+          "title": "Whether to append logs across rule re-runs or truncate on each run.\nfalse (default): each run starts with a clean log file (O_TRUNC).\ntrue: consecutive runs append to the same log file with a separator line,\npreserving history across restarts. Useful for debugging flaky tests\nor tracking output across multiple rule triggers.\nYAML: append_on_restarts: true"
         }
       }
     },

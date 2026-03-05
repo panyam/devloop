@@ -35,12 +35,38 @@ func NewLogManager(logDir string) (*LogManager, error) {
 }
 
 // GetWriter returns an io.Writer for a specific rule's log file.
-func (lm *LogManager) GetWriter(ruleName string) (io.Writer, error) {
+// When appendOnRestart is true, the log file is opened in append mode and a
+// separator line is written to mark the start of a new run. When false (default),
+// the file is truncated on each run.
+func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Writer, error) {
 	logFilePath := filepath.Join(lm.logDir, fmt.Sprintf("%s.log", ruleName))
-	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+
+	flags := os.O_CREATE | os.O_WRONLY
+	if appendOnRestart {
+		flags |= os.O_APPEND
+	} else {
+		flags |= os.O_TRUNC
+	}
+
+	file, err := os.OpenFile(logFilePath, flags, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file %q for rule %q: %w", logFilePath, ruleName, err)
 	}
+
+	// In append mode, write a separator line to mark the new run
+	if appendOnRestart {
+		separator := fmt.Sprintf("\n--- [rule: %s] run started at %s ---\n", ruleName, time.Now().Format(time.RFC3339))
+		if _, err := file.WriteString(separator); err != nil {
+			file.Close()
+			return nil, fmt.Errorf("failed to write separator to log file %q: %w", logFilePath, err)
+		}
+	}
+
+	// Clear finished state so StreamLogs uses the live path for this new run
+	lm.mu.Lock()
+	delete(lm.finishedRules, ruleName)
+	lm.mu.Unlock()
+
 	return file, nil
 }
 

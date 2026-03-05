@@ -7,7 +7,6 @@
 package v1
 
 import (
-	_ "github.com/redpanda-data/protoc-gen-go-mcp/proto/gen/go/mcp/v1"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -507,8 +506,15 @@ type Rule struct {
 	// Base backoff duration in milliseconds for startup retries (default: 3000ms)
 	// Grows exponentially: 3s, 6s, 12s, 24s, etc.
 	InitRetryBackoffBase uint64 `protobuf:"varint,17,opt,name=init_retry_backoff_base,json=initRetryBackoffBase,proto3" json:"init_retry_backoff_base,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// Whether to append logs across rule re-runs or truncate on each run.
+	// false (default): each run starts with a clean log file (O_TRUNC).
+	// true: consecutive runs append to the same log file with a separator line,
+	// preserving history across restarts. Useful for debugging flaky tests
+	// or tracking output across multiple rule triggers.
+	// YAML: append_on_restarts: true
+	AppendOnRestarts bool `protobuf:"varint,18,opt,name=append_on_restarts,json=appendOnRestarts,proto3" json:"append_on_restarts,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
@@ -658,6 +664,13 @@ func (x *Rule) GetInitRetryBackoffBase() uint64 {
 		return x.InitRetryBackoffBase
 	}
 	return 0
+}
+
+func (x *Rule) GetAppendOnRestarts() bool {
+	if x != nil {
+		return x.AppendOnRestarts
+	}
+	return false
 }
 
 type RuleMatcher struct {
@@ -827,7 +840,7 @@ var File_devloop_v1_models_proto protoreflect.FileDescriptor
 const file_devloop_v1_models_proto_rawDesc = "" +
 	"\n" +
 	"\x17devloop/v1/models.proto\x12\n" +
-	"devloop.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15google/api/http.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x18mcp/v1/annotations.proto\"O\n" +
+	"devloop.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15google/api/http.proto\x1a\x1bgoogle/protobuf/empty.proto\"O\n" +
 	"\vProjectInfo\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -871,7 +884,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\trule_name\x18\x02 \x01(\tR\bruleName\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xf1\x05\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\x9f\x06\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -891,7 +904,8 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x06status\x18\x0e \x01(\v2\x16.devloop.v1.RuleStatusR\x06status\x12-\n" +
 	"\x13exit_on_failed_init\x18\x0f \x01(\bR\x10exitOnFailedInit\x12(\n" +
 	"\x10max_init_retries\x18\x10 \x01(\rR\x0emaxInitRetries\x125\n" +
-	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x1a6\n" +
+	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x12,\n" +
+	"\x12append_on_restarts\x18\x12 \x01(\bR\x10appendOnRestarts\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +

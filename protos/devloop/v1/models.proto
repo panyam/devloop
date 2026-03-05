@@ -7,7 +7,6 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/api/http.proto";
 import "google/protobuf/empty.proto";
-import "mcp/v1/annotations.proto";
 
 
 // ProjectInfo represents the information about a registered devloop project.
@@ -168,7 +167,13 @@ message Rule {
   // Grows exponentially: 3s, 6s, 12s, 24s, etc.
   uint64 init_retry_backoff_base = 17;
 
-
+  // Whether to append logs across rule re-runs or truncate on each run.
+  // false (default): each run starts with a clean log file (O_TRUNC).
+  // true: consecutive runs append to the same log file with a separator line,
+  // preserving history across restarts. Useful for debugging flaky tests
+  // or tracking output across multiple rule triggers.
+  // YAML: append_on_restarts: true
+  bool append_on_restarts = 18;
 }
 
 message RuleMatcher {
