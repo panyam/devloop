@@ -360,7 +360,7 @@ func TestBroadcaster_SignalFinished(t *testing.T) {
 	})
 }
 
-func TestBroadcaster_SignalReset(t *testing.T) {
+func TestBroadcaster_SignalNewRun_Truncate(t *testing.T) {
 	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
 		path := filepath.Join(tmpDir, "rule.log")
 		os.WriteFile(path, []byte("old\n"), 0644)
@@ -372,10 +372,36 @@ func TestBroadcaster_SignalReset(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		assert.Equal(t, 1, b.ringBuffer.Len())
 
-		b.SignalReset()
+		b.SignalNewRun(false)
 
 		assert.False(t, b.IsFinished())
 		assert.Equal(t, 0, b.ringBuffer.Len())
+	})
+}
+
+func TestBroadcaster_SignalNewRun_Append(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		path := filepath.Join(tmpDir, "rule.log")
+		os.WriteFile(path, []byte("line1\nline2\n"), 0644)
+
+		src := NewFileLogSource(path)
+		b := NewLogBroadcaster("test-rule", src)
+		defer b.Stop()
+
+		// Wait for poller to read initial content
+		time.Sleep(300 * time.Millisecond)
+		assert.Equal(t, 2, b.ringBuffer.Len())
+
+		b.SignalFinished()
+		time.Sleep(50 * time.Millisecond)
+
+		b.SignalNewRun(true)
+
+		// Ring buffer should be preserved (not cleared)
+		assert.Equal(t, 2, b.ringBuffer.Len())
+		assert.Equal(t, []string{"line1", "line2"}, b.GetHistory(-1))
+		// Finished flag should be cleared
+		assert.False(t, b.IsFinished())
 	})
 }
 

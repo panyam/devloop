@@ -10,7 +10,7 @@ Three tasks planned (sequential):
 
 1. **Single-Poller-Per-Rule with Fan-Out** (completed 2026-03-05) -- Replaced per-client file polling with one `LogBroadcaster` per rule that reads new lines once and fans out to all subscribers. Added `LogSource` interface, `FileLogSource` with truncation detection, `RingBuffer` for `last_n_lines` history replay, and `last_n_lines` field to `StreamLogsRequest` proto. Fixed the `finishedRules` bug where rules were stuck in finished state after re-run.
 
-2. **Configurable Truncate vs Append** -- Add `append_on_restarts` per-rule config (default: `false` = truncate, current behavior). When `true`, consecutive runs append to the same log file with a separator line. Proto field: `Rule.append_on_restarts`. YAML field: `append_on_restarts: true`.
+2. **Configurable Truncate vs Append** (completed 2026-03-05) -- Added `append_on_restarts` per-rule config (default: `false` = truncate). When `true`, consecutive runs append to the same log file with a separator line. Proto field: `Rule.append_on_restarts`. YAML field: `append_on_restarts: true`. File writing, YAML loading, and RuleRunner integration all completed. Fixed broadcaster to use `SignalNewRun(appendMode)` so append mode preserves ring buffer history and source offset across restarts instead of resetting.
 
 3. **Structured Log Events** -- Add typed `LogEvent` messages (`RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `TIMEOUT`) to `StreamLogsResponse`. Replaces fragile plain-text control messages. `RUN_STARTED` includes a `truncated` flag so clients can decide to clear their view or not.
 

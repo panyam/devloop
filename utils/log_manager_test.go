@@ -567,6 +567,54 @@ func TestLogManager_StreamLogs_RuleRestart_Truncate(t *testing.T) {
 	})
 }
 
+// TestLogManager_StreamLogs_RuleRestart_Append verifies that after a rule restarts
+// in append mode, a subscriber sees new content without duplicated old content.
+func TestLogManager_StreamLogs_RuleRestart_Append(t *testing.T) {
+	testhelpers.WithTestContext(t, 3*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-restart-append"
+
+		// First run (append mode)
+		w1, err := lm.GetWriter(ruleName, true)
+		assert.NoError(t, err)
+		_, err = w1.Write([]byte("run1 output\n"))
+		assert.NoError(t, err)
+		lm.SignalFinished(ruleName)
+
+		// Second run (append mode) — file now has run1 content + separator
+		w2, err := lm.GetWriter(ruleName, true)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+		_, err = w2.Write([]byte("run2 output\n"))
+		assert.NoError(t, err)
+		time.Sleep(200 * time.Millisecond)
+
+		lm.SignalFinished(ruleName)
+		wg.Wait()
+		gw.Stop()
+
+		content := mock.getContent()
+		assert.Contains(t, content, "run2 output")
+		// run1 output should appear at most once (from initial file read),
+		// NOT duplicated by a source reset
+		count := strings.Count(content, "run1 output")
+		assert.LessOrEqual(t, count, 1, "run1 output should not be duplicated")
+	})
+}
+
 // TestLogManager_Close_StopsBroadcasters verifies that Close stops all broadcasters.
 func TestLogManager_Close_StopsBroadcasters(t *testing.T) {
 	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {

@@ -69,9 +69,9 @@ func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Write
 	// Clear finished state so StreamLogs uses the live path for this new run
 	lm.mu.Lock()
 	delete(lm.finishedRules, ruleName)
-	// Reset broadcaster if one exists (clears ring buffer, resets source offset)
+	// Signal broadcaster for new run if one exists
 	if b, ok := lm.broadcasters[ruleName]; ok {
-		b.SignalReset()
+		b.SignalNewRun(appendOnRestart)
 	}
 	lm.mu.Unlock()
 

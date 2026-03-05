@@ -92,11 +92,17 @@ func (b *LogBroadcaster) SignalFinished() {
 	b.finished.Store(true)
 }
 
-// SignalReset clears the ring buffer, resets the source, and clears the finished flag.
-// Used when a rule restarts.
-func (b *LogBroadcaster) SignalReset() {
-	b.ringBuffer.Clear()
-	b.source.Reset()
+// SignalNewRun prepares the broadcaster for a new rule run.
+// In truncate mode (appendMode=false): clears the ring buffer, resets the source
+// to offset 0, and clears the finished flag.
+// In append mode (appendMode=true): only clears the finished flag so the source
+// continues from its current offset (picking up the separator + new output) and
+// the ring buffer preserves history across runs.
+func (b *LogBroadcaster) SignalNewRun(appendMode bool) {
+	if !appendMode {
+		b.ringBuffer.Clear()
+		b.source.Reset()
+	}
 	b.finished.Store(false)
 }
 
