@@ -187,6 +187,10 @@ message StreamLogsRequest {
   // negative value  => Wait indefinitely/forever
   // 0 => use a default value (say 3s)
   int64 timeout = 3;
+
+  // Number of recent log lines to replay on connect (history).
+  // 0 => no history, negative => all available history.
+  int32 last_n_lines = 4;
 }
 
 message StreamLogsResponse {

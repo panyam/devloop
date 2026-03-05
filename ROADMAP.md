@@ -55,7 +55,7 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] Agent Service integration completed (provides foundation for gateway)
 - [ ] **Streaming Logs Overhaul (In Progress - 2026-03-03):**
   - Design doc: `docs/streaming-logs-design.md`
-  - [ ] Single-poller-per-rule with fan-out broadcaster (fixes `finishedRules` bug)
+  - [x] Single-poller-per-rule with fan-out broadcaster (completed 2026-03-05, fixes `finishedRules` bug)
   - [ ] Configurable truncate vs append on re-run (`append_on_restarts` per-rule config)
   - [ ] Structured `LogEvent` messages in `StreamLogsResponse` (RUN_STARTED, RUN_COMPLETED, etc.)
 - [ ] **Enhanced Logging:**

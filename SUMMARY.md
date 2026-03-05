@@ -177,6 +177,9 @@ settings:
   - **Comprehensive Logging:** Detailed retry attempt logging with next retry time and success notifications
   - **Backward Compatibility:** Default behavior allows devloop to continue running despite startup failures
 
+**Streaming Logs Overhaul (2026-03-05):**
+- **Single-Poller-Per-Rule with Fan-Out (LogBroadcaster):** Replaced per-client file polling with a single `LogBroadcaster` per rule. New files: `utils/ring_buffer.go` (circular buffer for history), `utils/log_source.go` (`LogSource` interface + `FileLogSource` with truncation detection), `utils/log_broadcaster.go` (poller goroutine with fan-out to subscribers). Added `last_n_lines` field to `StreamLogsRequest` proto for history replay on connect. Fixed `finishedRules` bug where rules were stuck in finished state after re-run.
+
 **Major Bug Fixes:**
 - **RuleRunner Test Suite Fixes (2026-03-04):** Fixed 6 bugs in RuleRunner and associated tests
   - `Stop()` hang when eventLoop never started: added `started atomic.Bool` to skip `<-stoppedChan` wait

@@ -85,7 +85,7 @@ func (s *AgentService) StreamLogs(req *protos.StreamLogsRequest, stream grpc.Ser
 	}()
 
 	// Call the orchestrator's StreamLogs method with our writer
-	err := s.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), req.GetTimeout(), writer)
+	err := s.orchestrator.StreamLogs(req.GetRuleName(), req.GetFilter(), req.GetTimeout(), req.GetLastNLines(), writer)
 
 	// StreamLogs has returned - either success, timeout, or error
 	// Stop the writer to signal completion

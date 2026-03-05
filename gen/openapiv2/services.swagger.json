@@ -120,6 +120,14 @@
             "required": false,
             "type": "string",
             "format": "int64"
+          },
+          {
+            "name": "lastNLines",
+            "description": "Number of recent log lines to replay on connect (history).\n0 =\u003e no history, negative =\u003e all available history.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
           }
         ],
         "tags": [
