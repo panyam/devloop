@@ -8,12 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/panyam/devloop/agent"
 	pb "github.com/panyam/devloop/gen/go/devloop/v1"
 	"github.com/panyam/devloop/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -206,15 +209,22 @@ func (s *Agent) startGRPCServer(errChan chan<- error) error {
 	return nil
 }
 
-// startHTTPServer starts the HTTP server
+// startHTTPServer starts the HTTP server with gRPC-gateway handlers
 func (s *Agent) startHTTPServer(errChan chan<- error) error {
 	utils.LogDevloop("Starting HTTP server on port %d", s.config.HTTPPort)
 
+	// Create gRPC-gateway mux and register handlers that proxy to the gRPC server
+	gwMux := runtime.NewServeMux()
+	grpcEndpoint := fmt.Sprintf("localhost:%d", s.config.GRPCPort)
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	if err := pb.RegisterAgentServiceHandlerFromEndpoint(s.ctx, gwMux, grpcEndpoint, opts); err != nil {
+		return fmt.Errorf("failed to register gRPC-gateway handlers: %w", err)
+	}
+
 	address := fmt.Sprintf(":%d", s.config.HTTPPort)
-	mainMux := http.NewServeMux()
 
 	// Create HTTP server with middleware
-	handler := s.withLogger(mainMux)
+	handler := s.withLogger(gwMux)
 	s.httpServer = &http.Server{
 		Addr:        address,
 		BaseContext: func(_ net.Listener) context.Context { return s.ctx },
@@ -235,21 +245,36 @@ func (s *Agent) startHTTPServer(errChan chan<- error) error {
 func (s *Agent) shutdown() error {
 	utils.LogDevloop("Shutting down server...")
 
-	// Stop orchestrator
-	if s.orchestrator != nil {
-		s.orchestrator.Stop()
-	}
+	// Cancel context first — this unblocks any in-flight gRPC-gateway connections
+	s.cancel()
 
-	// Stop gRPC server
-	if s.grpcServer != nil {
-		s.grpcServer.GracefulStop()
-	}
-
-	// Stop HTTP server
+	// Stop HTTP server before gRPC so gateway proxy connections drain
 	if s.httpServer != nil {
-		if err := s.httpServer.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := s.httpServer.Shutdown(ctx); err != nil {
 			utils.LogDevloop("HTTP server shutdown error: %v", err)
 		}
+	}
+
+	// Stop gRPC server — GracefulStop waits for active RPCs, so use a timeout fallback
+	if s.grpcServer != nil {
+		done := make(chan struct{})
+		go func() {
+			s.grpcServer.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			utils.LogDevloop("gRPC graceful stop timed out, forcing stop")
+			s.grpcServer.Stop()
+		}
+	}
+
+	// Stop orchestrator (stops rules, then LogManager/broadcasters)
+	if s.orchestrator != nil {
+		s.orchestrator.Stop()
 	}
 
 	// Cancel context
