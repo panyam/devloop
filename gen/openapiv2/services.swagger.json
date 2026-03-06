@@ -453,6 +453,10 @@
         "appendOnRestarts": {
           "type": "boolean",
           "title": "Whether to append logs across rule re-runs or truncate on each run.\nfalse (default): each run starts with a clean log file (O_TRUNC).\ntrue: consecutive runs append to the same log file with a separator line,\npreserving history across restarts. Useful for debugging flaky tests\nor tracking output across multiple rule triggers.\nYAML: append_on_restarts: true"
+        },
+        "disabled": {
+          "type": "boolean",
+          "title": "Whether this rule is disabled. Disabled rules are loaded into the config\nbut skipped by the orchestrator: no file watcher is started, no commands\nexecute, and manual triggers return an error.\nDefault: false (rule is enabled).\nYAML: disabled: true"
         }
       }
     },

@@ -82,7 +82,11 @@ func runGetStatus(args []string) {
 }
 
 func printRuleStatus(rule *pb.Rule) {
-	fmt.Printf("Rule: %s\n", rule.Name)
+	if rule.Disabled {
+		fmt.Printf("Rule: %s (disabled)\n", rule.Name)
+	} else {
+		fmt.Printf("Rule: %s\n", rule.Name)
+	}
 	fmt.Printf("  Status: %s\n", formatStatus(rule.Status))
 	fmt.Printf("  Commands: %s\n", strings.Join(rule.Commands, ", "))
 
@@ -121,6 +125,10 @@ func printRuleStatus(rule *pb.Rule) {
 func formatStatus(status *pb.RuleStatus) string {
 	if status == nil {
 		return "Unknown"
+	}
+
+	if status.LastBuildStatus == "DISABLED" {
+		return "Disabled"
 	}
 
 	if status.IsRunning {

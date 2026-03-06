@@ -190,6 +190,13 @@ message Rule {
   // or tracking output across multiple rule triggers.
   // YAML: append_on_restarts: true
   bool append_on_restarts = 18;
+
+  // Whether this rule is disabled. Disabled rules are loaded into the config
+  // but skipped by the orchestrator: no file watcher is started, no commands
+  // execute, and manual triggers return an error.
+  // Default: false (rule is enabled).
+  // YAML: disabled: true
+  bool disabled = 19;
 }
 
 message RuleMatcher {

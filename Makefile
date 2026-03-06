@@ -124,6 +124,12 @@ coverage-clean:
 	rm -rf reports/
 	@echo "Coverage files cleaned"
 
+# Install git hooks from scripts/ into .git/hooks/
+install-hooks:
+	@cp scripts/pre-push .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-push
+	@echo "Git hooks installed."
+
 # Install required Go tools
 install-tools:
 	@echo "Installing required Go tools..."

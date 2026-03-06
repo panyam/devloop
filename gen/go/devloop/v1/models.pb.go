@@ -644,8 +644,14 @@ type Rule struct {
 	// or tracking output across multiple rule triggers.
 	// YAML: append_on_restarts: true
 	AppendOnRestarts bool `protobuf:"varint,18,opt,name=append_on_restarts,json=appendOnRestarts,proto3" json:"append_on_restarts,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Whether this rule is disabled. Disabled rules are loaded into the config
+	// but skipped by the orchestrator: no file watcher is started, no commands
+	// execute, and manual triggers return an error.
+	// Default: false (rule is enabled).
+	// YAML: disabled: true
+	Disabled      bool `protobuf:"varint,19,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Rule) Reset() {
@@ -800,6 +806,13 @@ func (x *Rule) GetInitRetryBackoffBase() uint64 {
 func (x *Rule) GetAppendOnRestarts() bool {
 	if x != nil {
 		return x.AppendOnRestarts
+	}
+	return false
+}
+
+func (x *Rule) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
 	}
 	return false
 }
@@ -1021,7 +1034,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x04type\x18\x02 \x01(\x0e2\x18.devloop.v1.LogEventTypeR\x04type\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1c\n" +
-	"\ttruncated\x18\x05 \x01(\bR\ttruncated\"\x9f\x06\n" +
+	"\ttruncated\x18\x05 \x01(\bR\ttruncated\"\xbb\x06\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -1042,7 +1055,8 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x13exit_on_failed_init\x18\x0f \x01(\bR\x10exitOnFailedInit\x12(\n" +
 	"\x10max_init_retries\x18\x10 \x01(\rR\x0emaxInitRetries\x125\n" +
 	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x12,\n" +
-	"\x12append_on_restarts\x18\x12 \x01(\bR\x10appendOnRestarts\x1a6\n" +
+	"\x12append_on_restarts\x18\x12 \x01(\bR\x10appendOnRestarts\x12\x1a\n" +
+	"\bdisabled\x18\x13 \x01(\bR\bdisabled\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +

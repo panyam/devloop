@@ -498,6 +498,10 @@ func NewOrchestrator(configPath string) (*Orchestrator, error) {
 
 	// Initialize RuleRunners
 	for _, rule := range config.Rules {
+		if rule.Disabled {
+			utils.LogDevloop("Rule %q is disabled, skipping initialization", rule.Name)
+			continue
+		}
 		runner := NewRuleRunner(rule, orchestrator)
 		orchestrator.ruleRunners[rule.Name] = runner
 	}
@@ -630,6 +634,20 @@ func (o *Orchestrator) GetRuleStatus(ruleName string) (rule *pb.Rule, status *pb
 		rule = runner.rule
 		status = runner.GetStatus()
 		ok = true
+		return
+	}
+
+	// Check if rule exists but is disabled
+	for _, r := range o.Config.Rules {
+		if r.Name == ruleName {
+			rule = r
+			status = &pb.RuleStatus{
+				RuleName:        ruleName,
+				LastBuildStatus: "DISABLED",
+			}
+			ok = true
+			return
+		}
 	}
 	return
 }
@@ -738,6 +756,12 @@ func (o *Orchestrator) TriggerRule(ruleName string) error {
 
 	runner, exists := o.ruleRunners[ruleName]
 	if !exists {
+		// Check if rule exists but is disabled
+		for _, rule := range o.Config.Rules {
+			if rule.Name == ruleName && rule.Disabled {
+				return fmt.Errorf("rule %q is disabled", ruleName)
+			}
+		}
 		return fmt.Errorf("rule %q not found", ruleName)
 	}
 
