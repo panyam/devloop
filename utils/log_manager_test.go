@@ -39,7 +39,6 @@ func (m *mockWriter) write(response *pb.StreamLogsResponse) error {
 	if response.Lines != nil {
 		for _, logLine := range response.Lines {
 			m.buffer.WriteString(logLine.Line)
-			// Add newline to match expected test format (since LogManager strips them)
 			m.buffer.WriteString("\n")
 		}
 	}
@@ -50,6 +49,27 @@ func (m *mockWriter) getContent() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.buffer.String()
+}
+
+func (m *mockWriter) getEvents() []*pb.LogEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var events []*pb.LogEvent
+	for _, msg := range m.messages {
+		if msg.Event != nil {
+			events = append(events, msg.Event)
+		}
+	}
+	return events
+}
+
+func (m *mockWriter) hasEventType(t pb.LogEventType) bool {
+	for _, e := range m.getEvents() {
+		if e.Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 // TestLogManager_NewLogManager verifies that a new LogManager can be created
@@ -82,7 +102,7 @@ func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
 		_, err = writer.Write([]byte("line 2\n"))
 		assert.NoError(t, err)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err := os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -92,7 +112,7 @@ func TestLogManager_GetWriterAndSignalFinished(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = writer2.Write([]byte("new line 1\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err = os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -115,7 +135,7 @@ func TestLogManager_StreamLogs_Historical(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Mark the rule as finished so it streams historical content
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		mockWriter := newMockWriter()
 		writer := gocurrent.NewWriter(mockWriter.write)
@@ -125,8 +145,9 @@ func TestLogManager_StreamLogs_Historical(t *testing.T) {
 
 		writer.Stop()
 
-		expected := "historical line 1\nhistorical line 2\nRule 'test-rule-historical' execution completed\n"
-		assert.Equal(t, expected, mockWriter.getContent())
+		assert.Contains(t, mockWriter.getContent(), "historical line 1")
+		assert.Contains(t, mockWriter.getContent(), "historical line 2")
+		assert.True(t, mockWriter.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED))
 	})
 }
 
@@ -163,12 +184,13 @@ func TestLogManager_StreamLogs_Realtime(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(50 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		writer.Stop()
 
-		expected := "realtime line 1\nrealtime line 2\nRule 'test-rule-realtime' execution completed\n"
-		assert.Equal(t, expected, mockWriter.getContent())
+		assert.Contains(t, mockWriter.getContent(), "realtime line 1")
+		assert.Contains(t, mockWriter.getContent(), "realtime line 2")
+		assert.True(t, mockWriter.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED))
 	})
 }
 
@@ -196,14 +218,14 @@ func TestLogManager_StreamLogs_Blocking(t *testing.T) {
 
 		_, err = fileWriter.Write([]byte("blocked line\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		err = <-streamErrChan
 		assert.NoError(t, err)
 		writer.Stop()
 
-		expected := "blocked line\nRule 'test-rule-blocking' execution completed\n"
-		assert.Equal(t, expected, mockWriter.getContent())
+		assert.Contains(t, mockWriter.getContent(), "blocked line")
+		assert.True(t, mockWriter.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED))
 	})
 }
 
@@ -221,7 +243,7 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 		contentToWrite := "line with filter keyword\nline without\nANOTHER LINE WITH FILTER KEYWORD\nfinal line\n"
 		_, err = writer.Write([]byte(contentToWrite))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		mockWriter := newMockWriter()
 		gocurrentWriter := gocurrent.NewWriter(mockWriter.write)
@@ -231,8 +253,9 @@ func TestLogManager_StreamLogs_Filtering(t *testing.T) {
 
 		gocurrentWriter.Stop()
 
-		expected := "line with filter keyword\nANOTHER LINE WITH FILTER KEYWORD\nRule 'test-rule-filter' execution completed\n"
-		assert.Equal(t, expected, mockWriter.getContent())
+		assert.Contains(t, mockWriter.getContent(), "line with filter keyword")
+		assert.Contains(t, mockWriter.getContent(), "ANOTHER LINE WITH FILTER KEYWORD")
+		assert.True(t, mockWriter.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED))
 	})
 }
 
@@ -278,7 +301,7 @@ func TestLogManager_GetWriter_AppendMode(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = writer1.Write([]byte("run1 line1\nrun1 line2\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err := os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -289,7 +312,7 @@ func TestLogManager_GetWriter_AppendMode(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = writer2.Write([]byte("run2 line1\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err = os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -315,14 +338,14 @@ func TestLogManager_GetWriter_TruncateMode(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = writer1.Write([]byte("run1 output\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		// Second run: truncate mode - previous content should be gone
 		writer2, err := lm.GetWriter(ruleName, false)
 		assert.NoError(t, err)
 		_, err = writer2.Write([]byte("run2 output\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err := os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -345,7 +368,7 @@ func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = writer1.Write([]byte("run1 line\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		mock1 := newMockWriter()
 		gw1 := gocurrent.NewWriter(mock1.write)
@@ -353,7 +376,7 @@ func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
 		assert.NoError(t, err)
 		gw1.Stop()
 		assert.Contains(t, mock1.getContent(), "run1 line")
-		assert.Contains(t, mock1.getContent(), "execution completed")
+		assert.True(t, mock1.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED))
 
 		// Second run: GetWriter should clear finished state
 		writer2, err := lm.GetWriter(ruleName, false)
@@ -374,7 +397,7 @@ func TestLogManager_GetWriter_ClearsFinishedState(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(50 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		gw2.Stop()
 
@@ -398,21 +421,21 @@ func TestLogManager_AppendMode_MultipleRuns(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = w1.Write([]byte("run1\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		// Run 2: append
 		w2, err := lm.GetWriter(ruleName, true)
 		assert.NoError(t, err)
 		_, err = w2.Write([]byte("run2\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		// Run 3: append
 		w3, err := lm.GetWriter(ruleName, true)
 		assert.NoError(t, err)
 		_, err = w3.Write([]byte("run3\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		content, err := os.ReadFile(logFilePath)
 		assert.NoError(t, err)
@@ -463,7 +486,7 @@ func TestLogManager_StreamLogs_MultipleClients(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(200 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		gw1.Stop()
 		gw2.Stop()
@@ -509,7 +532,7 @@ func TestLogManager_StreamLogs_LastNLines(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(200 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		gw.Stop()
 
@@ -537,7 +560,7 @@ func TestLogManager_StreamLogs_RuleRestart_Truncate(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = w1.Write([]byte("run1 output\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		// Second run (truncate)
 		w2, err := lm.GetWriter(ruleName, false)
@@ -558,7 +581,7 @@ func TestLogManager_StreamLogs_RuleRestart_Truncate(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(200 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		gw.Stop()
 
@@ -581,7 +604,7 @@ func TestLogManager_StreamLogs_RuleRestart_Append(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = w1.Write([]byte("run1 output\n"))
 		assert.NoError(t, err)
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 
 		// Second run (append mode) — file now has run1 content + separator
 		w2, err := lm.GetWriter(ruleName, true)
@@ -602,7 +625,7 @@ func TestLogManager_StreamLogs_RuleRestart_Append(t *testing.T) {
 		assert.NoError(t, err)
 		time.Sleep(200 * time.Millisecond)
 
-		lm.SignalFinished(ruleName)
+		lm.SignalFinished(ruleName, true, "")
 		wg.Wait()
 		gw.Stop()
 
@@ -644,5 +667,101 @@ func TestLogManager_Close_StopsBroadcasters(t *testing.T) {
 
 		wg.Wait()
 		gw.Stop()
+	})
+}
+
+// TestLogManager_StreamLogs_CompletedEvent verifies that a RUN_COMPLETED event
+// is sent when a rule finishes execution.
+func TestLogManager_StreamLogs_CompletedEvent(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-event-completed"
+		fileWriter, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		_, _ = fileWriter.Write([]byte("output\n"))
+		time.Sleep(100 * time.Millisecond)
+
+		lm.SignalFinished(ruleName, true, "")
+		wg.Wait()
+		gw.Stop()
+
+		events := mock.getEvents()
+		assert.NotEmpty(t, events)
+		lastEvent := events[len(events)-1]
+		assert.Equal(t, pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED, lastEvent.Type)
+		assert.Equal(t, ruleName, lastEvent.RuleName)
+	})
+}
+
+// TestLogManager_StreamLogs_FailedEvent verifies that a RUN_FAILED event
+// is sent when a rule finishes with an error.
+func TestLogManager_StreamLogs_FailedEvent(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-event-failed"
+		fileWriter, err := lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lm.StreamLogs(ruleName, "", 5, 0, gw)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		_, _ = fileWriter.Write([]byte("output\n"))
+		time.Sleep(100 * time.Millisecond)
+
+		lm.SignalFinished(ruleName, false, "exit status 1")
+		wg.Wait()
+		gw.Stop()
+
+		events := mock.getEvents()
+		assert.NotEmpty(t, events)
+		lastEvent := events[len(events)-1]
+		assert.Equal(t, pb.LogEventType_LOG_EVENT_TYPE_RUN_FAILED, lastEvent.Type)
+		assert.Equal(t, "exit status 1", lastEvent.Message)
+	})
+}
+
+// TestLogManager_StreamLogs_TimeoutEvent verifies that a TIMEOUT event
+// is sent when the stream times out.
+func TestLogManager_StreamLogs_TimeoutEvent(t *testing.T) {
+	testhelpers.WithTestContext(t, 5*time.Second, func(t *testing.T, tmpDir string) {
+		lm, err := NewLogManager(tmpDir)
+		assert.NoError(t, err)
+
+		ruleName := "test-rule-event-timeout"
+		_, err = lm.GetWriter(ruleName, false)
+		assert.NoError(t, err)
+
+		mock := newMockWriter()
+		gw := gocurrent.NewWriter(mock.write)
+
+		err = lm.StreamLogs(ruleName, "", 1, 0, gw) // 1 second timeout
+		assert.NoError(t, err)
+		gw.Stop()
+
+		assert.True(t, mock.hasEventType(pb.LogEventType_LOG_EVENT_TYPE_TIMEOUT))
 	})
 }

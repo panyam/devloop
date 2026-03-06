@@ -469,6 +469,7 @@ func (x *StreamLogsRequest) GetLastNLines() int32 {
 type StreamLogsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Lines         []*LogLine             `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"`
+	Event         *LogEvent              `protobuf:"bytes,2,opt,name=event,proto3" json:"event,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -510,6 +511,13 @@ func (x *StreamLogsResponse) GetLines() []*LogLine {
 	return nil
 }
 
+func (x *StreamLogsResponse) GetEvent() *LogEvent {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
 var File_devloop_v1_agents_proto protoreflect.FileDescriptor
 
 const file_devloop_v1_agents_proto_rawDesc = "" +
@@ -536,9 +544,10 @@ const file_devloop_v1_agents_proto_rawDesc = "" +
 	"\x06filter\x18\x02 \x01(\tR\x06filter\x12\x18\n" +
 	"\atimeout\x18\x03 \x01(\x03R\atimeout\x12 \n" +
 	"\flast_n_lines\x18\x04 \x01(\x05R\n" +
-	"lastNLines\"?\n" +
+	"lastNLines\"k\n" +
 	"\x12StreamLogsResponse\x12)\n" +
-	"\x05lines\x18\x01 \x03(\v2\x13.devloop.v1.LogLineR\x05lines2\xa0\x04\n" +
+	"\x05lines\x18\x01 \x03(\v2\x13.devloop.v1.LogLineR\x05lines\x12*\n" +
+	"\x05event\x18\x02 \x01(\v2\x14.devloop.v1.LogEventR\x05event2\xa0\x04\n" +
 	"\fAgentService\x12Y\n" +
 	"\tGetConfig\x12\x1c.devloop.v1.GetConfigRequest\x1a\x1d.devloop.v1.GetConfigResponse\"\x0f\x82\xd3\xe4\x93\x02\t\x12\a/config\x12_\n" +
 	"\aGetRule\x12\x1a.devloop.v1.GetRuleRequest\x1a\x1b.devloop.v1.GetRuleResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/status/{rule_name}\x12l\n" +
@@ -577,26 +586,28 @@ var file_devloop_v1_agents_proto_goTypes = []any{
 	(*Config)(nil),                   // 10: devloop.v1.Config
 	(*Rule)(nil),                     // 11: devloop.v1.Rule
 	(*LogLine)(nil),                  // 12: devloop.v1.LogLine
+	(*LogEvent)(nil),                 // 13: devloop.v1.LogEvent
 }
 var file_devloop_v1_agents_proto_depIdxs = []int32{
 	10, // 0: devloop.v1.GetConfigResponse.config:type_name -> devloop.v1.Config
 	11, // 1: devloop.v1.GetRuleResponse.rule:type_name -> devloop.v1.Rule
 	12, // 2: devloop.v1.StreamLogsResponse.lines:type_name -> devloop.v1.LogLine
-	0,  // 3: devloop.v1.AgentService.GetConfig:input_type -> devloop.v1.GetConfigRequest
-	2,  // 4: devloop.v1.AgentService.GetRule:input_type -> devloop.v1.GetRuleRequest
-	6,  // 5: devloop.v1.AgentService.TriggerRule:input_type -> devloop.v1.TriggerRuleRequest
-	4,  // 6: devloop.v1.AgentService.ListWatchedPaths:input_type -> devloop.v1.ListWatchedPathsRequest
-	8,  // 7: devloop.v1.AgentService.StreamLogs:input_type -> devloop.v1.StreamLogsRequest
-	1,  // 8: devloop.v1.AgentService.GetConfig:output_type -> devloop.v1.GetConfigResponse
-	3,  // 9: devloop.v1.AgentService.GetRule:output_type -> devloop.v1.GetRuleResponse
-	7,  // 10: devloop.v1.AgentService.TriggerRule:output_type -> devloop.v1.TriggerRuleResponse
-	5,  // 11: devloop.v1.AgentService.ListWatchedPaths:output_type -> devloop.v1.ListWatchedPathsResponse
-	9,  // 12: devloop.v1.AgentService.StreamLogs:output_type -> devloop.v1.StreamLogsResponse
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	13, // 3: devloop.v1.StreamLogsResponse.event:type_name -> devloop.v1.LogEvent
+	0,  // 4: devloop.v1.AgentService.GetConfig:input_type -> devloop.v1.GetConfigRequest
+	2,  // 5: devloop.v1.AgentService.GetRule:input_type -> devloop.v1.GetRuleRequest
+	6,  // 6: devloop.v1.AgentService.TriggerRule:input_type -> devloop.v1.TriggerRuleRequest
+	4,  // 7: devloop.v1.AgentService.ListWatchedPaths:input_type -> devloop.v1.ListWatchedPathsRequest
+	8,  // 8: devloop.v1.AgentService.StreamLogs:input_type -> devloop.v1.StreamLogsRequest
+	1,  // 9: devloop.v1.AgentService.GetConfig:output_type -> devloop.v1.GetConfigResponse
+	3,  // 10: devloop.v1.AgentService.GetRule:output_type -> devloop.v1.GetRuleResponse
+	7,  // 11: devloop.v1.AgentService.TriggerRule:output_type -> devloop.v1.TriggerRuleResponse
+	5,  // 12: devloop.v1.AgentService.ListWatchedPaths:output_type -> devloop.v1.ListWatchedPathsResponse
+	9,  // 13: devloop.v1.AgentService.StreamLogs:output_type -> devloop.v1.StreamLogsResponse
+	9,  // [9:14] is the sub-list for method output_type
+	4,  // [4:9] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_devloop_v1_agents_proto_init() }
