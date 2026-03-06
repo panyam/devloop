@@ -2,6 +2,20 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed: Disabled Rules Feature (2026-03-06)
+
+Issue #3: Added `disabled` boolean field to Rule configuration. Users can now toggle rules off with `disabled: true` in YAML without commenting out config blocks.
+
+- Added `bool disabled = 19` to Rule proto message
+- Config parsing maps YAML `disabled` field to proto
+- Orchestrator skips disabled rules during initialization (no RuleRunner, no file watcher, zero overhead)
+- `TriggerRule` returns "rule is disabled" error for disabled rules
+- `GetRuleStatus` returns DISABLED status for disabled rules
+- CLI `devloop status` shows "(disabled)" label and "Disabled" status
+- Service `GetRule` includes `Disabled` field in response
+- Added `TestConfigDisabled` and `TestDisabledRulesSkipped` tests
+- Added pre-push git hook (`scripts/pre-push`) and `make install-hooks` target
+
 ## Recently Completed: Streaming Logs Overhaul (2026-03-03 to 2026-03-05)
 
 Design doc: `docs/streaming-logs-design.md`

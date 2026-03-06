@@ -120,6 +120,7 @@ rules:
     verbose: true         # Enable verbose logging for this rule
     color: "blue"         # Custom color for this rule's output
     workdir: "./backend"  # Custom working directory
+    disabled: true        # Skip this rule without removing config
     commands: [...]
 ```
 

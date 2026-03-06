@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // ConfigTest represents a configuration-based integration test
@@ -230,6 +232,58 @@ rules:
 	}
 }
 
+func TestConfigDisabled(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "devloop-disabled-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	configContent := `
+rules:
+  - name: "disabled-rule"
+    disabled: true
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["go build"]
+  - name: "enabled-rule"
+    disabled: false
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["go test"]
+  - name: "default-rule"
+    watch:
+      - action: "include"
+        patterns: ["*.go"]
+    commands: ["echo hi"]
+`
+	configPath := filepath.Join(tmpDir, "disabled_test.yaml")
+	err = os.WriteFile(configPath, []byte(strings.TrimSpace(configContent)), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if len(config.Rules) != 3 {
+		t.Fatalf("Expected 3 rules, got %d", len(config.Rules))
+	}
+	if !config.Rules[0].Disabled {
+		t.Errorf("Expected disabled-rule to have Disabled=true")
+	}
+	if config.Rules[1].Disabled {
+		t.Errorf("Expected enabled-rule to have Disabled=false")
+	}
+	if config.Rules[2].Disabled {
+		t.Errorf("Expected default-rule to have Disabled=false (default)")
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	// Test that invalid max_parallel_rules values are handled properly
 	tmpDir, err := os.MkdirTemp("", "devloop-validation-test-*")
@@ -280,4 +334,46 @@ rules:
 			t.Logf("Config %s: active=%d, capacity=%d, unlimited=%v", name, active, capacity, unlimited)
 		})
 	}
+}
+
+func TestDisabledRulesSkipped(t *testing.T) {
+	withConfigTest(t, "disabled_rules.yaml", func(t *testing.T, tmpDir string, orchestrator *Orchestrator) {
+		// Only the enabled rule should have a RuleRunner
+		orchestrator.runnersMutex.RLock()
+		_, enabledExists := orchestrator.ruleRunners["enabled-rule"]
+		_, disabledExists := orchestrator.ruleRunners["disabled-rule"]
+		orchestrator.runnersMutex.RUnlock()
+
+		assert.True(t, enabledExists, "enabled-rule should have a RuleRunner")
+		assert.False(t, disabledExists, "disabled-rule should NOT have a RuleRunner")
+
+		// TriggerRule on disabled rule should return error containing "disabled"
+		err := orchestrator.TriggerRule("disabled-rule")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "disabled")
+
+		// TriggerRule on nonexistent rule should return "not found"
+		err = orchestrator.TriggerRule("nonexistent-rule")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+
+		// GetRuleStatus on disabled rule should return DISABLED status
+		rule, status, ok := orchestrator.GetRuleStatus("disabled-rule")
+		assert.True(t, ok, "GetRuleStatus should return ok=true for disabled rule")
+		assert.NotNil(t, rule)
+		assert.NotNil(t, status)
+		assert.Equal(t, "DISABLED", status.LastBuildStatus)
+		assert.Equal(t, "disabled-rule", status.RuleName)
+
+		// GetRuleStatus on enabled rule should work normally
+		rule, status, ok = orchestrator.GetRuleStatus("enabled-rule")
+		assert.True(t, ok, "GetRuleStatus should return ok=true for enabled rule")
+		assert.NotNil(t, rule)
+		assert.NotNil(t, status)
+		assert.NotEqual(t, "DISABLED", status.LastBuildStatus)
+
+		// GetRuleStatus on nonexistent rule should return ok=false
+		_, _, ok = orchestrator.GetRuleStatus("nonexistent-rule")
+		assert.False(t, ok, "GetRuleStatus should return ok=false for nonexistent rule")
+	})
 }

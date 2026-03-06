@@ -239,6 +239,12 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 						config.Rules[i].AppendOnRestarts = appendBool
 					}
 				}
+
+				if disabled, exists := ruleMap["disabled"]; exists {
+					if disabledBool, ok := disabled.(bool); ok && i < len(config.Rules) {
+						config.Rules[i].Disabled = disabledBool
+					}
+				}
 			}
 		}
 	}

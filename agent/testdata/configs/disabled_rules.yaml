@@ -1,0 +1,12 @@
+rules:
+  - name: "enabled-rule"
+    watch:
+      - action: "include"
+        patterns: ["*.txt"]
+    commands: ["echo enabled"]
+  - name: "disabled-rule"
+    disabled: true
+    watch:
+      - action: "include"
+        patterns: ["*.txt"]
+    commands: ["echo disabled"]

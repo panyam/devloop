@@ -58,6 +58,12 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] Single-poller-per-rule with fan-out broadcaster (fixes `finishedRules` bug)
   - [x] Configurable truncate vs append on re-run (`append_on_restarts` per-rule config)
   - [x] Structured `LogEvent` messages in `StreamLogsResponse` (RUN_STARTED, RUN_COMPLETED, RUN_FAILED, TIMEOUT)
+- [x] **Disabled Rules (Issue #3, 2026-03-06):**
+  - [x] Added `disabled: true` per-rule config field to skip rules without removing config
+  - [x] Disabled rules get no RuleRunner, no file watcher, zero resource overhead
+  - [x] `devloop status` shows disabled rules as "Disabled"
+  - [x] `devloop trigger` on a disabled rule returns a clear error
+  - [x] Pre-push git hook runs `make test` before pushing
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.

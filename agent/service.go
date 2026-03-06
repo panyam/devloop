@@ -50,6 +50,7 @@ func (s *AgentService) GetRule(ctx context.Context, req *protos.GetRuleRequest) 
 			SkipRunOnInit: rule.SkipRunOnInit,
 			Color:         rule.Color,
 			Env:           rule.Env,
+			Disabled:      rule.Disabled,
 			Status:        ruleStatus,
 		}
 		resp = &protos.GetRuleResponse{
