@@ -127,6 +127,10 @@ Rule Options:
 │                     │         │          │ (default: 10)                                           │
 │ init_retry_backoff_ │ integer │ ❌       │ Base backoff duration in ms for startup retries         │
 │ base                │         │          │ (default: 3000)                                         │
+│ disabled            │ boolean │ ❌       │ Skip this rule without removing its config              │
+│                     │         │          │ (default: false)                                        │
+│ append_on_restarts  │ boolean │ ❌       │ Append logs across re-runs instead of truncating        │
+│                     │         │          │ (default: false)                                        │
 └─────────────────────┴─────────┴──────────┴─────────────────────────────────────────────────────────┘
 
 Watch Configuration:
@@ -170,6 +174,7 @@ Example Configuration:
     - name: "Backend API"
       prefix: "api"
       workdir: "./backend"
+      disabled: false             # Set to true to skip this rule
       exit_on_failed_init: false
       max_init_retries: 5
       init_retry_backoff_base: 2000
