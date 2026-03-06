@@ -72,6 +72,12 @@ func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Write
 	// Signal broadcaster for new run if one exists
 	if b, ok := lm.broadcasters[ruleName]; ok {
 		b.SignalNewRun(appendOnRestart)
+		b.BroadcastEvent(&pb.LogEvent{
+			RuleName:  ruleName,
+			Type:      pb.LogEventType_LOG_EVENT_TYPE_RUN_STARTED,
+			Timestamp: time.Now().UnixMilli(),
+			Truncated: !appendOnRestart,
+		})
 	}
 	lm.mu.Unlock()
 
@@ -79,13 +85,25 @@ func (lm *LogManager) GetWriter(ruleName string, appendOnRestart bool) (io.Write
 }
 
 // SignalFinished signals that a rule's execution has finished.
-func (lm *LogManager) SignalFinished(ruleName string) {
+// success indicates whether the run completed successfully.
+// errMsg is an optional error message when success is false.
+func (lm *LogManager) SignalFinished(ruleName string, success bool, errMsg string) {
 	lm.mu.Lock()
 	lm.finishedRules[ruleName] = true
 	b := lm.broadcasters[ruleName]
 	lm.mu.Unlock()
 
 	if b != nil {
+		eventType := pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED
+		if !success {
+			eventType = pb.LogEventType_LOG_EVENT_TYPE_RUN_FAILED
+		}
+		b.BroadcastEvent(&pb.LogEvent{
+			RuleName:  ruleName,
+			Type:      eventType,
+			Timestamp: time.Now().UnixMilli(),
+			Message:   errMsg,
+		})
 		b.SignalFinished()
 	}
 }
@@ -195,8 +213,11 @@ func (lm *LogManager) StreamLogs(ruleName, filter string, timeoutSeconds int64, 
 				timeoutTimer.Reset(timeoutDuration)
 			}
 
+		case event := <-sub.Events:
+			writer.Send(&pb.StreamLogsResponse{Event: event})
+
 		case <-sub.Done:
-			// Drain remaining batches from channel
+			// Drain remaining batches and events from channels
 			for {
 				select {
 				case batch := <-sub.Ch:
@@ -205,27 +226,23 @@ func (lm *LogManager) StreamLogs(ruleName, filter string, timeoutSeconds int64, 
 							Lines: []*pb.LogLine{logLine},
 						})
 					}
+				case event := <-sub.Events:
+					writer.Send(&pb.StreamLogsResponse{Event: event})
 				default:
 					goto drained
 				}
 			}
 		drained:
-			writer.Send(&pb.StreamLogsResponse{
-				Lines: []*pb.LogLine{{
-					RuleName:  ruleName,
-					Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
-					Timestamp: time.Now().UnixMilli(),
-				}},
-			})
 			return nil
 
 		case <-timeoutChan:
 			writer.Send(&pb.StreamLogsResponse{
-				Lines: []*pb.LogLine{{
+				Event: &pb.LogEvent{
 					RuleName:  ruleName,
-					Line:      fmt.Sprintf("Log streaming timed out after %d seconds of no new content", timeoutSeconds),
+					Type:      pb.LogEventType_LOG_EVENT_TYPE_TIMEOUT,
 					Timestamp: time.Now().UnixMilli(),
-				}},
+					Message:   fmt.Sprintf("No new content for %d seconds", timeoutSeconds),
+				},
 			})
 			return nil
 		}
@@ -260,11 +277,11 @@ func (lm *LogManager) streamFinishedLogs(logFilePath, ruleName, filter string, w
 		}
 		if err == io.EOF {
 			writer.Send(&pb.StreamLogsResponse{
-				Lines: []*pb.LogLine{{
+				Event: &pb.LogEvent{
 					RuleName:  ruleName,
-					Line:      fmt.Sprintf("Rule '%s' execution completed", ruleName),
+					Type:      pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED,
 					Timestamp: time.Now().UnixMilli(),
-				}},
+				},
 			})
 			return nil
 		}

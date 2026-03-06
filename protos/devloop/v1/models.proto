@@ -110,6 +110,22 @@ message LogLine {
   int64 timestamp = 4;
 }
 
+enum LogEventType {
+  LOG_EVENT_TYPE_UNSPECIFIED = 0;
+  LOG_EVENT_TYPE_RUN_STARTED = 1;
+  LOG_EVENT_TYPE_RUN_COMPLETED = 2;
+  LOG_EVENT_TYPE_RUN_FAILED = 3;
+  LOG_EVENT_TYPE_TIMEOUT = 4;
+}
+
+message LogEvent {
+  string rule_name = 1;
+  LogEventType type = 2;
+  int64 timestamp = 3;
+  string message = 4;
+  bool truncated = 5;  // only meaningful for RUN_STARTED
+}
+
 message Rule {
   // The project this rule belongs to
   string project_id = 1;

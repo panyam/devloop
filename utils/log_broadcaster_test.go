@@ -452,6 +452,44 @@ func TestBroadcaster_SlowSubscriber(t *testing.T) {
 	})
 }
 
+func TestBroadcaster_BroadcastEvent(t *testing.T) {
+	testhelpers.WithTestContext(t, 2*time.Second, func(t *testing.T, tmpDir string) {
+		path := filepath.Join(tmpDir, "rule.log")
+		os.WriteFile(path, []byte{}, 0644)
+
+		src := NewFileLogSource(path)
+		b := NewLogBroadcaster("test-rule", src)
+		defer b.Stop()
+
+		sub1 := b.Subscribe("client-1", "")
+		sub2 := b.Subscribe("client-2", "")
+
+		event := &pb.LogEvent{
+			RuleName:  "test-rule",
+			Type:      pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED,
+			Timestamp: time.Now().UnixMilli(),
+			Message:   "done",
+		}
+		b.BroadcastEvent(event)
+
+		// Both subscribers should receive the event
+		select {
+		case got := <-sub1.Events:
+			assert.Equal(t, pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED, got.Type)
+			assert.Equal(t, "done", got.Message)
+		case <-time.After(1 * time.Second):
+			t.Fatal("sub1 did not receive event")
+		}
+
+		select {
+		case got := <-sub2.Events:
+			assert.Equal(t, pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED, got.Type)
+		case <-time.After(1 * time.Second):
+			t.Fatal("sub2 did not receive event")
+		}
+	})
+}
+
 // collectLines reads from a subscriber until it has at least `want` lines or times out.
 func collectLines(t *testing.T, sub *Subscriber, want int, timeout time.Duration) []*pb.LogLine {
 	t.Helper()

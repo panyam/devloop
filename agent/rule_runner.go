@@ -456,6 +456,12 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 					r.updateStatus(false, "FAILED")
 				}
 			}
+			// Signal log manager that rule finished with success/error info
+			var errMsg string
+			if err != nil {
+				errMsg = err.Error()
+			}
+			r.orchestrator.LogManager.SignalFinished(rule.Name, err == nil, errMsg)
 			r.execDoneChan <- err
 		}()
 		for i, cmdStr := range rule.Commands {
@@ -530,8 +536,6 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 			}
 		}
 
-		// Signal log manager that rule finished
-		r.orchestrator.LogManager.SignalFinished(rule.Name)
 	}()
 
 	return nil

@@ -2,17 +2,17 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
-## In Progress: Streaming Logs Overhaul (2026-03-03)
+## Recently Completed: Streaming Logs Overhaul (2026-03-03 to 2026-03-05)
 
 Design doc: `docs/streaming-logs-design.md`
 
-Three tasks planned (sequential):
+All three tasks completed:
 
 1. **Single-Poller-Per-Rule with Fan-Out** (completed 2026-03-05) -- Replaced per-client file polling with one `LogBroadcaster` per rule that reads new lines once and fans out to all subscribers. Added `LogSource` interface, `FileLogSource` with truncation detection, `RingBuffer` for `last_n_lines` history replay, and `last_n_lines` field to `StreamLogsRequest` proto. Fixed the `finishedRules` bug where rules were stuck in finished state after re-run.
 
 2. **Configurable Truncate vs Append** (completed 2026-03-05) -- Added `append_on_restarts` per-rule config (default: `false` = truncate). When `true`, consecutive runs append to the same log file with a separator line. Proto field: `Rule.append_on_restarts`. YAML field: `append_on_restarts: true`. File writing, YAML loading, and RuleRunner integration all completed. Fixed broadcaster to use `SignalNewRun(appendMode)` so append mode preserves ring buffer history and source offset across restarts instead of resetting.
 
-3. **Structured Log Events** -- Add typed `LogEvent` messages (`RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `TIMEOUT`) to `StreamLogsResponse`. Replaces fragile plain-text control messages. `RUN_STARTED` includes a `truncated` flag so clients can decide to clear their view or not.
+3. **Structured Log Events** (completed 2026-03-05) -- Added typed `LogEvent` messages (`RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `TIMEOUT`) to `StreamLogsResponse`. Replaces plain-text control messages with structured events. `RUN_STARTED` includes a `truncated` flag so clients can decide to clear their view. `SignalFinished` now accepts success/error info so `RUN_FAILED` events carry error messages. CLI `devloop logs` formats events as `--- [rule] Run completed ---` lines. Moved `SignalFinished` call into the RuleRunner defer block so it fires on all exit paths (success or failure).
 
 ## Recently Completed: Test Suite Bug Fixes (2026-03-04)
 

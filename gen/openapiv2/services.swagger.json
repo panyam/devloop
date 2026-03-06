@@ -311,6 +311,39 @@
       },
       "description": "ListWatchedPathsResponse contains all file patterns being monitored."
     },
+    "v1LogEvent": {
+      "type": "object",
+      "properties": {
+        "ruleName": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1LogEventType"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "int64"
+        },
+        "message": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean",
+          "title": "only meaningful for RUN_STARTED"
+        }
+      }
+    },
+    "v1LogEventType": {
+      "type": "string",
+      "enum": [
+        "LOG_EVENT_TYPE_UNSPECIFIED",
+        "LOG_EVENT_TYPE_RUN_STARTED",
+        "LOG_EVENT_TYPE_RUN_COMPLETED",
+        "LOG_EVENT_TYPE_RUN_FAILED",
+        "LOG_EVENT_TYPE_TIMEOUT"
+      ],
+      "default": "LOG_EVENT_TYPE_UNSPECIFIED"
+    },
     "v1LogLine": {
       "type": "object",
       "properties": {
@@ -537,6 +570,9 @@
             "type": "object",
             "$ref": "#/definitions/v1LogLine"
           }
+        },
+        "event": {
+          "$ref": "#/definitions/v1LogEvent"
         }
       }
     },

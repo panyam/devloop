@@ -110,6 +110,11 @@ func runStreamLogs(ruleName string) {
 				return
 			}
 
+			// Handle structured events
+			if resp.Event != nil {
+				printLogEvent(resp.Event)
+			}
+
 			// Send each log line
 			for _, line := range resp.Lines {
 				logChan <- line
@@ -150,6 +155,34 @@ func runStreamLogs(ruleName string) {
 			printLogLine(logLine)
 		}
 	}
+}
+
+func printLogEvent(event *pb.LogEvent) {
+	var label string
+	switch event.Type {
+	case pb.LogEventType_LOG_EVENT_TYPE_RUN_STARTED:
+		label = "Run started"
+		if event.Truncated {
+			label += " (log truncated)"
+		}
+	case pb.LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED:
+		label = "Run completed"
+	case pb.LogEventType_LOG_EVENT_TYPE_RUN_FAILED:
+		label = "Run failed"
+	case pb.LogEventType_LOG_EVENT_TYPE_TIMEOUT:
+		label = "Timeout"
+	default:
+		label = "Event"
+	}
+	prefix := ""
+	if event.RuleName != "" {
+		prefix = fmt.Sprintf("[%s] ", event.RuleName)
+	}
+	msg := ""
+	if event.Message != "" {
+		msg = ": " + event.Message
+	}
+	fmt.Printf("--- %s%s%s ---\n", prefix, label, msg)
 }
 
 func printLogLine(logLine *pb.LogLine) {

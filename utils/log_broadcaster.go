@@ -21,6 +21,7 @@ type Subscriber struct {
 	ID     string
 	Filter string
 	Ch     chan []*pb.LogLine // buffered, batched delivery
+	Events chan *pb.LogEvent  // buffered, event delivery
 	Done   chan struct{}      // closed when broadcaster stops or rule finishes
 }
 
@@ -61,6 +62,7 @@ func (b *LogBroadcaster) Subscribe(id, filter string) *Subscriber {
 		ID:     id,
 		Filter: filter,
 		Ch:     make(chan []*pb.LogLine, subscriberChanBufSize),
+		Events: make(chan *pb.LogEvent, subscriberChanBufSize),
 		Done:   make(chan struct{}),
 	}
 	b.subMu.Lock()
@@ -104,6 +106,18 @@ func (b *LogBroadcaster) SignalNewRun(appendMode bool) {
 		b.source.Reset()
 	}
 	b.finished.Store(false)
+}
+
+// BroadcastEvent sends a LogEvent to all subscribers (non-blocking).
+func (b *LogBroadcaster) BroadcastEvent(event *pb.LogEvent) {
+	b.subMu.RLock()
+	defer b.subMu.RUnlock()
+	for _, sub := range b.subscribers {
+		select {
+		case sub.Events <- event:
+		default:
+		}
+	}
 }
 
 // Stop cancels the poller goroutine, closes all subscriber Done channels, and closes the source.

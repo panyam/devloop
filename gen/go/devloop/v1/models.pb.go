@@ -24,6 +24,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type LogEventType int32
+
+const (
+	LogEventType_LOG_EVENT_TYPE_UNSPECIFIED   LogEventType = 0
+	LogEventType_LOG_EVENT_TYPE_RUN_STARTED   LogEventType = 1
+	LogEventType_LOG_EVENT_TYPE_RUN_COMPLETED LogEventType = 2
+	LogEventType_LOG_EVENT_TYPE_RUN_FAILED    LogEventType = 3
+	LogEventType_LOG_EVENT_TYPE_TIMEOUT       LogEventType = 4
+)
+
+// Enum value maps for LogEventType.
+var (
+	LogEventType_name = map[int32]string{
+		0: "LOG_EVENT_TYPE_UNSPECIFIED",
+		1: "LOG_EVENT_TYPE_RUN_STARTED",
+		2: "LOG_EVENT_TYPE_RUN_COMPLETED",
+		3: "LOG_EVENT_TYPE_RUN_FAILED",
+		4: "LOG_EVENT_TYPE_TIMEOUT",
+	}
+	LogEventType_value = map[string]int32{
+		"LOG_EVENT_TYPE_UNSPECIFIED":   0,
+		"LOG_EVENT_TYPE_RUN_STARTED":   1,
+		"LOG_EVENT_TYPE_RUN_COMPLETED": 2,
+		"LOG_EVENT_TYPE_RUN_FAILED":    3,
+		"LOG_EVENT_TYPE_TIMEOUT":       4,
+	}
+)
+
+func (x LogEventType) Enum() *LogEventType {
+	p := new(LogEventType)
+	*p = x
+	return p
+}
+
+func (x LogEventType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LogEventType) Descriptor() protoreflect.EnumDescriptor {
+	return file_devloop_v1_models_proto_enumTypes[0].Descriptor()
+}
+
+func (LogEventType) Type() protoreflect.EnumType {
+	return &file_devloop_v1_models_proto_enumTypes[0]
+}
+
+func (x LogEventType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LogEventType.Descriptor instead.
+func (LogEventType) EnumDescriptor() ([]byte, []int) {
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{0}
+}
+
 // ProjectInfo represents the information about a registered devloop project.
 // This contains the core identification and location data for a project.
 type ProjectInfo struct {
@@ -465,6 +520,82 @@ func (x *LogLine) GetTimestamp() int64 {
 	return 0
 }
 
+type LogEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleName      string                 `protobuf:"bytes,1,opt,name=rule_name,json=ruleName,proto3" json:"rule_name,omitempty"`
+	Type          LogEventType           `protobuf:"varint,2,opt,name=type,proto3,enum=devloop.v1.LogEventType" json:"type,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Truncated     bool                   `protobuf:"varint,5,opt,name=truncated,proto3" json:"truncated,omitempty"` // only meaningful for RUN_STARTED
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEvent) Reset() {
+	*x = LogEvent{}
+	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEvent) ProtoMessage() {}
+
+func (x *LogEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEvent.ProtoReflect.Descriptor instead.
+func (*LogEvent) Descriptor() ([]byte, []int) {
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LogEvent) GetRuleName() string {
+	if x != nil {
+		return x.RuleName
+	}
+	return ""
+}
+
+func (x *LogEvent) GetType() LogEventType {
+	if x != nil {
+		return x.Type
+	}
+	return LogEventType_LOG_EVENT_TYPE_UNSPECIFIED
+}
+
+func (x *LogEvent) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *LogEvent) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LogEvent) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
 type Rule struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The project this rule belongs to
@@ -519,7 +650,7 @@ type Rule struct {
 
 func (x *Rule) Reset() {
 	*x = Rule{}
-	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	mi := &file_devloop_v1_models_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +662,7 @@ func (x *Rule) String() string {
 func (*Rule) ProtoMessage() {}
 
 func (x *Rule) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[5]
+	mi := &file_devloop_v1_models_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +675,7 @@ func (x *Rule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Rule.ProtoReflect.Descriptor instead.
 func (*Rule) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{5}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Rule) GetProjectId() string {
@@ -685,7 +816,7 @@ type RuleMatcher struct {
 
 func (x *RuleMatcher) Reset() {
 	*x = RuleMatcher{}
-	mi := &file_devloop_v1_models_proto_msgTypes[6]
+	mi := &file_devloop_v1_models_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -697,7 +828,7 @@ func (x *RuleMatcher) String() string {
 func (*RuleMatcher) ProtoMessage() {}
 
 func (x *RuleMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[6]
+	mi := &file_devloop_v1_models_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -710,7 +841,7 @@ func (x *RuleMatcher) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleMatcher.ProtoReflect.Descriptor instead.
 func (*RuleMatcher) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{6}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RuleMatcher) GetPatterns() []string {
@@ -758,7 +889,7 @@ type RuleStatus struct {
 
 func (x *RuleStatus) Reset() {
 	*x = RuleStatus{}
-	mi := &file_devloop_v1_models_proto_msgTypes[7]
+	mi := &file_devloop_v1_models_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -770,7 +901,7 @@ func (x *RuleStatus) String() string {
 func (*RuleStatus) ProtoMessage() {}
 
 func (x *RuleStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_devloop_v1_models_proto_msgTypes[7]
+	mi := &file_devloop_v1_models_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -783,7 +914,7 @@ func (x *RuleStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleStatus.ProtoReflect.Descriptor instead.
 func (*RuleStatus) Descriptor() ([]byte, []int) {
-	return file_devloop_v1_models_proto_rawDescGZIP(), []int{7}
+	return file_devloop_v1_models_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RuleStatus) GetProjectId() string {
@@ -884,7 +1015,13 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\trule_name\x18\x02 \x01(\tR\bruleName\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\x9f\x06\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xab\x01\n" +
+	"\bLogEvent\x12\x1b\n" +
+	"\trule_name\x18\x01 \x01(\tR\bruleName\x12,\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x18.devloop.v1.LogEventTypeR\x04type\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1c\n" +
+	"\ttruncated\x18\x05 \x01(\bR\ttruncated\"\x9f\x06\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -927,7 +1064,13 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\rlast_finished\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\flastFinished\x12*\n" +
 	"\x11last_build_status\x18\x06 \x01(\tR\x0flastBuildStatus\x12\x1d\n" +
 	"\n" +
-	"last_error\x18\a \x01(\tR\tlastErrorB\x93\x01\n" +
+	"last_error\x18\a \x01(\tR\tlastError*\xab\x01\n" +
+	"\fLogEventType\x12\x1e\n" +
+	"\x1aLOG_EVENT_TYPE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aLOG_EVENT_TYPE_RUN_STARTED\x10\x01\x12 \n" +
+	"\x1cLOG_EVENT_TYPE_RUN_COMPLETED\x10\x02\x12\x1d\n" +
+	"\x19LOG_EVENT_TYPE_RUN_FAILED\x10\x03\x12\x1a\n" +
+	"\x16LOG_EVENT_TYPE_TIMEOUT\x10\x04B\x93\x01\n" +
 	"\x0ecom.devloop.v1B\vModelsProtoP\x01Z+github.com/panyam/devloop/gen/go/devloop/v1\xa2\x02\x03DXX\xaa\x02\n" +
 	"Devloop.V1\xca\x02\n" +
 	"Devloop\\V1\xe2\x02\x16Devloop\\V1\\GPBMetadata\xea\x02\vDevloop::V1b\x06proto3"
@@ -944,35 +1087,39 @@ func file_devloop_v1_models_proto_rawDescGZIP() []byte {
 	return file_devloop_v1_models_proto_rawDescData
 }
 
-var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_devloop_v1_models_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_devloop_v1_models_proto_goTypes = []any{
-	(*ProjectInfo)(nil),            // 0: devloop.v1.ProjectInfo
-	(*Config)(nil),                 // 1: devloop.v1.Config
-	(*Settings)(nil),               // 2: devloop.v1.Settings
-	(*CycleDetectionSettings)(nil), // 3: devloop.v1.CycleDetectionSettings
-	(*LogLine)(nil),                // 4: devloop.v1.LogLine
-	(*Rule)(nil),                   // 5: devloop.v1.Rule
-	(*RuleMatcher)(nil),            // 6: devloop.v1.RuleMatcher
-	(*RuleStatus)(nil),             // 7: devloop.v1.RuleStatus
-	nil,                            // 8: devloop.v1.Settings.CustomColorsEntry
-	nil,                            // 9: devloop.v1.Rule.EnvEntry
-	(*timestamppb.Timestamp)(nil),  // 10: google.protobuf.Timestamp
+	(LogEventType)(0),              // 0: devloop.v1.LogEventType
+	(*ProjectInfo)(nil),            // 1: devloop.v1.ProjectInfo
+	(*Config)(nil),                 // 2: devloop.v1.Config
+	(*Settings)(nil),               // 3: devloop.v1.Settings
+	(*CycleDetectionSettings)(nil), // 4: devloop.v1.CycleDetectionSettings
+	(*LogLine)(nil),                // 5: devloop.v1.LogLine
+	(*LogEvent)(nil),               // 6: devloop.v1.LogEvent
+	(*Rule)(nil),                   // 7: devloop.v1.Rule
+	(*RuleMatcher)(nil),            // 8: devloop.v1.RuleMatcher
+	(*RuleStatus)(nil),             // 9: devloop.v1.RuleStatus
+	nil,                            // 10: devloop.v1.Settings.CustomColorsEntry
+	nil,                            // 11: devloop.v1.Rule.EnvEntry
+	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
 }
 var file_devloop_v1_models_proto_depIdxs = []int32{
-	2,  // 0: devloop.v1.Config.settings:type_name -> devloop.v1.Settings
-	5,  // 1: devloop.v1.Config.rules:type_name -> devloop.v1.Rule
-	8,  // 2: devloop.v1.Settings.custom_colors:type_name -> devloop.v1.Settings.CustomColorsEntry
-	3,  // 3: devloop.v1.Settings.cycle_detection:type_name -> devloop.v1.CycleDetectionSettings
-	6,  // 4: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
-	9,  // 5: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
-	7,  // 6: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
-	10, // 7: devloop.v1.RuleStatus.last_started:type_name -> google.protobuf.Timestamp
-	10, // 8: devloop.v1.RuleStatus.last_finished:type_name -> google.protobuf.Timestamp
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	3,  // 0: devloop.v1.Config.settings:type_name -> devloop.v1.Settings
+	7,  // 1: devloop.v1.Config.rules:type_name -> devloop.v1.Rule
+	10, // 2: devloop.v1.Settings.custom_colors:type_name -> devloop.v1.Settings.CustomColorsEntry
+	4,  // 3: devloop.v1.Settings.cycle_detection:type_name -> devloop.v1.CycleDetectionSettings
+	0,  // 4: devloop.v1.LogEvent.type:type_name -> devloop.v1.LogEventType
+	8,  // 5: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
+	11, // 6: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
+	9,  // 7: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
+	12, // 8: devloop.v1.RuleStatus.last_started:type_name -> google.protobuf.Timestamp
+	12, // 9: devloop.v1.RuleStatus.last_finished:type_name -> google.protobuf.Timestamp
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_devloop_v1_models_proto_init() }
@@ -981,19 +1128,20 @@ func file_devloop_v1_models_proto_init() {
 		return
 	}
 	file_devloop_v1_models_proto_msgTypes[2].OneofWrappers = []any{}
-	file_devloop_v1_models_proto_msgTypes[5].OneofWrappers = []any{}
+	file_devloop_v1_models_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_devloop_v1_models_proto_rawDesc), len(file_devloop_v1_models_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   10,
+			NumEnums:      1,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_devloop_v1_models_proto_goTypes,
 		DependencyIndexes: file_devloop_v1_models_proto_depIdxs,
+		EnumInfos:         file_devloop_v1_models_proto_enumTypes,
 		MessageInfos:      file_devloop_v1_models_proto_msgTypes,
 	}.Build()
 	File_devloop_v1_models_proto = out.File

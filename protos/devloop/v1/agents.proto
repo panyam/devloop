@@ -195,4 +195,5 @@ message StreamLogsRequest {
 
 message StreamLogsResponse {
   repeated LogLine lines = 1;
+  LogEvent event = 2;
 }
