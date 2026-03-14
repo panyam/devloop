@@ -457,6 +457,17 @@
         "disabled": {
           "type": "boolean",
           "title": "Whether this rule is disabled. Disabled rules are loaded into the config\nbut skipped by the orchestrator: no file watcher is started, no commands\nexecute, and manual triggers return an error.\nDefault: false (rule is enabled).\nYAML: disabled: true"
+        },
+        "shellFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rule-level shell files sourced before every command in this rule\n(in addition to global shell_files from settings).\nPaths are resolved relative to the rule's work_dir."
+        },
+        "resetEnv": {
+          "type": "boolean",
+          "description": "Per-rule override for reset_env (if not set, inherits from settings).\nWhen true, each command starts fresh with only shell_files base env.\nWhen false (default), env vars cascade between commands."
         }
       }
     },
@@ -561,6 +572,24 @@
           "type": "integer",
           "format": "int64",
           "title": "Maximum number of rules that can run in parallel (default: 0 = unlimited)\nAll rules (short and long-running) use the global worker pool\nSet to 1 for sequential execution, useful for debugging rule chains"
+        },
+        "shellFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Global shell files sourced before every command in every rule.\nPaths are resolved relative to the config file directory.\nMust be sh-compatible scripts."
+        },
+        "commands": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Reusable named commands referenced in rules via $name.\nSingle-pass expansion only (no recursive references)."
+        },
+        "resetEnv": {
+          "type": "boolean",
+          "description": "Whether to reset env between commands (default: false = cascade).\nWhen false, env vars exported by cmd1 are visible to cmd2, etc.\nWhen true, each command starts with only the shell_files base env."
         }
       },
       "description": "Settings defines global settings for devloop."

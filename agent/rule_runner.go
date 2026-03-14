@@ -464,28 +464,85 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 			r.orchestrator.LogManager.SignalFinished(rule.Name, err == nil, errMsg)
 			r.execDoneChan <- err
 		}()
+		configDir := filepath.Dir(r.orchestrator.ConfigPath)
+
+		// Determine reset_env setting (rule overrides global)
+		resetEnv := r.orchestrator.Config.Settings.ResetEnv
+		if rule.ResetEnv != nil {
+			resetEnv = *rule.ResetEnv
+		}
+
+		// Determine working directory
+		workDir := rule.WorkDir
+		if workDir == "" {
+			workDir = filepath.Dir(r.orchestrator.ConfigPath)
+		}
+
+		// Capture shell_files env once before the command loop
+		hasShellFiles := len(r.orchestrator.Config.Settings.GetShellFiles()) > 0 || len(rule.GetShellFiles()) > 0
+		var baseEnv map[string]string
+		var currentEnv map[string]string
+		if hasShellFiles {
+			baseEnv, err = captureShellFileEnv(
+				r.orchestrator.Config.Settings.GetShellFiles(),
+				rule.GetShellFiles(),
+				workDir, configDir,
+			)
+			if err != nil {
+				r.logDevloop("Warning: failed to capture shell file env: %v", err)
+				err = nil // non-fatal, continue without captured env
+			} else if len(baseEnv) > 0 {
+				currentEnv = make(map[string]string, len(baseEnv))
+				for k, v := range baseEnv {
+					currentEnv[k] = v
+				}
+			}
+		}
+
+		// Create temp file for env cascade between commands
+		var envTmpFile *os.File
+		if !resetEnv && len(rule.Commands) > 1 {
+			envTmpFile, _ = os.CreateTemp("", "devloop-env-*")
+			if envTmpFile != nil {
+				defer os.Remove(envTmpFile.Name())
+				defer envTmpFile.Close()
+			}
+		}
+
 		for i, cmdStr := range rule.Commands {
+			// Expand command aliases and prepend shell file sourcing
+			prepared := prepareCommand(cmdStr, r.orchestrator.Config.Settings, rule, configDir)
+			if r.isVerbose() && prepared != cmdStr {
+				r.logDevloop("Expanded command: %s -> %s", cmdStr, prepared)
+			}
+
+			// For non-last commands with cascade enabled, append env capture
+			isLastCmd := i == len(rule.Commands)-1
+			if !isLastCmd && !resetEnv && envTmpFile != nil {
+				prepared = prepared + " && env -0 > " + envTmpFile.Name()
+			}
+
 			r.logDevloop("Running command: %s", cmdStr)
-			cmd := createCrossPlatformCommand(cmdStr)
+			cmd := createCrossPlatformCommand(prepared)
 
 			// Setup output handling
 			if err = r.setupCommandOutput(cmd, logWriter); err != nil {
 				r.lastError = err
-				return // fmt.Errorf("failed to setup command output: %w", err)
+				return
 			}
 
 			// Set platform-specific process attributes
 			setSysProcAttr(cmd)
 
-			// Set working directory - default to config file directory if not specified
-			workDir := rule.WorkDir
-			if workDir == "" {
-				workDir = filepath.Dir(r.orchestrator.ConfigPath)
-			}
 			cmd.Dir = workDir
 
 			// Set environment variables
 			cmd.Env = os.Environ() // Inherit parent environment
+
+			// Inject captured shell_files env
+			for k, v := range currentEnv {
+				cmd.Env = append(cmd.Env, k+"="+v)
+			}
 
 			// Add environment variables to help subprocesses detect color support
 			suppressColors := r.orchestrator.Config.Settings.SuppressSubprocessColors
@@ -503,17 +560,26 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 			if err = cmd.Start(); err != nil {
 				r.logDevloop("Command %q failed to start for rule: %v", cmdStr, err)
 				r.updateStatus(false, "FAILED", err.Error())
-				return // fmt.Errorf("failed to start command: %w", err)
+				return
 			}
 
 			currentCmds = append(currentCmds, cmd)
 
 			// For non-last commands, wait for completion before proceeding
-			if i < len(rule.Commands)-1 {
+			if !isLastCmd {
 				if err = cmd.Wait(); err != nil {
 					r.logDevloop("Command failed: %v", err)
 					r.updateStatus(false, "FAILED", err.Error())
-					return // fmt.Errorf("command failed: %w", err)
+					return
+				}
+
+				// Parse env cascade from temp file (if cascading)
+				if !resetEnv && envTmpFile != nil {
+					newEnv, parseErr := parseEnvFile(envTmpFile.Name())
+					if parseErr == nil && len(newEnv) > 0 {
+						osEnv := envSliceToMap(os.Environ())
+						currentEnv = envDiff(osEnv, newEnv)
+					}
 				}
 			} else {
 				// This is the last command - let it run and monitor it
@@ -532,7 +598,7 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 			if err != nil {
 				r.logDevloop("Last command failed: %v", err)
 				r.updateStatus(false, "FAILED", err.Error())
-				return // fmt.Errorf("last command failed: %w", err)
+				return
 			}
 		}
 

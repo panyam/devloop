@@ -2,6 +2,18 @@
 
 This document outlines the immediate next steps for the `devloop` project.
 
+## Recently Completed: Shell Files Env Capture & Cascade (2026-03-14)
+
+Implemented env capture and cascade for shell_files and sequential commands in `executeNow()`.
+
+- **Env Capture Once**: Shell file env vars are captured once before the command loop via `captureShellFileEnv()` (runs `source ... && env -0`, diffs against `os.Environ()`). This avoids re-executing non-idempotent scripts (e.g., token fetch) per command.
+- **Env Cascade**: By default (`reset_env: false`), env vars exported by cmd1 are visible to cmd2. Non-last commands append `&& env -0 > tmpfile`, and the temp file is parsed after `cmd.Wait()` to update `currentEnv` for the next command.
+- **reset_env**: Added `bool reset_env = 15` to Settings and `optional bool reset_env = 21` to Rule in proto. Rule overrides global. When true, each command gets only the shell_files base env (no cascade).
+- **Shell files still sourced per-command**: For functions/aliases (idempotent). Env vars are injected via `cmd.Env`.
+- **New functions**: `parseEnvOutput()`, `envDiff()`, `envSliceToMap()`, `captureShellFileEnv()`, `parseEnvFile()` in `agent/common.go`
+- **YAML parsing**: Added `reset_env` to `LoadConfig()` for both settings and rules
+- **Tests**: 15 new unit tests + 5 integration tests exercising the full `executeNow()` flow via orchestrator (cascade, reset_env, shell file capture-once, functions, rule override)
+
 ## Recently Completed: Disabled Rules Feature (2026-03-06)
 
 Issue #3: Added `disabled` boolean field to Rule configuration. Users can now toggle rules off with `disabled: true` in YAML without commenting out config blocks.

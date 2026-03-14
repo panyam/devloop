@@ -226,8 +226,19 @@ type Settings struct {
 	// All rules (short and long-running) use the global worker pool
 	// Set to 1 for sequential execution, useful for debugging rule chains
 	MaxParallelRules uint32 `protobuf:"varint,12,opt,name=max_parallel_rules,json=maxParallelRules,proto3" json:"max_parallel_rules,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Global shell files sourced before every command in every rule.
+	// Paths are resolved relative to the config file directory.
+	// Must be sh-compatible scripts.
+	ShellFiles []string `protobuf:"bytes,13,rep,name=shell_files,json=shellFiles,proto3" json:"shell_files,omitempty"`
+	// Reusable named commands referenced in rules via $name.
+	// Single-pass expansion only (no recursive references).
+	Commands map[string]string `protobuf:"bytes,14,rep,name=commands,proto3" json:"commands,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Whether to reset env between commands (default: false = cascade).
+	// When false, env vars exported by cmd1 are visible to cmd2, etc.
+	// When true, each command starts with only the shell_files base env.
+	ResetEnv      bool `protobuf:"varint,15,opt,name=reset_env,json=resetEnv,proto3" json:"reset_env,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Settings) Reset() {
@@ -342,6 +353,27 @@ func (x *Settings) GetMaxParallelRules() uint32 {
 		return x.MaxParallelRules
 	}
 	return 0
+}
+
+func (x *Settings) GetShellFiles() []string {
+	if x != nil {
+		return x.ShellFiles
+	}
+	return nil
+}
+
+func (x *Settings) GetCommands() map[string]string {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+func (x *Settings) GetResetEnv() bool {
+	if x != nil {
+		return x.ResetEnv
+	}
+	return false
 }
 
 // Settings for cycle detection and prevention
@@ -649,7 +681,15 @@ type Rule struct {
 	// execute, and manual triggers return an error.
 	// Default: false (rule is enabled).
 	// YAML: disabled: true
-	Disabled      bool `protobuf:"varint,19,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	Disabled bool `protobuf:"varint,19,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	// Rule-level shell files sourced before every command in this rule
+	// (in addition to global shell_files from settings).
+	// Paths are resolved relative to the rule's work_dir.
+	ShellFiles []string `protobuf:"bytes,20,rep,name=shell_files,json=shellFiles,proto3" json:"shell_files,omitempty"`
+	// Per-rule override for reset_env (if not set, inherits from settings).
+	// When true, each command starts fresh with only shell_files base env.
+	// When false (default), env vars cascade between commands.
+	ResetEnv      *bool `protobuf:"varint,21,opt,name=reset_env,json=resetEnv,proto3,oneof" json:"reset_env,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -813,6 +853,20 @@ func (x *Rule) GetAppendOnRestarts() bool {
 func (x *Rule) GetDisabled() bool {
 	if x != nil {
 		return x.Disabled
+	}
+	return false
+}
+
+func (x *Rule) GetShellFiles() []string {
+	if x != nil {
+		return x.ShellFiles
+	}
+	return nil
+}
+
+func (x *Rule) GetResetEnv() bool {
+	if x != nil && x.ResetEnv != nil {
+		return *x.ResetEnv
 	}
 	return false
 }
@@ -993,7 +1047,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
 	"\bsettings\x18\x02 \x01(\v2\x14.devloop.v1.SettingsR\bsettings\x12&\n" +
-	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xa1\x05\n" +
+	"\x05rules\x18\x03 \x03(\v2\x10.devloop.v1.RuleR\x05rules\"\xdc\x06\n" +
 	"\bSettings\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
@@ -1010,8 +1064,15 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x0fcycle_detection\x18\n" +
 	" \x01(\v2\".devloop.v1.CycleDetectionSettingsR\x0ecycleDetection\x12<\n" +
 	"\x1asuppress_subprocess_colors\x18\v \x01(\bR\x18suppressSubprocessColors\x12,\n" +
-	"\x12max_parallel_rules\x18\f \x01(\rR\x10maxParallelRules\x1a?\n" +
+	"\x12max_parallel_rules\x18\f \x01(\rR\x10maxParallelRules\x12\x1f\n" +
+	"\vshell_files\x18\r \x03(\tR\n" +
+	"shellFiles\x12>\n" +
+	"\bcommands\x18\x0e \x03(\v2\".devloop.v1.Settings.CommandsEntryR\bcommands\x12\x1b\n" +
+	"\treset_env\x18\x0f \x01(\bR\bresetEnv\x1a?\n" +
 	"\x11CustomColorsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
+	"\rCommandsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x19\n" +
 	"\x17_default_debounce_delay\"\xde\x02\n" +
@@ -1034,7 +1095,7 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x04type\x18\x02 \x01(\x0e2\x18.devloop.v1.LogEventTypeR\x04type\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1c\n" +
-	"\ttruncated\x18\x05 \x01(\bR\ttruncated\"\xbb\x06\n" +
+	"\ttruncated\x18\x05 \x01(\bR\ttruncated\"\x8c\a\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -1056,14 +1117,19 @@ const file_devloop_v1_models_proto_rawDesc = "" +
 	"\x10max_init_retries\x18\x10 \x01(\rR\x0emaxInitRetries\x125\n" +
 	"\x17init_retry_backoff_base\x18\x11 \x01(\x04R\x14initRetryBackoffBase\x12,\n" +
 	"\x12append_on_restarts\x18\x12 \x01(\bR\x10appendOnRestarts\x12\x1a\n" +
-	"\bdisabled\x18\x13 \x01(\bR\bdisabled\x1a6\n" +
+	"\bdisabled\x18\x13 \x01(\bR\bdisabled\x12\x1f\n" +
+	"\vshell_files\x18\x14 \x03(\tR\n" +
+	"shellFiles\x12 \n" +
+	"\treset_env\x18\x15 \x01(\bH\x03R\bresetEnv\x88\x01\x01\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\n" +
 	"\n" +
 	"\b_verboseB\x11\n" +
 	"\x0f_debounce_delayB\x13\n" +
-	"\x11_cycle_protection\"A\n" +
+	"\x11_cycle_protectionB\f\n" +
+	"\n" +
+	"_reset_env\"A\n" +
 	"\vRuleMatcher\x12\x1a\n" +
 	"\bpatterns\x18\x01 \x03(\tR\bpatterns\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\"\xb2\x02\n" +
@@ -1102,7 +1168,7 @@ func file_devloop_v1_models_proto_rawDescGZIP() []byte {
 }
 
 var file_devloop_v1_models_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_devloop_v1_models_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_devloop_v1_models_proto_goTypes = []any{
 	(LogEventType)(0),              // 0: devloop.v1.LogEventType
 	(*ProjectInfo)(nil),            // 1: devloop.v1.ProjectInfo
@@ -1115,25 +1181,27 @@ var file_devloop_v1_models_proto_goTypes = []any{
 	(*RuleMatcher)(nil),            // 8: devloop.v1.RuleMatcher
 	(*RuleStatus)(nil),             // 9: devloop.v1.RuleStatus
 	nil,                            // 10: devloop.v1.Settings.CustomColorsEntry
-	nil,                            // 11: devloop.v1.Rule.EnvEntry
-	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
+	nil,                            // 11: devloop.v1.Settings.CommandsEntry
+	nil,                            // 12: devloop.v1.Rule.EnvEntry
+	(*timestamppb.Timestamp)(nil),  // 13: google.protobuf.Timestamp
 }
 var file_devloop_v1_models_proto_depIdxs = []int32{
 	3,  // 0: devloop.v1.Config.settings:type_name -> devloop.v1.Settings
 	7,  // 1: devloop.v1.Config.rules:type_name -> devloop.v1.Rule
 	10, // 2: devloop.v1.Settings.custom_colors:type_name -> devloop.v1.Settings.CustomColorsEntry
 	4,  // 3: devloop.v1.Settings.cycle_detection:type_name -> devloop.v1.CycleDetectionSettings
-	0,  // 4: devloop.v1.LogEvent.type:type_name -> devloop.v1.LogEventType
-	8,  // 5: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
-	11, // 6: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
-	9,  // 7: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
-	12, // 8: devloop.v1.RuleStatus.last_started:type_name -> google.protobuf.Timestamp
-	12, // 9: devloop.v1.RuleStatus.last_finished:type_name -> google.protobuf.Timestamp
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 4: devloop.v1.Settings.commands:type_name -> devloop.v1.Settings.CommandsEntry
+	0,  // 5: devloop.v1.LogEvent.type:type_name -> devloop.v1.LogEventType
+	8,  // 6: devloop.v1.Rule.watch:type_name -> devloop.v1.RuleMatcher
+	12, // 7: devloop.v1.Rule.env:type_name -> devloop.v1.Rule.EnvEntry
+	9,  // 8: devloop.v1.Rule.status:type_name -> devloop.v1.RuleStatus
+	13, // 9: devloop.v1.RuleStatus.last_started:type_name -> google.protobuf.Timestamp
+	13, // 10: devloop.v1.RuleStatus.last_finished:type_name -> google.protobuf.Timestamp
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_devloop_v1_models_proto_init() }
@@ -1149,7 +1217,7 @@ func file_devloop_v1_models_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_devloop_v1_models_proto_rawDesc), len(file_devloop_v1_models_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

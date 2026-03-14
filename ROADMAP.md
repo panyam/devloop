@@ -64,6 +64,12 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] `devloop status` shows disabled rules as "Disabled"
   - [x] `devloop trigger` on a disabled rule returns a clear error
   - [x] Pre-push git hook runs `make test` before pushing
+- [x] **Shell Files Env Capture & Cascade (2026-03-14):**
+  - [x] Shell file env vars captured once before command loop (not re-executed per command)
+  - [x] Env vars cascade between sequential commands by default
+  - [x] `reset_env` config flag (global + per-rule override) to disable cascade
+  - [x] Shell files still sourced per-command for functions/aliases
+  - [x] 20 new tests (unit + integration exercising full executeNow flow)
 - [ ] **Enhanced Logging:**
   - [ ] Structured logging (e.g., JSON) for machine-readability.
   - [ ] Log filtering and searching capabilities via the API.

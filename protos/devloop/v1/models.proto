@@ -66,6 +66,20 @@ message Settings {
   // All rules (short and long-running) use the global worker pool
   // Set to 1 for sequential execution, useful for debugging rule chains
   uint32 max_parallel_rules = 12;
+
+  // Global shell files sourced before every command in every rule.
+  // Paths are resolved relative to the config file directory.
+  // Must be sh-compatible scripts.
+  repeated string shell_files = 13;
+
+  // Reusable named commands referenced in rules via $name.
+  // Single-pass expansion only (no recursive references).
+  map<string, string> commands = 14;
+
+  // Whether to reset env between commands (default: false = cascade).
+  // When false, env vars exported by cmd1 are visible to cmd2, etc.
+  // When true, each command starts with only the shell_files base env.
+  bool reset_env = 15;
 }
 
 // Settings for cycle detection and prevention
@@ -197,6 +211,16 @@ message Rule {
   // Default: false (rule is enabled).
   // YAML: disabled: true
   bool disabled = 19;
+
+  // Rule-level shell files sourced before every command in this rule
+  // (in addition to global shell_files from settings).
+  // Paths are resolved relative to the rule's work_dir.
+  repeated string shell_files = 20;
+
+  // Per-rule override for reset_env (if not set, inherits from settings).
+  // When true, each command starts fresh with only shell_files base env.
+  // When false (default), env vars cascade between commands.
+  optional bool reset_env = 21;
 }
 
 message RuleMatcher {

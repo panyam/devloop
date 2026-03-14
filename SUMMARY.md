@@ -124,6 +124,24 @@ rules:
     commands: [...]
 ```
 
+**Shell Files & Reusable Commands:**
+```yaml
+settings:
+  shell_files: ["./env.sh"]       # Sourced before every command
+  commands:                        # Reusable named commands
+    build-proto: "buf generate"
+  reset_env: false                 # Cascade env between commands (default)
+
+rules:
+  - name: "proto-gen"
+    shell_files: ["./proto-env.sh"]  # Rule-level shell files
+    reset_env: true                   # Per-rule override
+    commands:
+      - "$build-proto"               # References settings.commands
+```
+
+Shell file env vars are captured once before the command loop (avoiding re-execution of non-idempotent scripts like token fetches). Env vars cascade between sequential commands by default (`reset_env: false`). Shell files are still sourced per-command for functions/aliases. The `reset_env` flag can be set globally or per-rule (rule overrides global).
+
 **Global Defaults:**
 ```yaml
 settings:

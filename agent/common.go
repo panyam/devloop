@@ -55,11 +55,13 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -87,6 +89,161 @@ func createCrossPlatformCommand(cmdStr string) *exec.Cmd {
 		cmd.Env = os.Environ()
 		return cmd
 	}
+}
+
+// expandCommandAliases performs single-pass left-to-right $name substitution.
+// Each $name token is expanded at most once (no recursive expansion).
+func expandCommandAliases(cmd string, commands map[string]string) string {
+	if len(commands) == 0 {
+		return cmd
+	}
+
+	var result strings.Builder
+	i := 0
+	for i < len(cmd) {
+		if cmd[i] != '$' {
+			result.WriteByte(cmd[i])
+			i++
+			continue
+		}
+
+		// Extract the name after $: alphanumeric + hyphens + underscores
+		j := i + 1
+		for j < len(cmd) && (cmd[j] == '-' || cmd[j] == '_' ||
+			(cmd[j] >= 'a' && cmd[j] <= 'z') ||
+			(cmd[j] >= 'A' && cmd[j] <= 'Z') ||
+			(cmd[j] >= '0' && cmd[j] <= '9')) {
+			j++
+		}
+
+		name := cmd[i+1 : j]
+		if expansion, ok := commands[name]; ok {
+			result.WriteString(expansion)
+			i = j
+		} else {
+			result.WriteByte(cmd[i])
+			i++
+		}
+	}
+	return result.String()
+}
+
+// buildSourcePrefix builds a "source X && source Y && " prefix string from
+// global and rule-level shell files. Global files resolve relative to configDir,
+// rule files resolve relative to workDir.
+func buildSourcePrefix(globalFiles, ruleFiles []string, workDir, configDir string) string {
+	if len(globalFiles) == 0 && len(ruleFiles) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, f := range globalFiles {
+		path := f
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(configDir, path)
+		}
+		parts = append(parts, "source "+path)
+	}
+	for _, f := range ruleFiles {
+		path := f
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(workDir, path)
+		}
+		parts = append(parts, "source "+path)
+	}
+
+	return strings.Join(parts, " && ") + " && "
+}
+
+// prepareCommand expands command aliases and prepends shell file sourcing.
+// This is called before each command is passed to createCrossPlatformCommand.
+func prepareCommand(cmd string, settings *pb.Settings, rule *pb.Rule, configDir string) string {
+	// Step 1: expand command aliases ($name -> value)
+	expanded := expandCommandAliases(cmd, settings.GetCommands())
+
+	// Step 2: build source prefix from shell files
+	workDir := rule.GetWorkDir()
+	if workDir == "" {
+		workDir = configDir
+	}
+	prefix := buildSourcePrefix(settings.GetShellFiles(), rule.GetShellFiles(), workDir, configDir)
+
+	if prefix == "" {
+		return expanded
+	}
+	return prefix + expanded
+}
+
+// parseEnvOutput parses NUL-delimited env output (from `env -0`) into a map.
+func parseEnvOutput(data []byte) map[string]string {
+	result := make(map[string]string)
+	for _, entry := range bytes.Split(data, []byte{0}) {
+		if len(entry) == 0 {
+			continue
+		}
+		idx := bytes.IndexByte(entry, '=')
+		if idx < 0 {
+			continue
+		}
+		key := string(entry[:idx])
+		value := string(entry[idx+1:])
+		result[key] = value
+	}
+	return result
+}
+
+// envDiff returns entries in current that are new or changed relative to base.
+func envDiff(base, current map[string]string) map[string]string {
+	diff := make(map[string]string)
+	for k, v := range current {
+		if baseVal, ok := base[k]; !ok || baseVal != v {
+			diff[k] = v
+		}
+	}
+	return diff
+}
+
+// envSliceToMap converts os.Environ()-style []string to a map.
+func envSliceToMap(environ []string) map[string]string {
+	m := make(map[string]string, len(environ))
+	for _, e := range environ {
+		idx := strings.IndexByte(e, '=')
+		if idx >= 0 {
+			m[e[:idx]] = e[idx+1:]
+		}
+	}
+	return m
+}
+
+// captureShellFileEnv sources global+rule shell files once and returns only
+// the env vars that are new or changed relative to the current process env.
+func captureShellFileEnv(globalFiles, ruleFiles []string, workDir, configDir string) (map[string]string, error) {
+	if len(globalFiles) == 0 && len(ruleFiles) == 0 {
+		return nil, nil
+	}
+
+	prefix := buildSourcePrefix(globalFiles, ruleFiles, workDir, configDir)
+	cmdStr := prefix + "env -0"
+
+	cmd := createCrossPlatformCommand(cmdStr)
+	cmd.Dir = workDir
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to capture shell file env: %w", err)
+	}
+
+	captured := parseEnvOutput(output)
+	baseEnv := envSliceToMap(os.Environ())
+	return envDiff(baseEnv, captured), nil
+}
+
+// parseEnvFile reads a NUL-delimited env file (written by `env -0 > file`).
+func parseEnvFile(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvOutput(data), nil
 }
 
 // LoadConfig reads and unmarshals the .devloop.yaml configuration file,
@@ -217,6 +374,37 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				config.Settings.MaxParallelRules = uint32(maxParallelRulesInt)
 			}
 		}
+
+		// Fix shell_files field
+		if shellFiles, exists := settings["shell_files"]; exists {
+			if shellFilesList, ok := shellFiles.([]interface{}); ok {
+				config.Settings.ShellFiles = make([]string, 0, len(shellFilesList))
+				for _, sf := range shellFilesList {
+					if sfStr, ok := sf.(string); ok {
+						config.Settings.ShellFiles = append(config.Settings.ShellFiles, sfStr)
+					}
+				}
+			}
+		}
+
+		// Fix commands field
+		if commands, exists := settings["commands"]; exists {
+			if commandsMap, ok := commands.(map[string]interface{}); ok {
+				config.Settings.Commands = make(map[string]string)
+				for key, value := range commandsMap {
+					if valueStr, ok := value.(string); ok {
+						config.Settings.Commands[key] = valueStr
+					}
+				}
+			}
+		}
+
+		// Fix reset_env field
+		if resetEnv, exists := settings["reset_env"]; exists {
+			if resetEnvBool, ok := resetEnv.(bool); ok {
+				config.Settings.ResetEnv = resetEnvBool
+			}
+		}
 	}
 
 	// Fix rule skipRunOnInit fields
@@ -243,6 +431,23 @@ func LoadConfig(configPath string) (*pb.Config, error) {
 				if disabled, exists := ruleMap["disabled"]; exists {
 					if disabledBool, ok := disabled.(bool); ok && i < len(config.Rules) {
 						config.Rules[i].Disabled = disabledBool
+					}
+				}
+
+				if shellFiles, exists := ruleMap["shell_files"]; exists {
+					if shellFilesList, ok := shellFiles.([]interface{}); ok && i < len(config.Rules) {
+						config.Rules[i].ShellFiles = make([]string, 0, len(shellFilesList))
+						for _, sf := range shellFilesList {
+							if sfStr, ok := sf.(string); ok {
+								config.Rules[i].ShellFiles = append(config.Rules[i].ShellFiles, sfStr)
+							}
+						}
+					}
+				}
+
+				if resetEnv, exists := ruleMap["reset_env"]; exists {
+					if resetEnvBool, ok := resetEnv.(bool); ok && i < len(config.Rules) {
+						config.Rules[i].ResetEnv = &resetEnvBool
 					}
 				}
 			}
