@@ -23,7 +23,7 @@ The devloop MCP server is a **simplified HTTP handler** that runs alongside the 
 
 ```bash
 # Enable MCP with standalone mode (requires both gRPC and HTTP ports)
-devloop --grpc-port 5555 --http-port 9999 --enable-mcp -c /path/to/project/.devloop.yaml
+devloop --grpc-port 19051 --http-port 19080 --enable-mcp -c /path/to/project/.devloop.yaml
 
 # Enable MCP with automatic port discovery (avoids conflicts)
 devloop --grpc-port 0 --http-port 0 --enable-mcp
@@ -33,7 +33,7 @@ devloop --grpc-port 5000 --http-port 8080 --enable-mcp
 
 # Or use default config location
 cd /path/to/project
-devloop --grpc-port 5555 --http-port 9999 --enable-mcp
+devloop --grpc-port 19051 --http-port 19080 --enable-mcp
 ```
 
 **Note:** Gateway mode is temporarily removed and will be reimplemented using the grpcrouter library.
@@ -43,12 +43,12 @@ devloop --grpc-port 5555 --http-port 9999 --enable-mcp
 #### Claude Code (HTTP Transport)
 ```bash
 # Add devloop as HTTP MCP server for Claude Code
-claude mcp add --transport http devloop http://localhost:9999/mcp/
+claude mcp add --transport http devloop http://localhost:19080/mcp/
 
 # Test the connection
 curl -X POST -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}' \
-  http://localhost:9999/mcp/
+  http://localhost:19080/mcp/
 ```
 
 ## Available MCP Tools
@@ -186,14 +186,14 @@ Previous versions used SSE transport requiring sessionId. This has been migrated
 - **File Access**: Limited to project directory only
 - **Path Traversal**: Blocked (no ../ allowed)
 - **Command Execution**: Only through predefined devloop rules
-- **Network Access**: HTTP on localhost only (default port 9999)
+- **Network Access**: HTTP on localhost only (default port 19080)
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"Missing sessionId" (Fixed)**: If using older devloop versions, upgrade to latest with StreamableHTTP transport
-2. **"Connection refused"**: Ensure devloop is running with `--enable-mcp` flag and correct port (default 9999)
+2. **"Connection refused"**: Ensure devloop is running with `--enable-mcp` flag and correct port (default 19080)
 3. **"Project not found"**: Ensure devloop is running in agent mode for the project
 4. **"Rule not found"**: Check rule names in project config with get_project_config
 5. **"Permission denied"**: Ensure MCP server has read access to project files
@@ -216,15 +216,15 @@ devloop --enable-mcp --c .devloop.yaml
 # Test HTTP transport directly
 curl -X POST -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"id":1}' \
-  http://localhost:9999/mcp/
+  http://localhost:19080/mcp/
 
 # Test tools list
 curl -X POST -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":2}' \
-  http://localhost:9999/mcp/
+  http://localhost:19080/mcp/
 
 # Test with Claude Code
-claude mcp add --transport http devloop http://localhost:9999/mcp/
+claude mcp add --transport http devloop http://localhost:19080/mcp/
 ```
 
 ## Advanced Usage

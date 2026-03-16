@@ -32,11 +32,11 @@ Multiple separate daemon processes (each watching their own project components) 
 
 ```bash
 # Start the central gateway
-devloop --mode gateway --http-port 9999 --grpc-port 55555
+devloop --mode gateway --http-port 19080 --grpc-port 19051
 
 # Connect individual project daemons to the gateway
-devloop --mode agent --gateway-addr localhost:55555 -c project-a/.devloop.yaml
-devloop --mode agent --gateway-addr localhost:55555 -c project-b/.devloop.yaml
+devloop --mode agent --gateway-addr localhost:19051 -c project-a/.devloop.yaml
+devloop --mode agent --gateway-addr localhost:19051 -c project-b/.devloop.yaml
 ```
 
 **Note:** Gateway mode is temporarily removed and will be reimplemented using the grpcrouter library for simplified proxy and reverse tunnel functionality.
@@ -443,7 +443,7 @@ Devloop provides both gRPC and REST APIs for monitoring and control. The REST AP
 
 ### REST API Endpoints
 
-Base URL: `http://localhost:9999` (default gateway port)
+Base URL: `http://localhost:19080` (default gateway port)
 
 #### List All Projects
 ```http
@@ -551,7 +551,7 @@ Server-sent events stream for real-time logs.
 ```
 data: {"projectId":"backend","ruleName":"api","line":"Starting server...","timestamp":"1704092400000"}
 
-data: {"projectId":"backend","ruleName":"api","line":"Server listening on :9999","timestamp":"1704092401000"}
+data: {"projectId":"backend","ruleName":"api","line":"Server listening on :19080","timestamp":"1704092401000"}
 ```
 
 #### Get Historical Logs
@@ -601,11 +601,11 @@ service GatewayClientService {
 #### JavaScript/TypeScript
 ```javascript
 // Fetch all projects
-const response = await fetch('http://localhost:9999/api/projects');
+const response = await fetch('http://localhost:19080/api/projects');
 const data = await response.json();
 
 // Stream logs using EventSource
-const events = new EventSource('http://localhost:9999/api/projects/backend/stream/logs/api');
+const events = new EventSource('http://localhost:19080/api/projects/backend/stream/logs/api');
 events.onmessage = (event) => {
   const log = JSON.parse(event.data);
   console.log(`[${log.ruleName}] ${log.line}`);
@@ -618,11 +618,11 @@ import requests
 import sseclient
 
 # Get rule status
-response = requests.get('http://localhost:9999/api/projects/backend/status/api')
+response = requests.get('http://localhost:19080/api/projects/backend/status/api')
 status = response.json()
 
 # Stream logs
-response = requests.get('http://localhost:9999/api/projects/backend/stream/logs/api', stream=True)
+response = requests.get('http://localhost:19080/api/projects/backend/stream/logs/api', stream=True)
 client = sseclient.SSEClient(response)
 for event in client.events():
     log = json.loads(event.data)
@@ -632,7 +632,7 @@ for event in client.events():
 #### Go
 ```go
 // Using the generated gRPC client
-conn, _ := grpc.NewClient("localhost:55555", grpc.WithTransportCredentials(insecure.NewCredentials()))
+conn, _ := grpc.NewClient("localhost:19051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 client := pb.NewGatewayClientServiceClient(conn)
 
 // List projects
@@ -662,7 +662,7 @@ Model Context Protocol (MCP) is a standard that allows AI assistants to interact
 
 ```bash
 # Start standalone mode with MCP server enabled
-devloop --grpc-port 5555 --http-port 9999 --enable-mcp -c .devloop.yaml
+devloop --grpc-port 5555 --http-port 19080 --enable-mcp -c .devloop.yaml
 ```
 
 The MCP server runs as an HTTP handler on the `/mcp` endpoint, using the same Agent Service that provides the gRPC API.
@@ -700,7 +700,7 @@ The MCP server is available at the `/mcp` HTTP endpoint:
 
 ```bash
 # MCP endpoint (when --enable-mcp is used)
-http://localhost:9999/mcp/
+http://localhost:19080/mcp/
 ```
 
 ### Using with Claude Desktop
@@ -712,7 +712,7 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   "mcpServers": {
     "devloop": {
       "type": "http",
-      "url": "http://localhost:9999/mcp/"
+      "url": "http://localhost:19080/mcp/"
     }
   }
 }
@@ -909,27 +909,27 @@ Different devloop modes provide different endpoints and capabilities:
 
 #### Standalone Mode (`--mode standalone`)
 ```bash
-devloop --mode standalone --http-port 9999 --grpc-port 55555 --enable-mcp
+devloop --mode standalone --http-port 19080 --grpc-port 19051 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:9999/api/projects`
-- ✅ gRPC API: `localhost:55555` 
-- ✅ MCP via HTTP: `http://localhost:9999/mcp/` (if `--enable-mcp`)
+- ✅ HTTP API: `http://localhost:19080/api/projects`
+- ✅ gRPC API: `localhost:19051` 
+- ✅ MCP via HTTP: `http://localhost:19080/mcp/` (if `--enable-mcp`)
 - ✅ File watching and rule execution
 
 #### Gateway Mode (`--mode gateway`)
 ```bash
-devloop --mode gateway --http-port 9999 --grpc-port 55555 --enable-mcp
+devloop --mode gateway --http-port 19080 --grpc-port 19051 --enable-mcp
 ```
-- ✅ HTTP API: `http://localhost:9999/api/projects`
-- ✅ gRPC API: `localhost:55555`
+- ✅ HTTP API: `http://localhost:19080/api/projects`
+- ✅ gRPC API: `localhost:19051`
 - ✅ Agent management and coordination
-- ✅ MCP via HTTP: `http://localhost:9999/mcp/` (if `--enable-mcp`)
+- ✅ MCP via HTTP: `http://localhost:19080/mcp/` (if `--enable-mcp`)
 - ❌ No direct file watching (agents do the watching)
 - ⚠️ **Note:** Gateway mode temporarily removed, being reimplemented with grpcrouter
 
-#### Agent Mode (`--mode agent --gateway-addr localhost:55555`)
+#### Agent Mode (`--mode agent --gateway-addr localhost:19051`)
 ```bash
-devloop --mode agent --gateway-addr localhost:55555
+devloop --mode agent --gateway-addr localhost:19051
 ```
 - ❌ No HTTP API endpoints (connects to gateway)
 - ❌ No direct gRPC API (uses gateway's API)
@@ -940,10 +940,10 @@ devloop --mode agent --gateway-addr localhost:55555
 **Quick Test Commands:**
 ```bash
 # Test standalone/gateway HTTP API
-curl http://localhost:9999/api/projects
+curl http://localhost:19080/api/projects
 
 # Test MCP HTTP endpoints (when --enable-mcp)
-curl http://localhost:9999/mcp/
+curl http://localhost:19080/mcp/
 
 # Test if any devloop process is running
 ps aux | grep devloop
@@ -960,10 +960,10 @@ ps aux | grep devloop
 ps aux | grep devloop
 
 # Test MCP HTTP endpoint (when --enable-mcp is specified)
-curl http://localhost:9999/mcp/
+curl http://localhost:19080/mcp/
 
 # Test regular HTTP API endpoints
-curl http://localhost:9999/api/
+curl http://localhost:19080/api/
 
 # MCP communication:
 # - stdio: For process-launched clients (Claude Desktop)
@@ -1009,7 +1009,7 @@ devloop -c .devloop.yaml
 To connect to a gateway:
 
 ```bash
-devloop --mode agent --gateway-addr localhost:55555 -c .devloop.yaml
+devloop --mode agent --gateway-addr localhost:19051 -c .devloop.yaml
 ```
 
 ### Running in Gateway Mode
@@ -1017,10 +1017,10 @@ devloop --mode agent --gateway-addr localhost:55555 -c .devloop.yaml
 To start a central gateway:
 
 ```bash
-devloop --mode gateway --gateway-port 9999
+devloop --mode gateway --gateway-port 19080
 ```
 
-The gateway will accept connections from agents and provide a unified interface at `http://localhost:9999`.
+The gateway will accept connections from agents and provide a unified interface at `http://localhost:19080`.
 
 ### Subcommands
 
@@ -1190,7 +1190,7 @@ rules:
            patterns: ["cmd/api/**/*.go", "internal/**/*.go"]
        commands:
          - "go build -o bin/api ./cmd/api"
-         - "bin/api --port 9999"
+         - "bin/api --port 19080"
    
      - name: "Worker"
        prefix: "worker"
@@ -1355,15 +1355,15 @@ Process Management Benefits:
 - Ensure proper debouncing is working
 
 #### 5. Port Already in Use
-**Error:** `listen tcp :9999: bind: address already in use`
+**Error:** `listen tcp :19080: bind: address already in use`
 
 **Solutions:**
-- Kill existing processes: `lsof -ti:9999 | xargs kill -9`
+- Kill existing processes: `lsof -ti:19080 | xargs kill -9`
 - Use different ports for different rules
 - Implement port checking in your startup scripts:
   ```bash
   commands:
-    - "kill $(lsof -ti:9999) || true"
+    - "kill $(lsof -ti:19080) || true"
     - "npm start"
   ```
 
@@ -1396,7 +1396,7 @@ Process Management Benefits:
 **Error:** `Failed to connect to gateway`
 
 **Solutions:**
-- Verify gateway is running: `curl http://gateway-host:9999/projects`
+- Verify gateway is running: `curl http://gateway-host:19080/projects`
 - Check network connectivity: `ping gateway-host`
 - Ensure correct gateway address format: `--gateway-addr host:port` (note: it's `gateway-addr`, not `gateway-url`)
 - Check firewall rules allow connection
@@ -1645,11 +1645,11 @@ rules:
 #### 2. Microservices with Gateway
 ```bash
 # Central gateway
-devloop --mode gateway --gateway-port 9999
+devloop --mode gateway --gateway-port 19080
 
 # Each service
-cd service-a && devloop --mode agent --gateway-url localhost:9999
-cd service-b && devloop --mode agent --gateway-url localhost:9999
+cd service-a && devloop --mode agent --gateway-url localhost:19080
+cd service-b && devloop --mode agent --gateway-url localhost:19080
 ```
 
 #### 3. Development vs Production

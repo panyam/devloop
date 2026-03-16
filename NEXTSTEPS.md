@@ -287,7 +287,7 @@ Fixed 6 bugs across `agent/rule_runner.go`, `agent/graceful_shutdown_test.go`, a
 
 - ✅ **Default Port Configuration & Auto-Discovery:**
   - **Problem**: Default ports 8080 (HTTP) and 50051 (gRPC) cause frequent conflicts with other services
-  - **Solution**: Updated defaults to 9999 (HTTP) and 5555 (gRPC) - less common ports
+  - **Solution**: Updated defaults to 19080 (HTTP) and 5555 (gRPC) - less common ports
   - **Auto-Discovery**: Added `--auto-ports` flag for automatic port conflict resolution
   - **Implementation**: Port discovery logic in `runOrchestrator()` with fallback search
   - **User Experience**: `devloop` now starts without port conflicts in most scenarios

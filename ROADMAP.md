@@ -43,7 +43,7 @@ This document outlines the high-level roadmap for the `devloop` project.
   - [x] Comprehensive test coverage for all core functionality
   - [x] Cross-platform testing support
 - [x] **Port Configuration & Auto-Discovery:**
-  - [x] Updated default ports to avoid common conflicts (HTTP: 8080→9999, gRPC: 50051→5555)
+  - [x] Updated default ports to avoid common conflicts (HTTP: 8080→19080, gRPC: 50051→5555)
   - [x] Implemented automatic port discovery with --auto-ports flag
   - [x] Fast TCP bind/close port availability checking
   - [x] Fallback port search with configurable range limits

@@ -50,8 +50,8 @@ func init() {
 	// Global persistent flags
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "./.devloop.yaml", "Path to the .devloop.yaml configuration file")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
-	rootCmd.PersistentFlags().IntVar(&httpPort, "http-port", 9999, "Port for the HTTP gateway server (-1 to disable)")
-	rootCmd.PersistentFlags().IntVar(&grpcPort, "grpc-port", 5555, "Port for the gRPC server (-1 to disable)")
+	rootCmd.PersistentFlags().IntVar(&httpPort, "http-port", 19080, "Port for the HTTP gateway server (-1 to disable)")
+	rootCmd.PersistentFlags().IntVar(&grpcPort, "grpc-port", 19051, "Port for the gRPC server (-1 to disable)")
 	rootCmd.PersistentFlags().StringVar(&gatewayAddr, "gateway", "", "Host and port of the gateway to connect to")
 	rootCmd.PersistentFlags().BoolVar(&autoPorts, "auto-ports", false, "Automatically find available ports if specified ports are in use")
 }

@@ -218,7 +218,7 @@ settings:
   - Impact: Projects with exclusion patterns now work correctly
 - **Port Configuration & Auto-Discovery (Critical):** Eliminated most common startup failure cause
   - Before: Default ports 8080/50051 frequently conflicted with other services
-  - After: New defaults 9999/5555 with --auto-ports flag for automatic conflict resolution
+  - After: New defaults 19080/19051 with --auto-ports flag for automatic conflict resolution
   - Impact: `devloop` now starts reliably without manual port configuration
 - **Architecture Simplification (Critical):** Removed complexity from dual orchestrator implementations
   - Before: Complex factory pattern with V1/V2 switching
@@ -259,7 +259,7 @@ settings:
 - **Modern MCP Transport:** StreamableHTTP (2025-03-26) for stateless, serverless-ready deployment
 - **Universal Client Compatibility:** Works with Claude Code, Python SDK, and other MCP implementations
 - **Port Conflict Resolution:** Automatic port discovery eliminates common startup failures
-- **User-Friendly Defaults:** Non-conflicting default ports (9999/5555) for seamless operation
+- **User-Friendly Defaults:** Non-conflicting default ports (19080/19051) for seamless operation
 - **Modular Design:** Clear separation between file watching (Orchestrator) and API access (Agent Service)
 - **Gateway Ready:** Architecture prepared for future grpcrouter-based gateway implementation
 - **Comprehensive Testing:** 57% test coverage with dedicated LRO and integration tests
