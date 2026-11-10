@@ -1,5 +1,29 @@
 # Devloop Release Notes
 
+## [v0.1.0] - 2026-11-09
+
+devloop v0.1.0 removes the MCP server, moves the default ports, and adds dagbump, a command that cascades releases across dependent repos.
+
+### Breaking
+- The MCP server and the `--enable-mcp` flag are gone. Use the gRPC API or the HTTP gateway.
+- The default ports moved from 5555 (gRPC) and 9999 (HTTP) to 19051 and 19080. Pass `--grpc-port 5555 --http-port 9999` to keep the old ones.
+
+### Added
+- `dagbump` (`go install github.com/panyam/devloop/cmd/dagbump@v0.1.0`). It finds the release DAG across local clones of Go modules and npm packages, writes a plan file, and applies dependency updates and releases wave by wave (PR 11).
+- `disabled: true` on a rule turns it off without deleting it (issue 3).
+- `append_on_restarts` keeps a rule's log file across re-runs.
+- `shell_files` captures the environment from shell files once and passes it between a rule's commands.
+- HTTP gateway routes for the gRPC API, and structured `LogEvent` messages in `StreamLogsResponse`.
+- Log streaming fans out from one poller per rule.
+
+### Fixed
+- HTTP 404 on gateway routes, and a hang on Ctrl-C at shutdown.
+- Six bugs in `RuleRunner` and its tests, and append-mode restarts with log streaming.
+- `TerminateProcesses` only signals processes that are running.
+
+### Dependencies
+- gocurrent v0.0.10 to v0.1.2.
+
 ## v0.0.80 (2025-08-29)
 
 ### Simplified Architecture & Enhanced Status Tracking
