@@ -3,6 +3,9 @@ install:
 	date > .LAST_BUILT_AT
 	go build -o ${GOBIN}/devloop main.go
 
+install-dagbump:
+	go install ./cmd/dagbump
+
 buf:
 	buf generate
 
