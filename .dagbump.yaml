@@ -1,0 +1,9 @@
+# dagbump release config: `dagbump release` reads this instead of Make targets.
+# Fields: cmd/dagbump/README.md#per-repo-config
+modules: [.]
+# The examples' package.json files are not released with devloop.
+npm: []
+version_files: [VERSION]
+notes:
+  changelog: RELEASE_NOTES.md
+  file: none
