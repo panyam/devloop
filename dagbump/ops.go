@@ -138,7 +138,10 @@ func moduleDirOf(p *Project, file string) string {
 }
 
 // goEnv lets the go command see tags pushed moments ago: the projects'
-// module prefixes skip the proxy and checksum database.
+// module prefixes skip the proxy and checksum database. GOWORK=off makes the
+// build check use the go.mod requires rather than a committed go.work, since a
+// release has to build against released deps, and workspace mode refuses
+// -mod=mod.
 func (g *Graph) goEnv() []string {
 	prefixes := map[string]bool{}
 	for _, p := range g.Projects {
@@ -153,7 +156,7 @@ func (g *Graph) goEnv() []string {
 	if priv := os.Getenv("GOPRIVATE"); priv != "" {
 		roots = append([]string{priv}, roots...)
 	}
-	return []string{"GOPRIVATE=" + strings.Join(roots, ","), "GOFLAGS=-mod=mod"}
+	return []string{"GOPRIVATE=" + strings.Join(roots, ","), "GOFLAGS=-mod=mod", "GOWORK=off"}
 }
 
 // UpdateOptions controls Update.
