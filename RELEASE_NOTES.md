@@ -1,5 +1,20 @@
 # Devloop Release Notes
 
+## [v0.1.4] - 2026-11-21
+
+devloop v0.1.4 fixes a dagbump release failure on followers whose replace names a version, and builds with go1.26.11.
+
+### Fixed
+- `dagbump release` stopped at `go mod tidy` when a follower had `replace M vOld => ../`. That replace only covers vOld, so once the release pinned M at the new version, tidy looked up the untagged version online. dagbump now rewrites the replace without its version, keeping the same folder (PR 20, issue 19).
+- `dagbump update` waits for the published version when a local replace names an older one, since the replace no longer applies (PR 20).
+
+### Changed
+- `dagbump list` warns separately about a local replace that names a version, because it stops applying once the require moves past it (PR 20).
+- `go.mod` sets `toolchain go1.26.11`, so CI and govulncheck use a patched standard library. The minimum Go version stays 1.26.0 (PR 18).
+
+### Dependencies
+- gocurrent v0.1.2 to v0.1.3 (PR 21).
+
 ## [v0.1.3] - 2026-11-21
 
 devloop v0.1.3 fixes `shell_files` on Linux and three ways shutdown could hang or leave processes behind.
