@@ -11,6 +11,16 @@ import (
 	"testing"
 )
 
+// TestMain gives git an identity, so the commits and annotated tags that
+// dagbump makes in test repos work on machines with no git config, like CI.
+func TestMain(m *testing.M) {
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+		"GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"} {
+		os.Setenv(k, v)
+	}
+	os.Exit(m.Run())
+}
+
 func TestRemoteID(t *testing.T) {
 	for in, want := range map[string]string{
 		"git@github.com:panyam/mcpkit.git":      "github.com/panyam/mcpkit",
