@@ -1,5 +1,5 @@
 # Multi-stage build for Go API
-FROM golang:1.20-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # Install git for go mod download
 RUN apk add --no-cache git
