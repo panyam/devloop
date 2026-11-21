@@ -21,6 +21,7 @@ type Watcher struct {
 	// File watching
 	fsWatcher   *fsnotify.Watcher
 	watchedDirs map[string]bool
+	stopping    bool
 	mutex       sync.RWMutex
 
 	// Event handling
@@ -61,6 +62,7 @@ func (w *Watcher) Start() error {
 	// Setup file watching based on rule patterns
 	if err := w.setupFileWatching(); err != nil {
 		w.fsWatcher.Close()
+		w.fsWatcher = nil
 		return fmt.Errorf("failed to setup file watching for rule %q: %w", w.rule.Name, err)
 	}
 
@@ -77,15 +79,20 @@ func (w *Watcher) Start() error {
 // Stop stops the file watcher
 func (w *Watcher) Stop() error {
 	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	if w.fsWatcher == nil {
+	if w.fsWatcher == nil || w.stopping {
+		w.mutex.Unlock()
 		return nil // Already stopped
 	}
+	w.stopping = true
+	w.mutex.Unlock()
 
-	// Signal stop and wait for goroutine to finish
+	// Wait without holding the mutex: the event goroutine takes it to
+	// handle directory creates and removes.
 	close(w.stopChan)
 	<-w.stoppedChan
+
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 
 	// Close the fsnotify watcher
 	err := w.fsWatcher.Close()
