@@ -47,7 +47,7 @@ devloop --mode agent --gateway-addr localhost:19051 -c project-b/.devloop.yaml
 
 Before installing devloop, ensure you have:
 
-- **Go 1.20 or higher** installed ([Download Go](https://go.dev/dl/))
+- **Go 1.26 or higher** installed ([Download Go](https://go.dev/dl/))
 - **Git** (for version control operations)
 - **$GOPATH/bin** added to your system's PATH
 

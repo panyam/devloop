@@ -140,7 +140,7 @@ rules:
       - "$build-proto"               # References settings.commands
 ```
 
-Shell file env vars are captured once before the command loop (avoiding re-execution of non-idempotent scripts like token fetches). Env vars cascade between sequential commands by default (`reset_env: false`). Shell files are still sourced per-command for functions/aliases. The `reset_env` flag can be set globally or per-rule (rule overrides global).
+Shell file env vars are captured once before the command loop (avoiding re-execution of non-idempotent scripts like token fetches). Env vars cascade between sequential commands by default (`reset_env: false`). Shell files are still sourced per-command for functions/aliases. Shell files are sourced with `.` under `sh`, which is dash on Debian and Ubuntu, so they must use POSIX syntax. The `reset_env` flag can be set globally or per-rule (rule overrides global).
 
 **Global Defaults:**
 ```yaml

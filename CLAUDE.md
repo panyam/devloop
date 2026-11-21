@@ -16,7 +16,21 @@
 - Proto files are automatically regenerated when changed - DO NOT run buf generate commands.
 
 ## Test Instructions
-- Run tests with `make test`
+- Run tests with `make test`. CI (`.github/workflows/test.yml`) runs the same target on Linux.
+- CI runs on Linux, where `sh` is dash and file watching uses inotify. Shell syntax, process
+  handling and watcher timing can pass on macOS and fail there (PR 14). To reproduce a Linux-only
+  failure, run the tests in a `golang:1.26` container as a non-root user with no git config.
+- Tests that need git commits must set a git identity themselves. CI has none (see
+  `dagbump/dagbump_test.go` TestMain).
+
+## Releases
+- Cut releases with `dagbump release --version vX.Y.Z --notes notes.md`, which follows
+  `.dagbump.yaml`: it bumps `VERSION`, adds the notes to `RELEASE_NOTES.md`, tags, pushes and
+  creates the GitHub release. Add `--dry-run` first.
+- `make install` rewrites the tracked `.LAST_BUILT_AT`, and dagbump refuses to release with
+  uncommitted changes. Restore the file with `git checkout .LAST_BUILT_AT` before releasing.
+- `go.mod` pins `toolchain go1.26.x` so CI and govulncheck use a patched standard library. Raise
+  it when vulncheck reports standard library advisories (issue 17).
 
 ## Summary instructions
 
