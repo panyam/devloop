@@ -1,5 +1,5 @@
 
-install:
+install: install-dagbump
 	date > .LAST_BUILT_AT
 	go build -o ${GOBIN}/devloop main.go
 
