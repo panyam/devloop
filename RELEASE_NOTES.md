@@ -1,5 +1,15 @@
 # Devloop Release Notes
 
+## [v0.1.1] - 2026-11-21
+
+devloop v0.1.1 adds three views to `dagbump list`, and `make install` now builds dagbump alongside devloop.
+
+### Added
+- `dagbump list --pretty` draws a boxed table sized to the terminal. Each warning wraps inside the notes cell, so long warnings no longer break the table (PR 12).
+- `dagbump list --html FILE` writes a self-contained page with the DAG in release waves. Hovering a unit traces its deps and dependents. Clicking it shows lagging deps, unreleased commits and warnings. Below the graph is a sortable, filterable table (PR 12).
+- `dagbump list --svg FILE` writes the graph alone. `--open` opens the written file (PR 12).
+- `make install` installs dagbump too.
+
 ## [v0.1.0] - 2026-11-09
 
 devloop v0.1.0 removes the MCP server, moves the default ports, and adds dagbump, a command that cascades releases across dependent repos.
