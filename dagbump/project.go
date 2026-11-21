@@ -24,6 +24,9 @@ type GoModule struct {
 	Requires  map[string]string // module path -> required version
 	// LocalReplaces maps a replaced module path to the local folder it points at.
 	LocalReplaces map[string]string
+	// ReplaceVersions holds the version a local replace names on its left
+	// side (replace M v1 => dir), which is the only version it applies to.
+	ReplaceVersions map[string]string
 	// Published is true when the module has at least one tag of its own.
 	Published bool
 }
@@ -542,11 +545,12 @@ func (p *Project) loadGoMod(rel string) (*GoModule, error) {
 		dir = ""
 	}
 	m := &GoModule{
-		Path:          f.Module.Mod.Path,
-		Dir:           dir,
-		TagPrefix:     dir,
-		Requires:      map[string]string{},
-		LocalReplaces: map[string]string{},
+		Path:            f.Module.Mod.Path,
+		Dir:             dir,
+		TagPrefix:       dir,
+		Requires:        map[string]string{},
+		LocalReplaces:   map[string]string{},
+		ReplaceVersions: map[string]string{},
 	}
 	if base := path.Base(dir); dir != "" && majorDirRe.MatchString(base) && strings.HasSuffix(m.Path, "/"+base) {
 		m.TagPrefix = path.Dir(dir)
@@ -560,6 +564,9 @@ func (p *Project) loadGoMod(rel string) (*GoModule, error) {
 	for _, r := range f.Replace {
 		if r.New.Version == "" {
 			m.LocalReplaces[r.Old.Path] = r.New.Path
+			if r.Old.Version != "" {
+				m.ReplaceVersions[r.Old.Path] = r.Old.Version
+			}
 		}
 	}
 	m.Published = len(p.tags[m.TagPrefix]) > 0

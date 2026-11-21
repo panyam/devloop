@@ -218,7 +218,9 @@ dependency lags, or when nothing is unreleased. With a `.dagbump.yaml` it runs t
 
 1. Write `V` to the version files and to each package.json in the unit.
 2. Pin the tagged modules to `V` on each other, adding an in-repo replace where one is missing,
-   so `go mod tidy` resolves `V` before it exists. Followers move per `pin_followers`. Tidy.
+   so `go mod tidy` resolves `V` before it exists. A replace that names a version
+   (`replace M v0.1.0 => ../`) would stop applying at `V`, so dagbump rewrites it without the
+   version. Followers move per `pin_followers`. Tidy.
 3. Run the `pre_tag` hooks and commit `release: V`.
 4. With `strip_replaces`, commit the tree without in-repo replaces.
 5. Tag. The marker tag goes first: the root tag for the main unit, and it carries the notes.
