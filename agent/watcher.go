@@ -391,8 +391,13 @@ func (w *Watcher) handleFileEvent(event fsnotify.Event) {
 		w.mutex.Unlock()
 	}
 
+	// The rule's event loop may have exited already, so give up on stop
+	// rather than block Stop() forever.
 	if w.eventChan != nil {
-		w.eventChan <- event.Name
+		select {
+		case w.eventChan <- event.Name:
+		case <-w.stopChan:
+		}
 	}
 }
 
