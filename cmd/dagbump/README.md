@@ -4,7 +4,7 @@ You release goutils, and now servicekit, oneauth, mcpkit, chakra and jaala each 
 version, in that order. dagbump works out that order and runs the mechanical steps.
 
 ```
-make install-dagbump        # or: go install github.com/panyam/devloop/cmd/dagbump@latest
+make install                # devloop and dagbump; or: go install github.com/panyam/devloop/cmd/dagbump@latest
 ```
 
 ## The plan file
