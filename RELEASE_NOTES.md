@@ -1,5 +1,20 @@
 # Devloop Release Notes
 
+## [v0.1.2] - 2026-11-21
+
+devloop v0.1.2 updates gRPC to fix open security advisories. Building devloop now requires Go 1.26.
+
+### Security
+- grpc v1.79.1 to v1.85.0. This fixes the `:path` authorization bypass, the HTTP/2 DATA frame memory exhaustion and the xDS advisories (PR 13).
+- x/net v0.48.0 to v0.63.0, for the HTML parser DoS (PR 13).
+- The examples pick up fixed versions of x/crypto, x/net, protobuf, gin-contrib/cors, requests, vite and vitest (PR 13).
+
+### Changed
+- The `go` directive moves from 1.24 to 1.26, because grpc v1.85.0 requires it.
+
+### Fixed
+- `TestGracefulShutdown` picks free ports instead of 8888 and 50051 (PR 13).
+
 ## [v0.1.1] - 2026-11-21
 
 devloop v0.1.1 adds three views to `dagbump list`, and `make install` now builds dagbump alongside devloop.
