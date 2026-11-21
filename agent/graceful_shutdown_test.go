@@ -46,8 +46,11 @@ func TestGracefulShutdown(t *testing.T) {
 		triggerFilePath := filepath.Join(tmpDir, "trigger.txt")
 		heartbeatFilePath := filepath.Join(tmpDir, "heartbeat.txt")
 
-		httpPort := "8888"
-		grpcPort := "50051"
+		hp, err := testhelpers.FindAvailablePort()
+		assert.NoError(t, err)
+		gp, err := testhelpers.FindAvailablePort()
+		assert.NoError(t, err)
+		httpPort, grpcPort := fmt.Sprint(hp), fmt.Sprint(gp)
 		multiYamlContent := fmt.Sprintf(`
 rules:
   - name: "Heartbeat Rule"
