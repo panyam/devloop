@@ -557,11 +557,22 @@ func (r *RuleRunner) executeNow(triggerType string, terminate bool) error {
 				cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 			}
 
+			// Stop() sets stopped before it terminates processes under
+			// commandsMutex, so a command either sees stopped and never starts,
+			// or is registered in time for Stop() to kill it.
+			r.commandsMutex.Lock()
+			if r.stopped.Load() {
+				r.commandsMutex.Unlock()
+				return
+			}
 			if err = cmd.Start(); err != nil {
+				r.commandsMutex.Unlock()
 				r.logDevloop("Command %q failed to start for rule: %v", cmdStr, err)
 				r.updateStatus(false, "FAILED", err.Error())
 				return
 			}
+			r.runningCommands = append(r.runningCommands, cmd)
+			r.commandsMutex.Unlock()
 
 			currentCmds = append(currentCmds, cmd)
 

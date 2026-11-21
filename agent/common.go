@@ -128,7 +128,7 @@ func expandCommandAliases(cmd string, commands map[string]string) string {
 	return result.String()
 }
 
-// buildSourcePrefix builds a "source X && source Y && " prefix string from
+// buildSourcePrefix builds a ". X && . Y && " prefix string from
 // global and rule-level shell files. Global files resolve relative to configDir,
 // rule files resolve relative to workDir.
 func buildSourcePrefix(globalFiles, ruleFiles []string, workDir, configDir string) string {
@@ -142,14 +142,14 @@ func buildSourcePrefix(globalFiles, ruleFiles []string, workDir, configDir strin
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(configDir, path)
 		}
-		parts = append(parts, "source "+path)
+		parts = append(parts, ". "+path)
 	}
 	for _, f := range ruleFiles {
 		path := f
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(workDir, path)
 		}
-		parts = append(parts, "source "+path)
+		parts = append(parts, ". "+path)
 	}
 
 	return strings.Join(parts, " && ") + " && "

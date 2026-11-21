@@ -100,12 +100,12 @@ func TestBuildSourcePrefix_NoFiles(t *testing.T) {
 
 func TestBuildSourcePrefix_GlobalOnly(t *testing.T) {
 	result := buildSourcePrefix([]string{"./env.sh"}, nil, "/work", "/config")
-	assert.Equal(t, "source /config/env.sh && ", result)
+	assert.Equal(t, ". /config/env.sh && ", result)
 }
 
 func TestBuildSourcePrefix_RuleOnly(t *testing.T) {
 	result := buildSourcePrefix(nil, []string{"./local.sh"}, "/work", "/config")
-	assert.Equal(t, "source /work/local.sh && ", result)
+	assert.Equal(t, ". /work/local.sh && ", result)
 }
 
 func TestBuildSourcePrefix_GlobalAndRule(t *testing.T) {
@@ -115,22 +115,22 @@ func TestBuildSourcePrefix_GlobalAndRule(t *testing.T) {
 		"/work",
 		"/config",
 	)
-	assert.Equal(t, "source /config/env.sh && source /config/aliases.sh && source /work/proto-env.sh && ", result)
+	assert.Equal(t, ". /config/env.sh && . /config/aliases.sh && . /work/proto-env.sh && ", result)
 }
 
 func TestBuildSourcePrefix_AbsolutePaths(t *testing.T) {
 	result := buildSourcePrefix([]string{"/abs/path/env.sh"}, nil, "/work", "/config")
-	assert.Equal(t, "source /abs/path/env.sh && ", result)
+	assert.Equal(t, ". /abs/path/env.sh && ", result)
 }
 
 func TestBuildSourcePrefix_RelativeGlobalResolvesToConfigDir(t *testing.T) {
 	result := buildSourcePrefix([]string{"scripts/setup.sh"}, nil, "/work", "/home/user/project")
-	assert.Equal(t, "source /home/user/project/scripts/setup.sh && ", result)
+	assert.Equal(t, ". /home/user/project/scripts/setup.sh && ", result)
 }
 
 func TestBuildSourcePrefix_RelativeRuleResolvesToWorkDir(t *testing.T) {
 	result := buildSourcePrefix(nil, []string{"scripts/setup.sh"}, "/home/user/subdir", "/config")
-	assert.Equal(t, "source /home/user/subdir/scripts/setup.sh && ", result)
+	assert.Equal(t, ". /home/user/subdir/scripts/setup.sh && ", result)
 }
 
 // --- prepareCommand tests ---
@@ -161,7 +161,7 @@ func TestPrepareCommand_WithShellFiles(t *testing.T) {
 		WorkDir: "/work",
 	}
 	result := prepareCommand("echo hello", settings, rule, "/config")
-	assert.Equal(t, "source /config/env.sh && echo hello", result)
+	assert.Equal(t, ". /config/env.sh && echo hello", result)
 }
 
 func TestPrepareCommand_WithShellFilesAndAliases(t *testing.T) {
@@ -176,7 +176,7 @@ func TestPrepareCommand_WithShellFilesAndAliases(t *testing.T) {
 		WorkDir:    "/work",
 	}
 	result := prepareCommand("$my-build", settings, rule, "/config")
-	assert.Equal(t, "source /config/env.sh && source /work/local.sh && make all", result)
+	assert.Equal(t, ". /config/env.sh && . /work/local.sh && make all", result)
 }
 
 func TestPrepareCommand_WorkDirDefaultsToConfigDir(t *testing.T) {
@@ -186,7 +186,7 @@ func TestPrepareCommand_WorkDirDefaultsToConfigDir(t *testing.T) {
 		// WorkDir not set - should default to configDir
 	}
 	result := prepareCommand("echo hi", settings, rule, "/config")
-	assert.Equal(t, "source /config/local.sh && echo hi", result)
+	assert.Equal(t, ". /config/local.sh && echo hi", result)
 }
 
 // --- Config integration tests ---
@@ -264,7 +264,7 @@ myfunc() { echo "function_output"; }
 	}
 
 	prepared := prepareCommand("echo $MY_VAR", settings, rule, tmpDir)
-	expected := "source " + filepath.Join(tmpDir, "env.sh") + " && echo $MY_VAR"
+	expected := ". " + filepath.Join(tmpDir, "env.sh") + " && echo $MY_VAR"
 	assert.Equal(t, expected, prepared)
 
 	// Actually run the command and verify output
