@@ -1,5 +1,21 @@
 # Devloop Release Notes
 
+## [v0.1.3] - 2026-11-21
+
+devloop v0.1.3 fixes `shell_files` on Linux and three ways shutdown could hang or leave processes behind.
+
+### Fixed
+- `shell_files` failed on Linux with exit 127. The source prefix used `source`, which `sh` lacks on Debian and Ubuntu. It now uses `.` (PR 14).
+- Shutdown could hang when a file event arrived while devloop was stopping. The watcher blocked sending the event after the rule's event loop had exited (PR 14).
+- Shutdown could deadlock when a matched file was removed, or a directory created, while the watcher was stopping (PR 16).
+- A rule could start its next command after shutdown began, leaving an orphaned process (PR 14).
+
+### Added
+- CI runs `make test` on pushes and PRs, and govulncheck runs weekly and on each tag (PR 14).
+
+### Dependencies
+- The vue-components example moves to vitest ^4.1.11 (PR 15).
+
 ## [v0.1.2] - 2026-11-21
 
 devloop v0.1.2 updates gRPC to fix open security advisories. Building devloop now requires Go 1.26.
