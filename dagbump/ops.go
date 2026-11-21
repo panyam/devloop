@@ -277,7 +277,7 @@ func (g *Graph) waitAvailable(edges []*Edge, r *Runner, wait time.Duration) erro
 	for _, e := range edges {
 		switch e.Kind {
 		case "go":
-			if e.LocalReplace != "" {
+			if e.ResolvesLocally() {
 				continue // tidy resolves it from the local folder
 			}
 			pending["go "+e.Module+"@"+e.Latest] = [2]string{"go", e.Module + "@" + e.Latest}
@@ -704,8 +704,11 @@ func (g *Graph) releaseNative(u *Unit, r *Runner, rp *ReleasePlan, notes string,
 				}
 			}
 			edits = append(edits, "-require="+req+"@"+v)
-			if _, has := m.LocalReplaces[req]; !has {
+			if dir, has := m.LocalReplaces[req]; !has {
 				edits = append(edits, "-replace="+req+"="+relDir(m.Dir, dep.Dir))
+			} else if old := m.ReplaceVersions[req]; old != "" {
+				// replace M vOld => dir stops applying once M is pinned at v.
+				edits = append(edits, "-dropreplace="+req+"@"+old, "-replace="+req+"="+dir)
 			}
 		}
 		if len(edits) > 0 {

@@ -279,6 +279,63 @@ func TestReleaseLockstep(t *testing.T) {
 	}
 }
 
+// A follower whose replace names the old version: the release pin must not
+// leave tidy looking up the new, untagged version (issue 19).
+func TestReleaseVersionedReplace(t *testing.T) {
+	root := t.TempDir()
+	files := kitFiles("modules: [., ext/*]\nnpm: []\n")
+	files["tests/go.mod"] = gomod("example.com/kit/tests", "example.com/kit v0.1.0") + "\nreplace example.com/kit v0.1.0 => ../\n"
+	files["tests/t.go"] = "package tests\n\nimport _ \"example.com/kit\"\n"
+	dir := repo(t, root, "kit", files, "v0.1.0", "ext/a/v0.1.0", "ext/b/v0.1.0")
+	m := manifestFor(t, root)
+	commitFile(t, dir, "kit2.go", "package kit\n")
+	g, err := BuildGraph(m)
+	must(t, err)
+	u, _ := g.Get("kit")
+	out := &bytes.Buffer{}
+	if _, err := g.Release(u, &Runner{Out: out}, ReleaseOptions{Bump: "minor", NoPush: true}); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	gm := gitOut(t, dir, "show", "v0.2.0:tests/go.mod")
+	if !strings.Contains(gm, "example.com/kit v0.2.0") || !strings.Contains(gm, "replace example.com/kit => ../") {
+		t.Errorf("tests/go.mod at the tag:\n%s", gm)
+	}
+}
+
+func TestVersionedReplaceWarning(t *testing.T) {
+	root := t.TempDir()
+	repo(t, root, "base", map[string]string{"go.mod": gomod("example.com/base")}, "v0.1.0", "v0.2.0")
+	repo(t, root, "app", map[string]string{"go.mod": gomod("example.com/app", "example.com/base v0.1.0") +
+		"\nreplace example.com/base v0.1.0 => ../../base/main\n"})
+	g, err := BuildGraph(manifestFor(t, root))
+	must(t, err)
+	warnings := strings.Join(g.Project("app").Warnings, "\n")
+	if !strings.Contains(warnings, "go.mod replaces base with a local folder only at v0.1.0") {
+		t.Errorf("warnings:\n%s", warnings)
+	}
+	u, _ := g.Get("app")
+	if e := g.Deps[u][0]; e.ResolvesLocally() {
+		t.Errorf("a replace at v0.1.0 should not cover the move to %s", e.Latest)
+	}
+}
+
+func TestResolvesLocally(t *testing.T) {
+	for _, c := range []struct {
+		replace, version string
+		want             bool
+	}{
+		{"", "", false},
+		{"../base", "", true},
+		{"../base", "v0.2.0", true},
+		{"../base", "v0.1.0", false},
+	} {
+		e := &Edge{LocalReplace: c.replace, ReplaceVersion: c.version, Latest: "v0.2.0"}
+		if got := e.ResolvesLocally(); got != c.want {
+			t.Errorf("replace %q at %q: got %v", c.replace, c.version, got)
+		}
+	}
+}
+
 func TestReleaseChangedAndOnly(t *testing.T) {
 	m, dir := kitRepo(t, "versioning: changed\nmodules: [., ext/*]\n")
 	commitFile(t, dir, "ext/a/doc.go", "package a\n")

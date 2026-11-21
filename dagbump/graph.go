@@ -28,6 +28,16 @@ type Edge struct {
 	// LocalReplace is set when the requiring go.mod replaces the dependency
 	// with a local folder.
 	LocalReplace string
+	// ReplaceVersion is set when that replace names a version on its left
+	// side, so it only applies while the requirement stays at that version.
+	ReplaceVersion string
+}
+
+// ResolvesLocally reports whether a local replace still covers the edge once
+// its requirement moves to Latest. A replace that names a version covers
+// only that version.
+func (e *Edge) ResolvesLocally() bool {
+	return e.LocalReplace != "" && (e.ReplaceVersion == "" || e.ReplaceVersion == e.Latest)
 }
 
 // Graph is the loaded DAG. Its nodes are units.
@@ -110,6 +120,7 @@ func NewGraph(m *Manifest, projects []*Project) (*Graph, error) {
 
 	for _, p := range projects {
 		replaced := map[string]map[string]bool{} // dependency project -> files pointing it at a local folder
+		pinned := map[string]map[string]string{} // dependency project -> file -> version its replace names
 		for _, u := range p.Units {
 			tagged := map[*GoModule]bool{}
 			for _, m := range u.Modules {
@@ -123,17 +134,25 @@ func NewGraph(m *Manifest, projects []*Project) (*Graph, error) {
 					}
 					e := &Edge{
 						From: u, To: o.u, Kind: "go", Module: req, FromDir: mod.Dir,
-						Required:     mod.Requires[req],
-						Latest:       p2latest(o.u, o.m),
-						Propagates:   tagged[mod],
-						LocalReplace: mod.LocalReplaces[req],
+						Required:       mod.Requires[req],
+						Latest:         p2latest(o.u, o.m),
+						Propagates:     tagged[mod],
+						LocalReplace:   mod.LocalReplaces[req],
+						ReplaceVersion: mod.ReplaceVersions[req],
 					}
 					e.Lagging = e.Latest != "" && semver.Compare(e.Latest, e.Required) > 0
 					if e.LocalReplace != "" && e.Propagates && o.u.Project != p {
-						if replaced[o.u.Project.Name] == nil {
-							replaced[o.u.Project.Name] = map[string]bool{}
+						if e.ReplaceVersion != "" {
+							if pinned[o.u.Project.Name] == nil {
+								pinned[o.u.Project.Name] = map[string]string{}
+							}
+							pinned[o.u.Project.Name][modFile(mod.Dir)] = e.ReplaceVersion
+						} else {
+							if replaced[o.u.Project.Name] == nil {
+								replaced[o.u.Project.Name] = map[string]bool{}
+							}
+							replaced[o.u.Project.Name][modFile(mod.Dir)] = true
 						}
-						replaced[o.u.Project.Name][modFile(mod.Dir)] = true
 					}
 					g.add(e)
 				}
@@ -175,6 +194,11 @@ func NewGraph(m *Manifest, projects []*Project) (*Graph, error) {
 				where = fmt.Sprintf("%s and %d more", files[0], len(files)-1)
 			}
 			p.Warnings = append(p.Warnings, fmt.Sprintf("%s replaces %s with a local folder; builds use that clone, not the release", where, name))
+		}
+		for _, name := range sortedKeys(pinned) {
+			for _, file := range sortedKeys(pinned[name]) {
+				p.Warnings = append(p.Warnings, fmt.Sprintf("%s replaces %s with a local folder only at %s; once the require moves past it, builds use the release", file, name, pinned[name][file]))
+			}
 		}
 	}
 	for _, p := range projects {
