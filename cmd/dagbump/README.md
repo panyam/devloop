@@ -181,7 +181,7 @@ module of the unit that requires it. The unit's other modules keep their version
 | `init [project] [--write]` | Propose a `.dagbump.yaml` from the repo's tags and files |
 | `add <path>` / `remove <name>` | Edit the manifest by hand |
 | `link <dependent> <dependency>` / `unlink` | Add or drop a manual edge |
-| `list` | Version, unreleased commits, lagging deps and warnings per project |
+| `list [--pretty] [--html f] [--svg f] [--open]` | Version, unreleased commits, lagging deps and warnings per project. `--pretty` draws a boxed table and wraps the notes inside their cell. `--html` writes a self-contained page with the DAG in waves and a sortable table. Hover a unit to trace its deps, click it for its commits and lagging deps. `--svg` writes the graph alone |
 | `graph [--dot]` | The whole DAG in release waves |
 | `plan <seeds> \| --changed [--exclude x] [--write]` | The seeds plus everything downstream, in waves, with an action each. A project name seeds all its units. `--write` saves `dagbump.plan` |
 | `notes [plan] --agent cmd` | Fill bump and notes in the plan file through an agent |

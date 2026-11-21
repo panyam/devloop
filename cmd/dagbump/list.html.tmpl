@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dagbump list</title>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f6f7f9; --line: #e3e5e9; --text: #111827; --muted: #6b7280;
+    --accent: #2563eb; --lag: #b45309; --lag-bg: #fef3c7; --err: #dc2626; --err-bg: #fee2e2;
+    --unrel: #1d4ed8; --unrel-bg: #dbeafe; --sel: #eff6ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --panel: #181b21; --line: #2a2e37; --text: #e5e7eb; --muted: #9ca3af;
+      --accent: #60a5fa; --lag: #fbbf24; --lag-bg: #3a2a0c; --err: #f87171; --err-bg: #3b1515;
+      --unrel: #93c5fd; --unrel-bg: #172554; --sel: #1e2533;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap;
+    gap: 12px 24px; align-items: center; }
+  header h1 { font-size: 15px; margin: 0; }
+  header .src { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+  .stats { display: flex; gap: 14px; color: var(--muted); }
+  .stats b { color: var(--text); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-left: auto; }
+  .controls input[type=search] { padding: 5px 9px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); width: 200px; }
+  .controls label { color: var(--muted); user-select: none; cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  #graph { overflow: auto; border-right: 1px solid var(--line); max-height: 72vh; padding: 4px; }
+  #graph .node { cursor: pointer; }
+  #graph .node.sel rect.box { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
+  #graph.focus .node:not(.hl) { opacity: .2; }
+  #graph.focus .edge:not(.hl) { opacity: .04; }
+  #graph.focus .edge.hl { opacity: 1; stroke-width: 2; }
+  #graph .node.hidden, #graph .edge.hidden { display: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 20px; color: var(--muted); font-size: 12px;
+    border-bottom: 1px solid var(--line); }
+  .legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+  aside { padding: 16px 18px; max-height: 72vh; overflow: auto; }
+  aside h2 { margin: 0 0 2px; font-size: 16px; }
+  aside .sub { color: var(--muted); margin-bottom: 12px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+  aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 16px 0 6px; }
+  aside ul { margin: 0; padding-left: 16px; }
+  aside li { margin: 3px 0; overflow-wrap: anywhere; }
+  aside .empty { color: var(--muted); }
+  code, .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+  .chip { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 11px; line-height: 18px; margin-right: 4px; }
+  .chip.lag { background: var(--lag-bg); color: var(--lag); }
+  .chip.unrel { background: var(--unrel-bg); color: var(--unrel); }
+  .chip.err { background: var(--err-bg); color: var(--err); }
+  .chip.plain { background: var(--panel); color: var(--muted); }
+  a.unit { color: var(--accent); text-decoration: none; cursor: pointer; }
+  a.unit:hover { text-decoration: underline; }
+  .tablewrap { border-top: 1px solid var(--line); overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { position: sticky; top: 0; background: var(--panel); font-weight: 600; font-size: 12px; cursor: pointer;
+    white-space: nowrap; user-select: none; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.name { font-weight: 600; white-space: nowrap; }
+  td.notes { color: var(--muted); min-width: 320px; }
+  td.notes div + div { margin-top: 3px; }
+  tr { cursor: pointer; }
+  tr:hover td { background: var(--panel); }
+  tr.sel td { background: var(--sel); }
+  tr.hidden { display: none; }
+  td .err { color: var(--err); }
+  td.lag { color: var(--lag); font-weight: 600; }
+  td.unrel { color: var(--unrel); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>dagbump list</h1>
+  <span class="src">{{.Manifest}}</span>
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Filter units…">
+    <label><input type="checkbox" id="f-lag"> lagging</label>
+    <label><input type="checkbox" id="f-unrel"> unreleased</label>
+    <label><input type="checkbox" id="f-warn"> warnings</label>
+  </div>
+</header>
+<div class="legend">
+  <span><i style="border-color:#9ca3af"></i>dependency (arrow points at the dependent)</span>
+  <span><i style="border-color:#dc2626"></i>lagging: requires an older version than the latest</span>
+  <span><i style="border-color:#9ca3af;border-top-style:dashed"></i>does not force a release</span>
+  <span>dashed box: app · amber box: has lagging deps · hover to trace, click for details</span>
+</div>
+<main>
+  <div id="graph">{{.SVG}}</div>
+  <aside id="detail"><p class="empty">Click a unit in the graph or the table.</p></aside>
+</main>
+<div class="tablewrap">
+  <table id="tbl">
+    <thead><tr>
+      <th data-k="name">Name</th><th data-k="kind">Kind</th><th data-k="version">Version</th>
+      <th data-k="mods" class="num">Mods</th><th data-k="npm" class="num">Npm</th>
+      <th data-k="unrel" class="num">Unrel</th><th data-k="lag" class="num">Lag</th>
+      <th data-k="cfg">Cfg</th><th data-k="notes">Notes</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+<script>
+const DATA = {{.Data}};
+const units = DATA.units, layout = DATA.layout;
+for (const u of units)
+  for (const k of ['tagged_modules', 'npm_packages', 'unreleased', 'lagging', 'depends_on', 'warnings']) u[k] ||= [];
+const byName = Object.fromEntries(units.map(u => [u.name, u]));
+const graph = document.getElementById('graph');
+const detail = document.getElementById('detail');
+const tbody = document.querySelector('#tbl tbody');
+
+const deps = {}, users = {};
+for (const e of layout.edges || []) {
+  (deps[e.from] ||= []).push(e.to);
+  (users[e.to] ||= []).push(e.from);
+}
+function closure(start, adj) {
+  const seen = new Set([start]), stack = [start];
+  while (stack.length) for (const n of adj[stack.pop()] || []) if (!seen.has(n)) { seen.add(n); stack.push(n); }
+  return seen;
+}
+const h = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'class' ? el.className = v : el.setAttribute(k, v);
+  for (const c of kids.flat()) if (c != null) el.append(c);
+  return el;
+};
+
+// Stats
+const count = f => units.filter(f).length;
+document.getElementById('stats').innerHTML =
+  `<span><b>${units.length}</b> units</span>` +
+  `<span><b>${count(u => u.kind === 'lib')}</b> libs</span>` +
+  `<span><b>${count(u => u.unreleased.length)}</b> with unreleased</span>` +
+  `<span><b>${count(u => u.lagging.length)}</b> lagging</span>` +
+  `<span><b>${layout.waves}</b> waves</span>`;
+
+// Hover tracing
+function trace(name) {
+  if (!name) { graph.classList.remove('focus'); graph.querySelectorAll('.hl').forEach(n => n.classList.remove('hl')); return; }
+  const up = closure(name, deps), down = closure(name, users), all = new Set([...up, ...down]);
+  graph.classList.add('focus');
+  graph.querySelectorAll('.node').forEach(n => n.classList.toggle('hl', all.has(n.dataset.name)));
+  graph.querySelectorAll('.edge').forEach(p => {
+    const f = p.dataset.from, t = p.dataset.to;
+    p.classList.toggle('hl', (up.has(f) && up.has(t)) || (down.has(f) && down.has(t)));
+  });
+}
+graph.addEventListener('mouseover', e => { const g = e.target.closest('.node'); if (g) trace(g.dataset.name); });
+graph.addEventListener('mouseout', e => { if (e.target.closest('.node')) trace(selected); });
+graph.addEventListener('click', e => { const g = e.target.closest('.node'); if (g) select(g.dataset.name, false); });
+
+// Details
+let selected = null;
+const unitLink = n => { const a = h('a', {class: 'unit'}, n); a.onclick = () => select(n, true); return a; };
+function list(items, render, empty) {
+  if (!items || !items.length) return h('p', {class: 'empty'}, empty);
+  return h('ul', {}, items.map(i => h('li', {}, render(i))));
+}
+function select(name, scroll) {
+  selected = name;
+  const u = byName[name];
+  graph.querySelectorAll('.node').forEach(n => n.classList.toggle('sel', n.dataset.name === name));
+  tbody.querySelectorAll('tr').forEach(r => r.classList.toggle('sel', r.dataset.name === name));
+  trace(name);
+  if (scroll) {
+    const g = graph.querySelector(`.node[data-name="${CSS.escape(name)}"]`);
+    if (g) g.scrollIntoView({block: 'center', inline: 'center', behavior: 'smooth'});
+  }
+  const chips = [];
+  if (u.error) chips.push(h('span', {class: 'chip err'}, 'error'));
+  if (u.unreleased.length) chips.push(h('span', {class: 'chip unrel'}, `${u.unreleased.length} unreleased`));
+  if (u.lagging.length) chips.push(h('span', {class: 'chip lag'}, `${u.lagging.length} lagging`));
+  chips.push(h('span', {class: 'chip plain'}, u.kind), h('span', {class: 'chip plain'}, u.versioning));
+  if (u.has_config) chips.push(h('span', {class: 'chip plain'}, '.dagbump.yaml'));
+  detail.replaceChildren(h('div', {},
+    h('h2', {}, `${u.name} `, h('span', {class: 'mono'}, u.version || '')),
+    h('div', {class: 'sub'}, u.path, u.remote ? h('br') : null, u.remote || null),
+    h('div', {}, chips),
+    u.error ? h('p', {class: 'chip err'}, u.error) : null,
+    h('h3', {}, 'Depends on'), list(u.depends_on, unitLink, 'nothing in the manifest'),
+    h('h3', {}, 'Used by'), list(users[name], unitLink, 'nothing in the manifest'),
+    h('h3', {}, 'Lagging deps'), list(u.lagging, e => [unitLink(e.to), ' ', h('code', {}, e.module), h('br'),
+      h('span', {class: 'mono'}, `${e.in}: ${e.required || '-'} → ${e.latest || '-'}`),
+      e.propagates ? null : h('span', {class: 'empty'}, ' (does not force a release)')], 'none'),
+    h('h3', {}, 'Unreleased commits'), list(u.unreleased, c => [h('code', {}, c.hash.slice(0, 7)), ' ', c.subject], 'none'),
+    h('h3', {}, 'Warnings'), list(u.warnings, w => w, 'none'),
+    u.tagged_modules.length ? [h('h3', {}, 'Tagged modules'), list(u.tagged_modules, m => h('code', {}, m))] : null,
+    u.npm_packages.length ? [h('h3', {}, 'npm packages'), list(u.npm_packages, m => h('code', {}, m))] : null,
+  ));
+}
+
+// Table
+const rowVal = {
+  name: u => u.name, kind: u => u.kind, version: u => u.version, mods: u => u.tagged_modules.length,
+  npm: u => u.npm_packages.length, unrel: u => u.unreleased.length, lag: u => u.lagging.length,
+  cfg: u => u.has_config ? 1 : 0, notes: u => u.error ? 1e9 : u.warnings.length,
+};
+for (const u of units) {
+  const notes = u.error ? [h('div', {class: 'err'}, 'ERROR: ' + u.error)] : u.warnings.map(w => h('div', {}, w));
+  const tr = h('tr', {'data-name': u.name},
+    h('td', {class: 'name'}, u.name), h('td', {}, u.kind), h('td', {class: 'mono'}, u.version || '-'),
+    h('td', {class: 'num'}, u.tagged_modules.length), h('td', {class: 'num'}, u.npm_packages.length),
+    h('td', {class: 'num' + (u.unreleased.length ? ' unrel' : '')}, u.unreleased.length),
+    h('td', {class: 'num' + (u.lagging.length ? ' lag' : '')}, u.lagging.length),
+    h('td', {}, u.has_config ? 'yes' : '-'), h('td', {class: 'notes'}, notes));
+  tr.onclick = () => select(u.name, true);
+  tbody.append(tr);
+}
+let sortKey = 'name', sortDir = 1;
+document.querySelectorAll('#tbl th').forEach(th => th.onclick = () => {
+  const k = th.dataset.k;
+  sortDir = k === sortKey ? -sortDir : (typeof rowVal[k](units[0]) === 'number' ? -1 : 1);
+  sortKey = k;
+  const rows = [...tbody.children].sort((a, b) => {
+    const x = rowVal[k](byName[a.dataset.name]), y = rowVal[k](byName[b.dataset.name]);
+    return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+  });
+  tbody.append(...rows);
+});
+
+// Filters
+const q = document.getElementById('q');
+const fLag = document.getElementById('f-lag'), fUnrel = document.getElementById('f-unrel'), fWarn = document.getElementById('f-warn');
+function applyFilter() {
+  const s = q.value.trim().toLowerCase();
+  const ok = u => (!s || u.name.toLowerCase().includes(s) || u.project.toLowerCase().includes(s)) &&
+    (!fLag.checked || u.lagging.length) && (!fUnrel.checked || u.unreleased.length) &&
+    (!fWarn.checked || u.warnings.length || u.error);
+  const show = new Set(units.filter(ok).map(u => u.name));
+  tbody.querySelectorAll('tr').forEach(r => r.classList.toggle('hidden', !show.has(r.dataset.name)));
+  const any = s || fLag.checked || fUnrel.checked || fWarn.checked;
+  graph.querySelectorAll('.node').forEach(n => n.style.opacity = !any || show.has(n.dataset.name) ? '' : '.2');
+}
+[q, fLag, fUnrel, fWarn].forEach(el => el.addEventListener('input', applyFilter));
+</script>
+</body>
+</html>

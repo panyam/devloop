@@ -8,6 +8,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -477,9 +478,18 @@ func dash(s string) string {
 }
 
 func listCmd() *cobra.Command {
-	return &cobra.Command{
+	var pretty, open bool
+	var htmlOut, svgOut string
+	c := &cobra.Command{
 		Use:   "list",
 		Short: "Show every unit: version, unreleased commits, lagging deps, warnings",
+		Long: `Prints one row per unit. --pretty draws a boxed table that fits the terminal
+and wraps the notes inside their cell.
+
+--html FILE writes a self-contained page: the DAG in release waves (hover a unit
+to trace its deps and dependents, click it for commits, lagging deps and
+warnings) above a sortable, filterable table. --svg FILE writes just the graph.
+Use - for stdout, and --open to open the file once written.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g, err := loadGraph()
 			if err != nil {
@@ -490,8 +500,36 @@ func listCmd() *cobra.Command {
 				views = append(views, viewUnit(g, u))
 			}
 			sort.Slice(views, func(i, j int) bool { return views[i].Name < views[j].Name })
+			if htmlOut != "" || svgOut != "" {
+				byName := map[string]unitView{}
+				for _, v := range views {
+					byName[v.Name] = v
+				}
+				l, err := layoutGraph(g, byName)
+				if err != nil {
+					return err
+				}
+				if svgOut != "" {
+					if err := writeOutput(svgOut, open, func(w io.Writer) error {
+						_, err := io.WriteString(w, renderSVG(l, true))
+						return err
+					}); err != nil {
+						return err
+					}
+				}
+				if htmlOut != "" {
+					return writeOutput(htmlOut, open, func(w io.Writer) error {
+						return renderHTML(w, l, views, dagbump.CompactPath(manifestPath))
+					})
+				}
+				return nil
+			}
 			if jsonOut {
 				return printJSON(views)
+			}
+			if pretty {
+				printPrettyList(os.Stdout, views)
+				return nil
 			}
 			w := table()
 			fmt.Fprintln(w, "NAME\tKIND\tVERSION\tMODS\tNPM\tUNRELEASED\tLAGGING\tCONFIG\tNOTES")
@@ -510,6 +548,11 @@ func listCmd() *cobra.Command {
 			return w.Flush()
 		},
 	}
+	c.Flags().BoolVar(&pretty, "pretty", false, "boxed table sized to the terminal, notes wrapped in their cell")
+	c.Flags().StringVar(&htmlOut, "html", "", "write an interactive HTML page of the graph and table to FILE (- for stdout)")
+	c.Flags().StringVar(&svgOut, "svg", "", "write the graph as SVG to FILE (- for stdout)")
+	c.Flags().BoolVar(&open, "open", false, "open the --html or --svg file once written")
+	return c
 }
 
 func graphCmd() *cobra.Command {
