@@ -2,6 +2,8 @@ module github.com/panyam/devloop
 
 go 1.26.0
 
+toolchain go1.26.11
+
 require (
 	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/fatih/color v1.18.0
