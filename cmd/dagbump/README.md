@@ -146,7 +146,7 @@ units:
 |---|---|
 | `modules` | go.mod folders tagged with the unit. `.` is the root, `*` one segment, `**` any depth. Default: every module with a tag of its own |
 | `follow` | Untagged go.mod folders (examples, docs) that belong to the unit. Default for the main unit: every module nobody claims |
-| `pin_followers` | Which pins a follower moves at a release: `root` (default), `all` or `none`. Requires at `v0.0.0` never move |
+| `pin_followers` | Which pins a follower moves at a release: `root` (default), `all` or `none`. Requires at `v0.0.0` or the zero pseudo-version never move |
 | `npm` | package.json folders that get the unit's version. Default for the main unit: every public package.json |
 | `version_files` | Files that hold the bare version. Default: `VERSION` if tracked. A file that had no `v` keeps none |
 | `versioning` | `lockstep` (default) tags every module each release. `changed` tags the modules changed since their own last tag, plus the unit's modules that require them |

@@ -302,6 +302,31 @@ func TestReleaseVersionedReplace(t *testing.T) {
 	}
 }
 
+// A follower that requires the module at Go's zero pseudo-version gets it
+// through a replace, like one at v0.0.0. The release leaves it alone, so no
+// tidy runs there. Such a module often imports generated code that tidy
+// can't find.
+func TestReleaseLeavesZeroPseudoVersionFollower(t *testing.T) {
+	root := t.TempDir()
+	const zero = "v0.0.0-00010101000000-000000000000"
+	files := kitFiles("modules: [., ext/*]\nnpm: []\n")
+	files["examples/go.mod"] = gomod("example.com/kit/examples", "example.com/kit "+zero) + "\nreplace example.com/kit => ../\n"
+	files["examples/e.go"] = "package examples\n\nimport _ \"example.com/kit/examples/gen/missing\"\n"
+	dir := repo(t, root, "kit", files, "v0.1.0", "ext/a/v0.1.0", "ext/b/v0.1.0")
+	m := manifestFor(t, root)
+	commitFile(t, dir, "kit2.go", "package kit\n")
+	g, err := BuildGraph(m)
+	must(t, err)
+	u, _ := g.Get("kit")
+	out := &bytes.Buffer{}
+	if _, err := g.Release(u, &Runner{Out: out}, ReleaseOptions{Bump: "minor", NoPush: true}); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if gm := gitOut(t, dir, "show", "v0.2.0:examples/go.mod"); !strings.Contains(gm, "example.com/kit "+zero) {
+		t.Errorf("examples/go.mod at the tag:\n%s", gm)
+	}
+}
+
 func TestVersionedReplaceWarning(t *testing.T) {
 	root := t.TempDir()
 	repo(t, root, "base", map[string]string{"go.mod": gomod("example.com/base")}, "v0.1.0", "v0.2.0")
