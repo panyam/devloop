@@ -692,7 +692,7 @@ func (g *Graph) releaseNative(u *Unit, r *Runner, rp *ReleasePlan, notes string,
 		var edits []string
 		for _, req := range sortedKeys(m.Requires) {
 			dep, ok := tagged[req]
-			if !ok || dep == m || m.Requires[req] == "v0.0.0" {
+			if !ok || dep == m || placeholderVersion(m.Requires[req]) {
 				continue
 			}
 			if !isMember[m] {
@@ -1091,4 +1091,11 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// placeholderVersion reports whether a require names no real version: v0.0.0,
+// or Go's zero pseudo-version, which go mod edit writes beside a replace. A
+// replace supplies such a module, so a release leaves the require alone.
+func placeholderVersion(v string) bool {
+	return v == "v0.0.0" || v == "v0.0.0-00010101000000-000000000000"
 }
